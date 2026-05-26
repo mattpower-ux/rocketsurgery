@@ -7,6 +7,11 @@ try:
 except ImportError:
     from storage import load_walkthrough, save_walkthrough
 
+try:
+    from app.generator import generate_placeholder_walkthrough
+except ImportError:
+    from generator import generate_placeholder_walkthrough
+
 
 app = FastAPI(title="RocketSurgery API")
 
@@ -97,9 +102,7 @@ def get_walkthrough(request: WalkthroughRequest):
     if cached:
         return cached
 
-    return {
-        "status": "not_found",
-        "title": "Walkthrough not found yet",
-        "disclaimer": "This walkthrough has not been generated or cached yet.",
-        "steps": []
-    }
+    generated = generate_placeholder_walkthrough(request.query)
+    save_walkthrough(generated["walkthrough_id"], generated)
+
+    return generated
