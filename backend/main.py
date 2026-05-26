@@ -47,6 +47,11 @@ except ImportError:
     from spec_walkthrough_builder import build_walkthrough_from_specs
 
 try:
+    from app.model_discovery import process_model_discovery
+except ImportError:
+    from model_discovery import process_model_discovery
+
+try:
     from app.admin import (
         admin_status,
         save_bulk_queries,
@@ -261,6 +266,11 @@ def post_bulk_catalog(request: BulkCatalogRequest):
 @app.post("/admin/process-bulk-queries")
 def post_process_bulk_queries(limit: int = 5):
     return process_bulk_queries(limit=limit)
+
+
+@app.post("/admin/process-model-discovery")
+def post_process_model_discovery(limit: int = 5):
+    return process_model_discovery(limit=limit)
 
 
 @app.post("/walkthrough")
