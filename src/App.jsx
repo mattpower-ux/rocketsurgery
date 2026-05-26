@@ -3,18 +3,55 @@ import "./App.css";
 
 const API_URL = "https://rocketsurgery-api.onrender.com";
 
+const BRAND_MODEL_OPTIONS = {
+  Moen: ["1222 Posi-Temp", "1225 Cartridge", "1200 Cartridge", "M-Core 1213", "Flo Smart Valve"],
+  Delta: ["RP19804", "RP46074", "Monitor 14 Series", "MultiChoice Universal", "RP50587"],
+  Kohler: ["GP500520", "GP76851", "GP800820", "Rite-Temp", "K-8304"],
+  Pfister: ["974-042", "974-074", "974-292", "974-321", "Avante Cartridge"],
+  "American Standard": ["M952100", "M961854", "A954440", "Ceramic Disc Cartridge", "Pressure Balance Cartridge"]
+};
+
+const KNOWN_BRANDS = Object.keys(BRAND_MODEL_OPTIONS);
+
+function queryLooksSpecific(query) {
+  const normalized = query.toLowerCase();
+
+  return KNOWN_BRANDS.some((brand) =>
+    normalized.includes(brand.toLowerCase())
+  );
+}
+
+function buildSpecificQuery(query, brand, model) {
+  const baseQuery = query.trim() || "installation walkthrough";
+
+  if (!brand) {
+    return baseQuery;
+  }
+
+  if (!model) {
+    return `${baseQuery} ${brand}`;
+  }
+
+  return `${baseQuery} ${brand} ${model}`;
+}
+
 function App() {
   const [query, setQuery] = useState("");
   const [walkthrough, setWalkthrough] = useState(null);
   const [started, setStarted] = useState(false);
+  const [clarifying, setClarifying] = useState(false);
+  const [installMode, setInstallMode] = useState("");
+  const [selectedBrand, setSelectedBrand] = useState("");
+  const [selectedModel, setSelectedModel] = useState("");
   const [loading, setLoading] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [activeHotspot, setActiveHotspot] = useState(null);
   const [complete, setComplete] = useState(false);
 
   const currentStep = walkthrough?.steps?.[stepIndex];
+  const availableModels = selectedBrand ? BRAND_MODEL_OPTIONS[selectedBrand] || [] : [];
 
-  async function startWalkthrough() {
+  async function fetchWalkthrough(finalQuery) {
     setLoading(true);
     setActiveHotspot(null);
     setComplete(false);
@@ -27,7 +64,7 @@ function App() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          query: query || "James Hardie siding nailing schedule"
+          query: finalQuery || "James Hardie siding nailing schedule"
         })
       });
 
@@ -35,6 +72,7 @@ function App() {
 
       setWalkthrough(data);
       setStarted(true);
+      setClarifying(false);
     } catch (error) {
       alert("Could not load walkthrough from API.");
       console.error(error);
@@ -43,11 +81,40 @@ function App() {
     }
   }
 
+  function startWalkthrough() {
+    const trimmedQuery = query.trim();
+
+    if (queryLooksSpecific(trimmedQuery)) {
+      fetchWalkthrough(trimmedQuery);
+      return;
+    }
+
+    setClarifying(true);
+    setStarted(false);
+    setComplete(false);
+    setActiveHotspot(null);
+  }
+
+  function continueGeneric() {
+    setInstallMode("generic");
+    fetchWalkthrough(query.trim() || "generic installation walkthrough");
+  }
+
+  function continueSpecific() {
+    const finalQuery = buildSpecificQuery(query, selectedBrand, selectedModel);
+    setInstallMode("specific");
+    fetchWalkthrough(finalQuery);
+  }
+
   function newJob() {
     window.speechSynthesis.cancel();
     setQuery("");
     setWalkthrough(null);
     setStarted(false);
+    setClarifying(false);
+    setInstallMode("");
+    setSelectedBrand("");
+    setSelectedModel("");
     setLoading(false);
     setComplete(false);
     setStepIndex(0);
@@ -74,7 +141,18 @@ function App() {
       setStarted(false);
       setWalkthrough(null);
       setComplete(false);
+      setClarifying(true);
     }
+  }
+
+  function backToHome() {
+    window.speechSynthesis.cancel();
+    setClarifying(false);
+    setStarted(false);
+    setWalkthrough(null);
+    setComplete(false);
+    setStepIndex(0);
+    setActiveHotspot(null);
   }
 
   function readAloud() {
@@ -96,7 +174,7 @@ function App() {
         </button>
       </header>
 
-      {!started ? (
+      {!started && !clarifying ? (
         <main className="homeScreen">
           <div className="homeBadge">FIELD WALKTHROUGHS</div>
 
@@ -112,7 +190,7 @@ function App() {
                 startWalkthrough();
               }
             }}
-            placeholder="Example: James Hardie siding nailing schedule"
+            placeholder="Example: replace shower cartridge"
           />
 
           <button
@@ -122,6 +200,108 @@ function App() {
           >
             {loading ? "BUILDING WALKTHROUGH..." : "START WALKTHROUGH"}
           </button>
+        </main>
+      ) : clarifying ? (
+        <main className="clarifyScreen">
+          <div className="homeBadge">CLARIFY INSTALLATION</div>
+
+          <h1>How specific should this walkthrough be?</h1>
+
+          <p className="clarifyPrompt">
+            Query: <strong>{query || "Generic installation walkthrough"}</strong>
+          </p>
+
+          <section className="choicePanel">
+            <label className={`choiceCard ${installMode === "generic" ? "choiceSelected" : ""}`}>
+              <input
+                type="radio"
+                name="installMode"
+                checked={installMode === "generic"}
+                onChange={() => setInstallMode("generic")}
+              />
+              <span>
+                <strong>GENERIC</strong>
+                <small>Use common installation principles and typical field practice.</small>
+              </span>
+            </label>
+
+            <label className={`choiceCard ${installMode === "specific" ? "choiceSelected" : ""}`}>
+              <input
+                type="radio"
+                name="installMode"
+                checked={installMode === "specific"}
+                onChange={() => setInstallMode("specific")}
+              />
+              <span>
+                <strong>SPECIFIC BRAND AND MODEL</strong>
+                <small>Use product-specific instructions when manufacturer data is available.</small>
+              </span>
+            </label>
+          </section>
+
+          {installMode === "specific" && (
+            <section className="brandModelPanel">
+              <label>
+                Brand
+                <select
+                  className="selectBox"
+                  value={selectedBrand}
+                  onChange={(e) => {
+                    setSelectedBrand(e.target.value);
+                    setSelectedModel("");
+                  }}
+                >
+                  <option value="">Select brand</option>
+                  {KNOWN_BRANDS.map((brand) => (
+                    <option key={brand} value={brand}>
+                      {brand}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Model
+                <select
+                  className="selectBox"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={!selectedBrand}
+                >
+                  <option value="">Select model</option>
+                  {availableModels.map((model) => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </section>
+          )}
+
+          <div className="clarifyActions">
+            <button className="secondaryButton" onClick={backToHome}>
+              ← Back
+            </button>
+
+            {installMode === "generic" ? (
+              <button
+                className="startButton"
+                onClick={continueGeneric}
+                disabled={loading}
+              >
+                {loading ? "BUILDING..." : "CONTINUE GENERIC"}
+              </button>
+            ) : (
+              <button
+                className="startButton"
+                onClick={continueSpecific}
+                disabled={loading || !selectedBrand}
+              >
+                {loading ? "BUILDING..." : "CONTINUE SPECIFIC"}
+              </button>
+            )}
+          </div>
         </main>
       ) : complete ? (
         <main className="completionScreen">
