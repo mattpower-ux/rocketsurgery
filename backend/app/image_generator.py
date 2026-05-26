@@ -17,26 +17,40 @@ API_BASE_URL = "https://rocketsurgery-api.onrender.com"
 
 def build_image_prompt(query: str, step_label: str = "Step 1") -> str:
     return f"""
-Create a clean technical construction illustration for RocketSurgery.
+Create a high-quality technical installation illustration for RocketSurgery.
 
 Topic: {query}
 Panel: {step_label}
 
-Style requirements:
-- crisp instructional diagram
-- simple jobsite construction graphic
-- white or light background
-- clear outlines
-- limited colors
-- no photorealism
-- no logos
-- no brand marks
-- no tiny unreadable text
-- no decorative art
-- show the installation concept clearly
-- use arrows/callouts only if visually clear
+The image should look like a polished app-ready construction walkthrough panel, similar to a premium illustrated field manual or contractor training comic.
 
-The image should look like a professional installation manual illustration for a trade contractor using a phone in the field.
+Visual style:
+- clean semi-realistic technical illustration
+- crisp black outlines with subtle shading
+- accurate construction materials and tool details
+- realistic wood grain, fasteners, siding, flashing, pipe, wire, roof, or product components when relevant
+- light jobsite background, not cluttered
+- modern mobile app illustration quality
+- clear focal point
+- strong depth and perspective
+- professional instructional graphic, not cartoonish
+- high-resolution polished rendering
+- limited but realistic color palette
+- red arrows or red dashed circles may be used to highlight the action
+- blue circular hotspot markers may appear where specs could be tapped
+
+Composition requirements:
+- show exactly one installation action or concept
+- make the work area large and readable on a phone screen
+- use arrows, callouts, cutaway details, or magnified inset circles only where helpful
+- avoid tiny labels or unreadable text
+- avoid brand logos and copyrighted marks
+- avoid messy backgrounds
+- avoid photorealistic people or faces
+- avoid surreal, decorative, or fantasy imagery
+
+Output goal:
+A crisp, clear, contractor-friendly instructional panel that could appear inside the RocketSurgery mobile app.
 """
 
 
