@@ -14,12 +14,14 @@ def generate_placeholder_walkthrough(query: str) -> dict:
 
     clean_query = query.strip() or "Untitled installation walkthrough"
 
-    generated_image_url = generate_step_image(clean_query, 1)
+    step_1_image = generate_step_image(clean_query, 1)
+    step_2_image = generate_step_image(clean_query, 2)
+    step_3_image = generate_step_image(clean_query, 3)
 
     return {
         "walkthrough_id": walkthrough_id,
 
-        "title": f"AI IMAGE TEST: {clean_query}",
+        "title": f"AI IMAGE WALKTHROUGH: {clean_query}",
 
         "disclaimer":
             "Draft walkthrough only. Manufacturer instructions and local codes must be verified.",
@@ -38,7 +40,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 1: Confirm product",
 
                 "imageUrl":
-                    generated_image_url,
+                    step_1_image,
 
                 "hotspots": [
                     {
@@ -67,7 +69,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 2: Check manual",
 
                 "imageUrl":
-                    generated_image_url,
+                    step_2_image,
 
                 "hotspots": [
                     {
@@ -96,7 +98,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 3: Install in sequence",
 
                 "imageUrl":
-                    generated_image_url,
+                    step_3_image,
 
                 "hotspots": [
                     {
