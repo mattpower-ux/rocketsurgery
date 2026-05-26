@@ -18,6 +18,8 @@ function buildSpecificQuery(query, brand, model) {
 }
 
 function App() {
+  const [screen, setScreen] = useState("home");
+
   const [query, setQuery] = useState("");
   const [walkthrough, setWalkthrough] = useState(null);
   const [started, setStarted] = useState(false);
@@ -34,6 +36,15 @@ function App() {
   const [stepIndex, setStepIndex] = useState(0);
   const [activeHotspot, setActiveHotspot] = useState(null);
   const [complete, setComplete] = useState(false);
+
+  const [adminStatus, setAdminStatus] = useState(null);
+  const [adminMessage, setAdminMessage] = useState("");
+  const [bulkQueries, setBulkQueries] = useState("");
+  const [catalogBrand, setCatalogBrand] = useState("");
+  const [catalogCategory, setCatalogCategory] = useState("");
+  const [catalogModels, setCatalogModels] = useState("");
+  const [discoverTopModels, setDiscoverTopModels] = useState(true);
+  const [adminLoading, setAdminLoading] = useState(false);
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
@@ -76,6 +87,7 @@ function App() {
       setWalkthrough(data);
       setStarted(true);
       setClarifying(false);
+      setScreen("home");
     } catch (error) {
       alert("Could not load walkthrough from API.");
       console.error(error);
@@ -105,6 +117,7 @@ function App() {
 
       setClarifying(true);
       setStarted(false);
+      setScreen("home");
     } catch (error) {
       console.error(error);
 
@@ -116,6 +129,7 @@ function App() {
 
       setClarifying(true);
       setStarted(false);
+      setScreen("home");
     } finally {
       setLoading(false);
     }
@@ -134,6 +148,7 @@ function App() {
 
   function newJob() {
     window.speechSynthesis.cancel();
+    setScreen("home");
     setQuery("");
     setWalkthrough(null);
     setStarted(false);
@@ -150,6 +165,16 @@ function App() {
     setComplete(false);
     setStepIndex(0);
     setActiveHotspot(null);
+  }
+
+  function openAdmin() {
+    window.speechSynthesis.cancel();
+    setScreen("admin");
+    setStarted(false);
+    setClarifying(false);
+    setComplete(false);
+    setActiveHotspot(null);
+    loadAdminStatus();
   }
 
   function nextStep() {
@@ -179,6 +204,7 @@ function App() {
 
   function backToHome() {
     window.speechSynthesis.cancel();
+    setScreen("home");
     setClarifying(false);
     setStarted(false);
     setWalkthrough(null);
@@ -199,17 +225,217 @@ function App() {
     window.speechSynthesis.speak(utterance);
   }
 
+  async function loadAdminStatus() {
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/status`);
+      const data = await response.json();
+
+      setAdminStatus(data);
+      setAdminMessage("Admin status loaded.");
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not load admin status.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+  async function submitBulkQueries() {
+    setAdminLoading(true);
+    setAdminMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/admin/bulk-queries`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          raw_text: bulkQueries
+        })
+      });
+
+      const data = await response.json();
+
+      setAdminMessage(
+        `Bulk queries saved. Added ${data.added_count || 0}; duplicates ${data.duplicate_count || 0}.`
+      );
+      setBulkQueries("");
+      loadAdminStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not save bulk queries.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+  async function submitCatalogEntry() {
+    setAdminLoading(true);
+    setAdminMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/admin/catalog-entry`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          brand: catalogBrand,
+          category: catalogCategory,
+          models_text: catalogModels,
+          discover_top_models: discoverTopModels
+        })
+      });
+
+      const data = await response.json();
+
+      setAdminMessage(
+        `Catalog request saved for ${data.request?.brand || catalogBrand} / ${data.request?.category || catalogCategory}.`
+      );
+      setCatalogBrand("");
+      setCatalogCategory("");
+      setCatalogModels("");
+      setDiscoverTopModels(true);
+      loadAdminStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not save catalog entry.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
   return (
     <div className="app">
       <header className="topbar">
-        <div className="topbarSpacer"></div>
+        <button className="adminButton" onClick={openAdmin}>
+          ADMIN
+        </button>
         <div className="logo">RocketSurgery</div>
         <button className="newJobButton" onClick={newJob}>
           NEW JOB
         </button>
       </header>
 
-      {!started && !clarifying ? (
+      {screen === "admin" ? (
+        <main className="adminScreen">
+          <div className="homeBadge">ADMIN</div>
+
+          <h1>RocketSurgery Builder</h1>
+
+          <section className="adminCard">
+            <div className="adminCardHeader">
+              <h2>System Status</h2>
+              <button
+                className="secondaryButton"
+                onClick={loadAdminStatus}
+                disabled={adminLoading}
+              >
+                Refresh
+              </button>
+            </div>
+
+            {adminStatus ? (
+              <div className="adminStats">
+                <div>
+                  <strong>{adminStatus.bulk_query_count}</strong>
+                  <span>Bulk queries</span>
+                </div>
+                <div>
+                  <strong>{adminStatus.catalog_request_count}</strong>
+                  <span>Catalog requests</span>
+                </div>
+                <div>
+                  <strong>{adminStatus.catalog_category_count}</strong>
+                  <span>Catalog categories</span>
+                </div>
+              </div>
+            ) : (
+              <p className="adminHelp">Click refresh to load admin status.</p>
+            )}
+          </section>
+
+          <section className="adminCard">
+            <h2>Bulk Query Seeder</h2>
+            <p className="adminHelp">
+              Paste one common installation or repair query per line.
+            </p>
+
+            <textarea
+              className="adminTextArea"
+              value={bulkQueries}
+              onChange={(e) => setBulkQueries(e.target.value)}
+              placeholder={"replace sink disposal\nreplace toilet\ninstall bathroom exhaust fan\nreplace shower cartridge"}
+            />
+
+            <button
+              className="startButton"
+              onClick={submitBulkQueries}
+              disabled={adminLoading || !bulkQueries.trim()}
+            >
+              SAVE BULK QUERIES
+            </button>
+          </section>
+
+          <section className="adminCard">
+            <h2>Brand + Category Catalog Builder</h2>
+            <p className="adminHelp">
+              Add product categories and known models. Leave models blank to queue top-10 model discovery.
+            </p>
+
+            <input
+              className="queryBox"
+              type="text"
+              value={catalogBrand}
+              onChange={(e) => setCatalogBrand(e.target.value)}
+              placeholder="Brand, example: Kohler"
+            />
+
+            <input
+              className="queryBox"
+              type="text"
+              value={catalogCategory}
+              onChange={(e) => setCatalogCategory(e.target.value)}
+              placeholder="Category, example: Bidets"
+            />
+
+            <textarea
+              className="adminTextArea small"
+              value={catalogModels}
+              onChange={(e) => setCatalogModels(e.target.value)}
+              placeholder={"Optional models, one per line\nK-8298\nK-4108\nK-5724"}
+            />
+
+            <label className="adminCheck">
+              <input
+                type="checkbox"
+                checked={discoverTopModels}
+                onChange={(e) => setDiscoverTopModels(e.target.checked)}
+              />
+              Auto-discover top 10 models later if no models are supplied
+            </label>
+
+            <button
+              className="startButton"
+              onClick={submitCatalogEntry}
+              disabled={adminLoading || !catalogBrand.trim() || !catalogCategory.trim()}
+            >
+              SAVE CATALOG ENTRY
+            </button>
+          </section>
+
+          {adminMessage && (
+            <p className="adminMessage">{adminMessage}</p>
+          )}
+
+          <button className="secondaryButton" onClick={backToHome}>
+            ← Back to App
+          </button>
+        </main>
+      ) : !started && !clarifying ? (
         <main className="homeScreen">
           <div className="homeBadge">FIELD WALKTHROUGHS</div>
 
