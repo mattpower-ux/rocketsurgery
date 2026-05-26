@@ -50,13 +50,15 @@ try:
     from app.admin import (
         admin_status,
         save_bulk_queries,
-        save_catalog_request
+        save_catalog_request,
+        process_bulk_queries
     )
 except ImportError:
     from admin import (
         admin_status,
         save_bulk_queries,
-        save_catalog_request
+        save_catalog_request,
+        process_bulk_queries
     )
 
 
@@ -243,6 +245,11 @@ def post_catalog_entry(request: CatalogEntryRequest):
         models_text=request.models_text,
         discover_top_models=request.discover_top_models
     )
+
+
+@app.post("/admin/process-bulk-queries")
+def post_process_bulk_queries(limit: int = 5):
+    return process_bulk_queries(limit=limit)
 
 
 @app.post("/walkthrough")
