@@ -8,110 +8,47 @@ try:
 except ImportError:
     from image_generator import generate_step_image
 
+try:
+    from app.step_planner import generate_installation_steps
+except ImportError:
+    from step_planner import generate_installation_steps
+
 
 def generate_placeholder_walkthrough(query: str) -> dict:
     walkthrough_id = query_to_walkthrough_id(query)
-
     clean_query = query.strip() or "Untitled installation walkthrough"
 
-    step_1_image = generate_step_image(clean_query, 1)
-    step_2_image = generate_step_image(clean_query, 2)
-    step_3_image = generate_step_image(clean_query, 3)
+    planned_steps = generate_installation_steps(clean_query)
 
-    return {
-        "walkthrough_id": walkthrough_id,
+    steps = []
 
-        "title": f"AI IMAGE WALKTHROUGH: {clean_query}",
+    for index, planned_step in enumerate(planned_steps[:8], start=1):
+        image_url = generate_step_image(
+            f"{clean_query} — {planned_step.get('title', f'Step {index}')}",
+            index
+        )
 
-        "disclaimer":
-            "Draft walkthrough only. Manufacturer instructions and local codes must be verified.",
-
-        "steps": [
+        steps.append(
             {
-                "id": 1,
-
-                "instruction":
-                    "Identify the exact product and installation condition.",
-
-                "detail":
-                    "Confirm manufacturer, model, substrate, exposure, and jobsite conditions before starting.",
-
-                "imageLabel":
-                    "Step 1: Confirm product",
-
-                "imageUrl":
-                    step_1_image,
-
+                "id": index,
+                "instruction": planned_step.get("instruction", "Complete this installation step."),
+                "detail": planned_step.get("detail", "Follow manufacturer instructions and local code requirements."),
+                "imageLabel": f"Step {index}: {planned_step.get('title', 'Installation step')}",
+                "imageUrl": image_url,
                 "hotspots": [
                     {
-                        "id": "product",
-
-                        "label": "Product check",
-
-                        "title": "Product Verification",
-
-                        "content":
-                            "Future version will pull this from manufacturer installation manuals."
-                    }
-                ]
-            },
-
-            {
-                "id": 2,
-
-                "instruction":
-                    "Review the manufacturer installation requirements.",
-
-                "detail":
-                    "Fasteners, spacing, clearances, overlaps, and sealants must match the current product guide.",
-
-                "imageLabel":
-                    "Step 2: Check manual",
-
-                "imageUrl":
-                    step_2_image,
-
-                "hotspots": [
-                    {
-                        "id": "manual",
-
-                        "label": "Manual source",
-
-                        "title": "Manufacturer Manual",
-
-                        "content":
-                            "Future version will attach source PDF, page number, and extracted specification."
-                    }
-                ]
-            },
-
-            {
-                "id": 3,
-
-                "instruction":
-                    "Complete the installation sequence in the correct order.",
-
-                "detail":
-                    "The final generated walkthrough will replace this placeholder with product-specific illustrated steps.",
-
-                "imageLabel":
-                    "Step 3: Install in sequence",
-
-                "imageUrl":
-                    step_3_image,
-
-                "hotspots": [
-                    {
-                        "id": "sequence",
-
-                        "label": "Sequence",
-
-                        "title": "Installation Sequence",
-
-                        "content":
-                            "Future version will generate step-by-step visuals and hotspot specs."
+                        "id": f"step-{index}-spec",
+                        "label": "Spec check",
+                        "title": "Specification Check",
+                        "content": "Future version will attach manufacturer source, page number, and product-specific spec."
                     }
                 ]
             }
-        ]
+        )
+
+    return {
+        "walkthrough_id": walkthrough_id,
+        "title": f"PLANNED WALKTHROUGH: {clean_query}",
+        "disclaimer": "Draft walkthrough only. Manufacturer instructions and local codes must be verified.",
+        "steps": steps
     }
