@@ -83,4 +83,3 @@ def generate_installation_steps(query: str):
             "detail": "Follow manufacturer instructions and local code requirements."
         }
     ]
-}
