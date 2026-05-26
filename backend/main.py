@@ -36,6 +36,11 @@ except ImportError:
         save_uploaded_manual
     )
 
+try:
+    from app.manual_parser import extract_installation_specs
+except ImportError:
+    from manual_parser import extract_installation_specs
+
 
 app = FastAPI(title="RocketSurgery API")
 
@@ -58,6 +63,10 @@ app.add_middleware(
 
 class WalkthroughRequest(BaseModel):
     query: str
+
+
+class ManualExtractRequest(BaseModel):
+    text_path: str
 
 
 DEMO_WALKTHROUGH_ID = "james-hardie-lap-siding-nailing-schedule"
@@ -163,6 +172,11 @@ async def upload_manual(
     )
 
     return result
+
+
+@app.post("/manuals/extract-specs")
+def manuals_extract_specs(request: ManualExtractRequest):
+    return extract_installation_specs(request.text_path)
 
 
 @app.post("/walkthrough")
