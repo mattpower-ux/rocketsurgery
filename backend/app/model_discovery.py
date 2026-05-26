@@ -169,7 +169,7 @@ def process_model_discovery(limit: int = 5):
 
         except Exception as e:
             item["status"] = "model_discovery_failed"
-            item["error": str(e)]
+            item["error"] = str(e)
 
             failed.append({
                 "brand": brand,
