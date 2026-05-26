@@ -40,6 +40,7 @@ function App() {
   const [adminStatus, setAdminStatus] = useState(null);
   const [adminMessage, setAdminMessage] = useState("");
   const [bulkQueries, setBulkQueries] = useState("");
+  const [bulkCatalog, setBulkCatalog] = useState("");
   const [catalogBrand, setCatalogBrand] = useState("");
   const [catalogCategory, setCatalogCategory] = useState("");
   const [catalogModels, setCatalogModels] = useState("");
@@ -272,6 +273,40 @@ function App() {
     }
   }
 
+  async function submitBulkCatalog() {
+    setAdminLoading(true);
+    setAdminMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/admin/bulk-catalog`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          raw_text: bulkCatalog
+        })
+      });
+
+      const data = await response.json();
+
+      setAdminMessage(
+        `Bulk catalog saved. Added ${data.added_count || 0}; failed ${data.failed_count || 0}.`
+      );
+
+      setBulkCatalog("");
+      loadAdminStatus();
+
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not save bulk catalog entries.");
+
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
   async function submitCatalogEntry() {
     setAdminLoading(true);
     setAdminMessage("");
@@ -466,6 +501,43 @@ function App() {
               {adminLoading
                 ? "PROCESSING..."
                 : "PROCESS QUEUED WALKTHROUGHS"}
+            </button>
+          </section>
+
+          <section className="adminCard">
+            <h2>Bulk Brand Ingestion</h2>
+
+            <p className="adminHelp">
+              Paste one brand and category per line using:
+              Brand | Category
+            </p>
+
+            <textarea
+              className="adminTextArea"
+              value={bulkCatalog}
+              onChange={(e) => setBulkCatalog(e.target.value)}
+              placeholder={
+                "Kohler | Bidets\nDelta | Shower Valves\nMoen | Kitchen Faucets\nRheem | Heat Pumps\nLeviton | Smart Switches"
+              }
+            />
+
+            <button
+              className="startButton"
+              onClick={submitBulkCatalog}
+              disabled={adminLoading || !bulkCatalog.trim()}
+            >
+              SAVE BULK BRAND LIST
+            </button>
+
+            <button
+              className="doneButton"
+              onClick={processModelDiscovery}
+              disabled={adminLoading}
+              style={{ marginTop: "12px" }}
+            >
+              {adminLoading
+                ? "DISCOVERING..."
+                : "PROCESS MODEL DISCOVERY"}
             </button>
           </section>
 
