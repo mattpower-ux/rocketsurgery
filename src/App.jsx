@@ -147,7 +147,15 @@ function App() {
             </div>
 
             <section className="imagePanel">
-              <div className={`fakeIllustration stepArt${currentStep.id}`}>
+              <div className={`illustrationFrame ${currentStep.imageUrl ? "realIllustration" : `fakeIllustration stepArt${currentStep.id}`}`}>
+                {currentStep.imageUrl ? (
+                  <img
+                    className="stepImage"
+                    src={currentStep.imageUrl}
+                    alt={currentStep.imageLabel || currentStep.instruction}
+                  />
+                ) : null}
+
                 <div className="illustrationLabel">{currentStep.imageLabel}</div>
 
                 {currentStep.hotspots.map((hotspot, index) => (
