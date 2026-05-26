@@ -25,6 +25,11 @@ except ImportError:
         query_has_known_brand_and_model
     )
 
+try:
+    from app.manuals import manual_storage_status
+except ImportError:
+    from manuals import manual_storage_status
+
 
 app = FastAPI(title="RocketSurgery API")
 
@@ -131,6 +136,11 @@ def product_options(query: str):
         "query_has_known_brand_and_model":
             query_has_known_brand_and_model(query)
     }
+
+
+@app.get("/manuals/status")
+def manuals_status():
+    return manual_storage_status()
 
 
 @app.post("/walkthrough")
