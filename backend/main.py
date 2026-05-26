@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -26,9 +26,15 @@ except ImportError:
     )
 
 try:
-    from app.manuals import manual_storage_status
+    from app.manuals import (
+        manual_storage_status,
+        save_uploaded_manual
+    )
 except ImportError:
-    from manuals import manual_storage_status
+    from manuals import (
+        manual_storage_status,
+        save_uploaded_manual
+    )
 
 
 app = FastAPI(title="RocketSurgery API")
@@ -141,6 +147,22 @@ def product_options(query: str):
 @app.get("/manuals/status")
 def manuals_status():
     return manual_storage_status()
+
+
+@app.post("/manuals/upload")
+async def upload_manual(
+    manufacturer: str = Form(...),
+    file: UploadFile = File(...)
+):
+    contents = await file.read()
+
+    result = save_uploaded_manual(
+        file_bytes=contents,
+        filename=file.filename,
+        manufacturer=manufacturer
+    )
+
+    return result
 
 
 @app.post("/walkthrough")
