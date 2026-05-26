@@ -337,11 +337,8 @@ body {
   font-weight: 900;
 }
 
-@media (min-width: 760px) {
-  .app {
-    background: radial-gradient(circle at top, #ffffff 0, #f4f5f7 45%);
-  }
-  .illustrationFrame {
+
+.illustrationFrame {
   position: relative;
   height: 420px;
   border-radius: 20px;
@@ -359,4 +356,229 @@ body {
   display: block;
 }
 
+.adminButton {
+  background: #111;
+  color: white;
+  border: none;
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.adminScreen,
+.clarifyScreen {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.adminScreen h1,
+.clarifyScreen h1 {
+  font-size: 38px;
+  line-height: 1;
+  margin: 18px 0;
+  letter-spacing: -1px;
+}
+
+.adminCard {
+  background: white;
+  border-radius: 24px;
+  padding: 22px;
+  margin: 18px 0;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e5e5;
+}
+
+.adminCard h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+  letter-spacing: -0.4px;
+}
+
+.adminCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.adminHelp,
+.clarifyPrompt {
+  margin: 8px 0 16px;
+  color: #555;
+  line-height: 1.45;
+}
+
+.adminStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.adminStats div {
+  background: #f4f5f7;
+  border-radius: 18px;
+  padding: 16px;
+  border: 1px solid #ddd;
+}
+
+.adminStats strong {
+  display: block;
+  font-size: 30px;
+  font-weight: 900;
+  color: #e53935;
+}
+
+.adminStats span {
+  display: block;
+  margin-top: 4px;
+  color: #555;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.adminTextArea {
+  width: 100%;
+  min-height: 180px;
+  padding: 16px;
+  font-size: 16px;
+  border: 2px solid #ddd;
+  border-radius: 18px;
+  background: white;
+  resize: vertical;
+  margin-bottom: 14px;
+  line-height: 1.35;
+}
+
+.adminTextArea.small {
+  min-height: 110px;
+}
+
+.adminCheck {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 0 16px;
+  color: #333;
+  line-height: 1.35;
+}
+
+.adminMessage {
+  background: #fff;
+  border-left: 6px solid #e53935;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+  font-weight: 700;
+}
+
+.choicePanel {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.choiceCard {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: white;
+  border: 2px solid #ddd;
+  border-radius: 22px;
+  padding: 18px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+  cursor: pointer;
+}
+
+.choiceSelected {
+  border-color: #e53935;
+}
+
+.choiceCard strong {
+  display: block;
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.choiceCard small {
+  color: #555;
+  line-height: 1.35;
+}
+
+.brandModelPanel {
+  background: white;
+  border-radius: 22px;
+  padding: 18px;
+  margin: 16px 0;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+  display: grid;
+  gap: 14px;
+}
+
+.brandModelPanel label {
+  display: grid;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.selectBox {
+  width: 100%;
+  padding: 16px;
+  font-size: 16px;
+  border-radius: 16px;
+  border: 2px solid #ddd;
+  background: white;
+}
+
+.clarifyActions {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+@media (min-width: 760px) {
+  .app {
+    background: radial-gradient(circle at top, #ffffff 0, #f4f5f7 45%);
+  }
+
+  .adminScreen {
+    width: min(100% - 80px, 900px);
+    padding-top: 34px;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar {
+    grid-template-columns: 78px 1fr 78px;
+    padding: 12px;
+  }
+
+  .logo {
+    font-size: 21px;
+  }
+
+  .adminButton,
+  .newJobButton {
+    font-size: 11px;
+    padding: 8px 9px;
+  }
+
+  .adminStats {
+    grid-template-columns: 1fr;
+  }
+
+  .adminScreen,
+  .clarifyScreen {
+    width: min(100% - 24px, 540px);
+    padding: 20px 0 40px;
+  }
+
+  .clarifyActions {
+    grid-template-columns: 1fr;
+  }
 }
