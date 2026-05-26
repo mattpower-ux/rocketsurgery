@@ -46,6 +46,19 @@ try:
 except ImportError:
     from spec_walkthrough_builder import build_walkthrough_from_specs
 
+try:
+    from app.admin import (
+        admin_status,
+        save_bulk_queries,
+        save_catalog_request
+    )
+except ImportError:
+    from admin import (
+        admin_status,
+        save_bulk_queries,
+        save_catalog_request
+    )
+
 
 app = FastAPI(title="RocketSurgery API")
 
@@ -77,6 +90,17 @@ class ManualExtractRequest(BaseModel):
 class ManualWalkthroughRequest(BaseModel):
     query: str
     specs: dict
+
+
+class BulkQueriesRequest(BaseModel):
+    raw_text: str
+
+
+class CatalogEntryRequest(BaseModel):
+    brand: str
+    category: str
+    models_text: str = ""
+    discover_top_models: bool = True
 
 
 DEMO_WALKTHROUGH_ID = "james-hardie-lap-siding-nailing-schedule"
@@ -199,6 +223,26 @@ def manuals_build_walkthrough(request: ManualWalkthroughRequest):
     save_walkthrough(walkthrough["walkthrough_id"], walkthrough)
 
     return walkthrough
+
+
+@app.get("/admin/status")
+def get_admin_status():
+    return admin_status()
+
+
+@app.post("/admin/bulk-queries")
+def post_bulk_queries(request: BulkQueriesRequest):
+    return save_bulk_queries(request.raw_text)
+
+
+@app.post("/admin/catalog-entry")
+def post_catalog_entry(request: CatalogEntryRequest):
+    return save_catalog_request(
+        brand=request.brand,
+        category=request.category,
+        models_text=request.models_text,
+        discover_top_models=request.discover_top_models
+    )
 
 
 @app.post("/walkthrough")
