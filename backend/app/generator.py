@@ -4,6 +4,13 @@ except ImportError:
     from storage import query_to_walkthrough_id
 
 
+ROCKETSURGERY_API_URL = "https://rocketsurgery-api.onrender.com"
+
+
+def render_disk_image_url(filename: str) -> str:
+    return f"{ROCKETSURGERY_API_URL}/static/images/{filename}"
+
+
 def generate_placeholder_walkthrough(query: str) -> dict:
     walkthrough_id = query_to_walkthrough_id(query)
 
@@ -31,7 +38,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 1: Confirm product",
 
                 "imageUrl":
-                    "https://placehold.co/900x600/png?text=RocketSurgery+Step+1",
+                    render_disk_image_url("test-step.png"),
 
                 "hotspots": [
                     {
@@ -60,7 +67,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 2: Check manual",
 
                 "imageUrl":
-                    "https://placehold.co/900x600/png?text=RocketSurgery+Step+2",
+                    render_disk_image_url("test-step.png"),
 
                 "hotspots": [
                     {
@@ -89,7 +96,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 3: Install in sequence",
 
                 "imageUrl":
-                    "https://placehold.co/900x600/png?text=RocketSurgery+Step+3",
+                    render_disk_image_url("test-step.png"),
 
                 "hotspots": [
                     {
