@@ -3,12 +3,10 @@ try:
 except ImportError:
     from storage import query_to_walkthrough_id
 
-
-ROCKETSURGERY_API_URL = "https://rocketsurgery-api.onrender.com"
-
-
-def render_disk_image_url(filename: str) -> str:
-    return f"{ROCKETSURGERY_API_URL}/static/images/{filename}"
+try:
+    from app.image_generator import generate_step_image
+except ImportError:
+    from image_generator import generate_step_image
 
 
 def generate_placeholder_walkthrough(query: str) -> dict:
@@ -16,10 +14,12 @@ def generate_placeholder_walkthrough(query: str) -> dict:
 
     clean_query = query.strip() or "Untitled installation walkthrough"
 
+    generated_image_url = generate_step_image(clean_query, 1)
+
     return {
         "walkthrough_id": walkthrough_id,
 
-        "title": f"NEW PLACEHOLDER: {clean_query}",
+        "title": f"AI IMAGE TEST: {clean_query}",
 
         "disclaimer":
             "Draft walkthrough only. Manufacturer instructions and local codes must be verified.",
@@ -38,7 +38,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 1: Confirm product",
 
                 "imageUrl":
-                    render_disk_image_url("test-step.svg"),
+                    generated_image_url,
 
                 "hotspots": [
                     {
@@ -67,7 +67,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 2: Check manual",
 
                 "imageUrl":
-                    render_disk_image_url("test-step.svg"),
+                    generated_image_url,
 
                 "hotspots": [
                     {
@@ -96,7 +96,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 3: Install in sequence",
 
                 "imageUrl":
-                    render_disk_image_url("test-step.svg"),
+                    generated_image_url,
 
                 "hotspots": [
                     {
