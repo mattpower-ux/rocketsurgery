@@ -51,14 +51,16 @@ try:
         admin_status,
         save_bulk_queries,
         save_catalog_request,
-        process_bulk_queries
+        process_bulk_queries,
+        save_bulk_catalog_requests
     )
 except ImportError:
     from admin import (
         admin_status,
         save_bulk_queries,
         save_catalog_request,
-        process_bulk_queries
+        process_bulk_queries,
+        save_bulk_catalog_requests
     )
 
 
@@ -103,6 +105,10 @@ class CatalogEntryRequest(BaseModel):
     category: str
     models_text: str = ""
     discover_top_models: bool = True
+
+
+class BulkCatalogRequest(BaseModel):
+    raw_text: str
 
 
 DEMO_WALKTHROUGH_ID = "james-hardie-lap-siding-nailing-schedule"
@@ -245,6 +251,11 @@ def post_catalog_entry(request: CatalogEntryRequest):
         models_text=request.models_text,
         discover_top_models=request.discover_top_models
     )
+
+
+@app.post("/admin/bulk-catalog")
+def post_bulk_catalog(request: BulkCatalogRequest):
+    return save_bulk_catalog_requests(request.raw_text)
 
 
 @app.post("/admin/process-bulk-queries")
