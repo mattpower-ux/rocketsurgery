@@ -308,6 +308,34 @@ function App() {
     }
   }
 
+
+  async function processQueuedWalkthroughs() {
+    setAdminLoading(true);
+    setAdminMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/admin/process-bulk-queries?limit=5`,
+        {
+          method: "POST"
+        }
+      );
+
+      const data = await response.json();
+
+      setAdminMessage(
+        `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
+      );
+
+      loadAdminStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not process queued walkthroughs.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -342,12 +370,29 @@ function App() {
               <div className="adminStats">
                 <div>
                   <strong>{adminStatus.bulk_query_count}</strong>
-                  <span>Bulk queries</span>
+                  <span>Total queries</span>
                 </div>
+
+                <div>
+                  <strong>{adminStatus.bulk_completed_count || 0}</strong>
+                  <span>Completed</span>
+                </div>
+
+                <div>
+                  <strong>{adminStatus.bulk_queued_count || 0}</strong>
+                  <span>Queued</span>
+                </div>
+
+                <div>
+                  <strong>{adminStatus.bulk_failed_count || 0}</strong>
+                  <span>Failed</span>
+                </div>
+
                 <div>
                   <strong>{adminStatus.catalog_request_count}</strong>
                   <span>Catalog requests</span>
                 </div>
+
                 <div>
                   <strong>{adminStatus.catalog_category_count}</strong>
                   <span>Catalog categories</span>
@@ -377,6 +422,18 @@ function App() {
               disabled={adminLoading || !bulkQueries.trim()}
             >
               SAVE BULK QUERIES
+            </button>
+
+
+            <button
+              className="doneButton"
+              onClick={processQueuedWalkthroughs}
+              disabled={adminLoading}
+              style={{ marginTop: "12px" }}
+            >
+              {adminLoading
+                ? "PROCESSING..."
+                : "PROCESS QUEUED WALKTHROUGHS"}
             </button>
           </section>
 
