@@ -38,7 +38,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 1: Confirm product",
 
                 "imageUrl":
-                    render_disk_image_url("test-step.png"),
+                    render_disk_image_url("test-step.svg"),
 
                 "hotspots": [
                     {
@@ -67,7 +67,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 2: Check manual",
 
                 "imageUrl":
-                    render_disk_image_url("test-step.png"),
+                    render_disk_image_url("test-step.svg"),
 
                 "hotspots": [
                     {
@@ -96,7 +96,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                     "Step 3: Install in sequence",
 
                 "imageUrl":
-                    render_disk_image_url("test-step.png"),
+                    render_disk_image_url("test-step.svg"),
 
                 "hotspots": [
                     {
