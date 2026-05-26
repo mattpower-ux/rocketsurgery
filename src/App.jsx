@@ -13,12 +13,22 @@ const BRAND_MODEL_OPTIONS = {
 
 const KNOWN_BRANDS = Object.keys(BRAND_MODEL_OPTIONS);
 
-function queryLooksSpecific(query) {
+function queryHasKnownBrandAndModel(query) {
   const normalized = query.toLowerCase();
 
-  return KNOWN_BRANDS.some((brand) =>
-    normalized.includes(brand.toLowerCase())
-  );
+  return KNOWN_BRANDS.some((brand) => {
+    const brandMatch = normalized.includes(brand.toLowerCase());
+
+    if (!brandMatch) {
+      return false;
+    }
+
+    const models = BRAND_MODEL_OPTIONS[brand] || [];
+
+    return models.some((model) =>
+      normalized.includes(model.toLowerCase())
+    );
+  });
 }
 
 function buildSpecificQuery(query, brand, model) {
@@ -40,7 +50,7 @@ function App() {
   const [walkthrough, setWalkthrough] = useState(null);
   const [started, setStarted] = useState(false);
   const [clarifying, setClarifying] = useState(false);
-  const [installMode, setInstallMode] = useState("");
+  const [installMode, setInstallMode] = useState("generic");
   const [selectedBrand, setSelectedBrand] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [loading, setLoading] = useState(false);
@@ -84,11 +94,14 @@ function App() {
   function startWalkthrough() {
     const trimmedQuery = query.trim();
 
-    if (queryLooksSpecific(trimmedQuery)) {
+    if (queryHasKnownBrandAndModel(trimmedQuery)) {
       fetchWalkthrough(trimmedQuery);
       return;
     }
 
+    setInstallMode("generic");
+    setSelectedBrand("");
+    setSelectedModel("");
     setClarifying(true);
     setStarted(false);
     setComplete(false);
@@ -112,7 +125,7 @@ function App() {
     setWalkthrough(null);
     setStarted(false);
     setClarifying(false);
-    setInstallMode("");
+    setInstallMode("generic");
     setSelectedBrand("");
     setSelectedModel("");
     setLoading(false);
@@ -205,7 +218,7 @@ function App() {
         <main className="clarifyScreen">
           <div className="homeBadge">CLARIFY INSTALLATION</div>
 
-          <h1>How specific should this walkthrough be?</h1>
+          <h1>Generic or product-specific?</h1>
 
           <p className="clarifyPrompt">
             Query: <strong>{query || "Generic installation walkthrough"}</strong>
@@ -284,21 +297,21 @@ function App() {
               ← Back
             </button>
 
-            {installMode === "generic" ? (
-              <button
-                className="startButton"
-                onClick={continueGeneric}
-                disabled={loading}
-              >
-                {loading ? "BUILDING..." : "CONTINUE GENERIC"}
-              </button>
-            ) : (
+            {installMode === "specific" ? (
               <button
                 className="startButton"
                 onClick={continueSpecific}
                 disabled={loading || !selectedBrand}
               >
                 {loading ? "BUILDING..." : "CONTINUE SPECIFIC"}
+              </button>
+            ) : (
+              <button
+                className="startButton"
+                onClick={continueGeneric}
+                disabled={loading}
+              >
+                {loading ? "BUILDING..." : "CONTINUE GENERIC"}
               </button>
             )}
           </div>
