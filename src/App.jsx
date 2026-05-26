@@ -65,10 +65,15 @@ function App() {
   }
 
   function previousStep() {
+    window.speechSynthesis.cancel();
     setActiveHotspot(null);
 
     if (stepIndex > 0) {
       setStepIndex(stepIndex - 1);
+    } else {
+      setStarted(false);
+      setWalkthrough(null);
+      setComplete(false);
     }
   }
 
@@ -102,6 +107,11 @@ function App() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !loading) {
+                startWalkthrough();
+              }
+            }}
             placeholder="Example: James Hardie siding nailing schedule"
           />
 
