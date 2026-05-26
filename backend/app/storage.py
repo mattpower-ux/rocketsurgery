@@ -4,10 +4,12 @@ from pathlib import Path
 
 BASE_DIR = Path("/data/rocketsurgery")
 WALKTHROUGHS_DIR = BASE_DIR / "walkthroughs"
+IMAGES_DIR = BASE_DIR / "images"
 
 
 def ensure_storage():
     WALKTHROUGHS_DIR.mkdir(parents=True, exist_ok=True)
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def slugify(text: str) -> str:
@@ -29,6 +31,11 @@ def query_to_walkthrough_id(query: str) -> str:
 
 def walkthrough_path(walkthrough_id: str) -> Path:
     return WALKTHROUGHS_DIR / walkthrough_id / "manifest.json"
+
+
+def image_path(filename: str) -> Path:
+    ensure_storage()
+    return IMAGES_DIR / filename
 
 
 def load_walkthrough(query: str):
