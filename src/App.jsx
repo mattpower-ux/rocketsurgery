@@ -7,11 +7,13 @@ function App() {
   const [started, setStarted] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [activeHotspot, setActiveHotspot] = useState(null);
+  const [complete, setComplete] = useState(false);
 
   const currentStep = sampleWalkthrough.steps[stepIndex];
 
   function startWalkthrough() {
     setStarted(true);
+    setComplete(false);
     setStepIndex(0);
     setActiveHotspot(null);
   }
@@ -20,6 +22,7 @@ function App() {
     window.speechSynthesis.cancel();
     setQuery("");
     setStarted(false);
+    setComplete(false);
     setStepIndex(0);
     setActiveHotspot(null);
   }
@@ -29,6 +32,16 @@ function App() {
 
     if (stepIndex < sampleWalkthrough.steps.length - 1) {
       setStepIndex(stepIndex + 1);
+    } else {
+      setComplete(true);
+    }
+  }
+
+  function previousStep() {
+    setActiveHotspot(null);
+
+    if (stepIndex > 0) {
+      setStepIndex(stepIndex - 1);
     }
   }
 
@@ -44,6 +57,7 @@ function App() {
   return (
     <div className="app">
       <header className="topbar">
+        <div className="topbarSpacer"></div>
         <div className="logo">RocketSurgery</div>
         <button className="newJobButton" onClick={newJob}>
           NEW JOB
@@ -52,6 +66,8 @@ function App() {
 
       {!started ? (
         <main className="homeScreen">
+          <div className="homeBadge">FIELD WALKTHROUGHS</div>
+
           <h1>What do you need help installing?</h1>
 
           <input
@@ -66,6 +82,20 @@ function App() {
             START WALKTHROUGH
           </button>
         </main>
+      ) : complete ? (
+        <main className="completionScreen">
+          <div className="completionCard">
+            <div className="completionIcon">✓</div>
+            <h1>Walkthrough complete</h1>
+            <p>
+              This job sequence is finished. Start a new job when you are ready
+              for the next installation question.
+            </p>
+            <button className="startButton" onClick={newJob}>
+              NEW JOB
+            </button>
+          </div>
+        </main>
       ) : (
         <main className="walkthroughScreen">
           <div className="walkthroughTitle">{sampleWalkthrough.title}</div>
@@ -75,7 +105,7 @@ function App() {
           </div>
 
           <section className="imagePanel">
-            <div className="fakeIllustration">
+            <div className={`fakeIllustration stepArt${currentStep.id}`}>
               <div className="illustrationLabel">{currentStep.imageLabel}</div>
 
               {currentStep.hotspots.map((hotspot, index) => (
@@ -83,6 +113,7 @@ function App() {
                   key={hotspot.id}
                   className={`hotspot hotspot${index + 1}`}
                   onClick={() => setActiveHotspot(hotspot)}
+                  aria-label={hotspot.label}
                 >
                   +
                 </button>
@@ -110,6 +141,10 @@ function App() {
           )}
 
           <footer className="actionBar">
+            <button className="secondaryButton" onClick={previousStep}>
+              ← Back
+            </button>
+
             <button className="audioButton" onClick={readAloud}>
               🔊 Read
             </button>
