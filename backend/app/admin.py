@@ -173,6 +173,55 @@ def process_bulk_queries(limit: int = 5):
     }
 
 
+
+def save_bulk_catalog_requests(raw_text: str):
+    ensure_admin_storage()
+
+    lines = [
+        line.strip()
+        for line in raw_text.splitlines()
+        if line.strip()
+    ]
+
+    added = []
+    failed = []
+
+    for line in lines:
+        try:
+            if "|" not in line:
+                failed.append({
+                    "line": line,
+                    "error": "Missing | separator"
+                })
+                continue
+
+            brand, category = line.split("|", 1)
+
+            result = save_catalog_request(
+                brand=brand.strip(),
+                category=category.strip(),
+                models_text="",
+                discover_top_models=True
+            )
+
+            added.append(result["request"])
+
+        except Exception as e:
+            failed.append({
+                "line": line,
+                "error": str(e)
+            })
+
+    return {
+        "status": "bulk catalog requests processed",
+        "submitted_count": len(lines),
+        "added_count": len(added),
+        "failed_count": len(failed),
+        "added": added,
+        "failed": failed
+    }
+
+
 def save_catalog_request(
     brand: str,
     category: str,
