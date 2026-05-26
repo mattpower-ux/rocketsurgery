@@ -90,18 +90,57 @@ def load_product_options():
         return json.load(f)
 
 
+def normalize_text(text: str) -> str:
+    return (
+        text.lower()
+        .replace("-", " ")
+        .replace("_", " ")
+        .strip()
+    )
+
+
+def singularize(word: str) -> str:
+    if word.endswith("ies"):
+        return word[:-3] + "y"
+
+    if word.endswith("s") and len(word) > 3:
+        return word[:-1]
+
+    return word
+
+
+def build_variations(text: str):
+    normalized = normalize_text(text)
+
+    words = normalized.split()
+
+    variations = {
+        normalized,
+        " ".join(singularize(w) for w in words)
+    }
+
+    return variations
+
+
 def get_product_options_for_query(query: str):
     catalog = load_product_options()
-    q = query.lower()
+
+    query_variations = build_variations(query)
 
     for category, data in catalog.items():
         keywords = data.get("keywords", [])
 
-        if any(keyword.lower() in q for keyword in keywords):
-            return {
-                "category": category,
-                "brands": data.get("brands", [])
-            }
+        for keyword in keywords:
+            keyword_variations = build_variations(keyword)
+
+            for qv in query_variations:
+                for kv in keyword_variations:
+
+                    if kv in qv or qv in kv:
+                        return {
+                            "category": category,
+                            "brands": data.get("brands", [])
+                        }
 
     return {
         "category": "generic",
