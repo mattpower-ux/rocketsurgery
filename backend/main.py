@@ -81,7 +81,7 @@ def root():
     return {"status": "RocketSurgery API is running"}
 
 
-@app.post("/seed-demo")
+@app.get("/seed-demo")
 def seed_demo():
     save_walkthrough(DEMO_WALKTHROUGH_ID, DEMO_WALKTHROUGH)
     return {
