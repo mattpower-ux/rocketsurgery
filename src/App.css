@@ -341,4 +341,22 @@ body {
   .app {
     background: radial-gradient(circle at top, #ffffff 0, #f4f5f7 45%);
   }
+  .illustrationFrame {
+  position: relative;
+  height: 420px;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.realIllustration {
+  background: #e8e8e8;
+}
+
+.stepImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 }
