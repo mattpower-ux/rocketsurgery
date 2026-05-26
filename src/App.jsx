@@ -3,34 +3,6 @@ import "./App.css";
 
 const API_URL = "https://rocketsurgery-api.onrender.com";
 
-const BRAND_MODEL_OPTIONS = {
-  Moen: ["1222 Posi-Temp", "1225 Cartridge", "1200 Cartridge", "M-Core 1213", "Flo Smart Valve"],
-  Delta: ["RP19804", "RP46074", "Monitor 14 Series", "MultiChoice Universal", "RP50587"],
-  Kohler: ["GP500520", "GP76851", "GP800820", "Rite-Temp", "K-8304"],
-  Pfister: ["974-042", "974-074", "974-292", "974-321", "Avante Cartridge"],
-  "American Standard": ["M952100", "M961854", "A954440", "Ceramic Disc Cartridge", "Pressure Balance Cartridge"]
-};
-
-const KNOWN_BRANDS = Object.keys(BRAND_MODEL_OPTIONS);
-
-function queryHasKnownBrandAndModel(query) {
-  const normalized = query.toLowerCase();
-
-  return KNOWN_BRANDS.some((brand) => {
-    const brandMatch = normalized.includes(brand.toLowerCase());
-
-    if (!brandMatch) {
-      return false;
-    }
-
-    const models = BRAND_MODEL_OPTIONS[brand] || [];
-
-    return models.some((model) =>
-      normalized.includes(model.toLowerCase())
-    );
-  });
-}
-
 function buildSpecificQuery(query, brand, model) {
   const baseQuery = query.trim() || "installation walkthrough";
 
@@ -51,6 +23,11 @@ function App() {
   const [started, setStarted] = useState(false);
   const [clarifying, setClarifying] = useState(false);
   const [installMode, setInstallMode] = useState("");
+  const [productOptions, setProductOptions] = useState({
+    category: "generic",
+    brands: [],
+    query_has_known_brand_and_model: false
+  });
   const [selectedBrand, setSelectedBrand] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [loading, setLoading] = useState(false);
@@ -59,7 +36,23 @@ function App() {
   const [complete, setComplete] = useState(false);
 
   const currentStep = walkthrough?.steps?.[stepIndex];
-  const availableModels = selectedBrand ? BRAND_MODEL_OPTIONS[selectedBrand] || [] : [];
+  const availableBrands = productOptions?.brands || [];
+  const selectedBrandRecord = availableBrands.find(
+    (item) => item.brand === selectedBrand
+  );
+  const availableModels = selectedBrandRecord?.models || [];
+
+  async function fetchProductOptions(finalQuery) {
+    const response = await fetch(
+      `${API_URL}/product-options?query=${encodeURIComponent(finalQuery)}`
+    );
+
+    if (!response.ok) {
+      throw new Error("Could not load product options.");
+    }
+
+    return response.json();
+  }
 
   async function fetchWalkthrough(finalQuery) {
     setLoading(true);
@@ -91,21 +84,41 @@ function App() {
     }
   }
 
-  function startWalkthrough() {
-    const trimmedQuery = query.trim();
+  async function startWalkthrough() {
+    const trimmedQuery = query.trim() || "generic installation walkthrough";
 
-    if (queryHasKnownBrandAndModel(trimmedQuery)) {
-      fetchWalkthrough(trimmedQuery);
-      return;
-    }
-
+    setLoading(true);
     setInstallMode("");
     setSelectedBrand("");
     setSelectedModel("");
-    setClarifying(true);
-    setStarted(false);
-    setComplete(false);
     setActiveHotspot(null);
+    setComplete(false);
+
+    try {
+      const options = await fetchProductOptions(trimmedQuery);
+      setProductOptions(options);
+
+      if (options.query_has_known_brand_and_model) {
+        fetchWalkthrough(trimmedQuery);
+        return;
+      }
+
+      setClarifying(true);
+      setStarted(false);
+    } catch (error) {
+      console.error(error);
+
+      setProductOptions({
+        category: "generic",
+        brands: [],
+        query_has_known_brand_and_model: false
+      });
+
+      setClarifying(true);
+      setStarted(false);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function continueGeneric() {
@@ -126,6 +139,11 @@ function App() {
     setStarted(false);
     setClarifying(false);
     setInstallMode("");
+    setProductOptions({
+      category: "generic",
+      brands: [],
+      query_has_known_brand_and_model: false
+    });
     setSelectedBrand("");
     setSelectedModel("");
     setLoading(false);
@@ -216,7 +234,7 @@ function App() {
             onClick={startWalkthrough}
             disabled={loading}
           >
-            {loading ? "BUILDING WALKTHROUGH..." : "START WALKTHROUGH"}
+            {loading ? "CHECKING PRODUCT OPTIONS..." : "START WALKTHROUGH"}
           </button>
         </main>
       ) : clarifying ? (
@@ -252,7 +270,11 @@ function App() {
               />
               <span>
                 <strong>SPECIFIC BRAND AND MODEL</strong>
-                <small>Use product-specific instructions when manufacturer data is available.</small>
+                <small>
+                  {availableBrands.length > 0
+                    ? "Use product-specific instructions when manufacturer data is available."
+                    : "No matching product catalog is loaded yet for this query."}
+                </small>
               </span>
             </label>
           </section>
@@ -268,11 +290,12 @@ function App() {
                     setSelectedBrand(e.target.value);
                     setSelectedModel("");
                   }}
+                  disabled={availableBrands.length === 0}
                 >
                   <option value="">Select brand</option>
-                  {KNOWN_BRANDS.map((brand) => (
-                    <option key={brand} value={brand}>
-                      {brand}
+                  {availableBrands.map((entry) => (
+                    <option key={entry.brand} value={entry.brand}>
+                      {entry.brand}
                     </option>
                   ))}
                 </select>
