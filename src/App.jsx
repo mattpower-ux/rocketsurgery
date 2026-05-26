@@ -1,27 +1,54 @@
 import { useState } from "react";
 import "./App.css";
-import sampleWalkthrough from "./data/sampleWalkthrough";
+
+const API_URL = "https://rocketsurgery-api.onrender.com";
 
 function App() {
   const [query, setQuery] = useState("");
+  const [walkthrough, setWalkthrough] = useState(null);
   const [started, setStarted] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [activeHotspot, setActiveHotspot] = useState(null);
   const [complete, setComplete] = useState(false);
 
-  const currentStep = sampleWalkthrough.steps[stepIndex];
+  const currentStep = walkthrough?.steps?.[stepIndex];
 
-  function startWalkthrough() {
-    setStarted(true);
+  async function startWalkthrough() {
+    setLoading(true);
+    setActiveHotspot(null);
     setComplete(false);
     setStepIndex(0);
-    setActiveHotspot(null);
+
+    try {
+      const response = await fetch(`${API_URL}/walkthrough`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          query: query || "James Hardie siding nailing schedule"
+        })
+      });
+
+      const data = await response.json();
+
+      setWalkthrough(data);
+      setStarted(true);
+    } catch (error) {
+      alert("Could not load walkthrough from API.");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function newJob() {
     window.speechSynthesis.cancel();
     setQuery("");
+    setWalkthrough(null);
     setStarted(false);
+    setLoading(false);
     setComplete(false);
     setStepIndex(0);
     setActiveHotspot(null);
@@ -30,7 +57,7 @@ function App() {
   function nextStep() {
     setActiveHotspot(null);
 
-    if (stepIndex < sampleWalkthrough.steps.length - 1) {
+    if (stepIndex < walkthrough.steps.length - 1) {
       setStepIndex(stepIndex + 1);
     } else {
       setComplete(true);
@@ -78,8 +105,12 @@ function App() {
             placeholder="Example: James Hardie siding nailing schedule"
           />
 
-          <button className="startButton" onClick={startWalkthrough}>
-            START WALKTHROUGH
+          <button
+            className="startButton"
+            onClick={startWalkthrough}
+            disabled={loading}
+          >
+            {loading ? "BUILDING WALKTHROUGH..." : "START WALKTHROUGH"}
           </button>
         </main>
       ) : complete ? (
@@ -97,65 +128,67 @@ function App() {
           </div>
         </main>
       ) : (
-        <main className="walkthroughScreen">
-          <div className="walkthroughTitle">{sampleWalkthrough.title}</div>
+        currentStep && (
+          <main className="walkthroughScreen">
+            <div className="walkthroughTitle">{walkthrough.title}</div>
 
-          <div className="progressText">
-            Step {stepIndex + 1} of {sampleWalkthrough.steps.length}
-          </div>
-
-          <section className="imagePanel">
-            <div className={`fakeIllustration stepArt${currentStep.id}`}>
-              <div className="illustrationLabel">{currentStep.imageLabel}</div>
-
-              {currentStep.hotspots.map((hotspot, index) => (
-                <button
-                  key={hotspot.id}
-                  className={`hotspot hotspot${index + 1}`}
-                  onClick={() => setActiveHotspot(hotspot)}
-                  aria-label={hotspot.label}
-                >
-                  +
-                </button>
-              ))}
+            <div className="progressText">
+              Step {stepIndex + 1} of {walkthrough.steps.length}
             </div>
-          </section>
 
-          <section className="captionPanel">
-            <p className="instruction">{currentStep.instruction}</p>
-            <p className="detail">{currentStep.detail}</p>
-          </section>
+            <section className="imagePanel">
+              <div className={`fakeIllustration stepArt${currentStep.id}`}>
+                <div className="illustrationLabel">{currentStep.imageLabel}</div>
 
-          {activeHotspot && (
-            <section className="specCard">
-              <button
-                className="closeSpec"
-                onClick={() => setActiveHotspot(null)}
-              >
-                ×
-              </button>
-              <h3>{activeHotspot.title}</h3>
-              <p>{activeHotspot.content}</p>
-              <small>Source type: manufacturer installation guide</small>
+                {currentStep.hotspots.map((hotspot, index) => (
+                  <button
+                    key={hotspot.id}
+                    className={`hotspot hotspot${index + 1}`}
+                    onClick={() => setActiveHotspot(hotspot)}
+                    aria-label={hotspot.label}
+                  >
+                    +
+                  </button>
+                ))}
+              </div>
             </section>
-          )}
 
-          <footer className="actionBar">
-            <button className="secondaryButton" onClick={previousStep}>
-              ← Back
-            </button>
+            <section className="captionPanel">
+              <p className="instruction">{currentStep.instruction}</p>
+              <p className="detail">{currentStep.detail}</p>
+            </section>
 
-            <button className="audioButton" onClick={readAloud}>
-              🔊 Read
-            </button>
+            {activeHotspot && (
+              <section className="specCard">
+                <button
+                  className="closeSpec"
+                  onClick={() => setActiveHotspot(null)}
+                >
+                  ×
+                </button>
+                <h3>{activeHotspot.title}</h3>
+                <p>{activeHotspot.content}</p>
+                <small>Source type: manufacturer installation guide</small>
+              </section>
+            )}
 
-            <button className="doneButton" onClick={nextStep}>
-              ✓ Done
-            </button>
-          </footer>
+            <footer className="actionBar">
+              <button className="secondaryButton" onClick={previousStep}>
+                ← Back
+              </button>
 
-          <p className="disclaimer">{sampleWalkthrough.disclaimer}</p>
-        </main>
+              <button className="audioButton" onClick={readAloud}>
+                🔊 Read
+              </button>
+
+              <button className="doneButton" onClick={nextStep}>
+                ✓ Done
+              </button>
+            </footer>
+
+            <p className="disclaimer">{walkthrough.disclaimer}</p>
+          </main>
+        )
       )}
     </div>
   );
