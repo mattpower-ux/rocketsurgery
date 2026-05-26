@@ -2,9 +2,22 @@ import json
 from datetime import datetime, timezone
 
 try:
-    from app.storage import BASE_DIR, slugify
+    from app.storage import (
+        BASE_DIR,
+        slugify,
+        save_walkthrough
+    )
 except ImportError:
-    from storage import BASE_DIR, slugify
+    from storage import (
+        BASE_DIR,
+        slugify,
+        save_walkthrough
+    )
+
+try:
+    from app.generator import generate_placeholder_walkthrough
+except ImportError:
+    from generator import generate_placeholder_walkthrough
 
 
 ADMIN_DIR = BASE_DIR / "admin"
@@ -99,6 +112,64 @@ def save_bulk_queries(raw_text: str):
         "duplicate_count": len(lines) - len(added),
         "total_count": len(existing_queries),
         "added": added
+    }
+
+
+def process_bulk_queries(limit: int = 5):
+    ensure_admin_storage()
+
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    queries = bulk.get("queries", [])
+
+    processed = []
+    failed = []
+
+    queued = [
+        item for item in queries
+        if item.get("status") == "queued"
+    ]
+
+    for item in queued[:limit]:
+        query = item.get("query")
+
+        try:
+            walkthrough = generate_placeholder_walkthrough(query)
+
+            save_walkthrough(
+                walkthrough["walkthrough_id"],
+                walkthrough
+            )
+
+            item["status"] = "completed"
+            item["completed_at"] = now_iso()
+            item["walkthrough_id"] = walkthrough["walkthrough_id"]
+
+            processed.append({
+                "query": query,
+                "walkthrough_id": walkthrough["walkthrough_id"]
+            })
+
+        except Exception as e:
+            item["status"] = "failed"
+            item["error"] = str(e)
+
+            failed.append({
+                "query": query,
+                "error": str(e)
+            })
+
+    save_json(BULK_QUERIES_FILE, bulk)
+
+    return {
+        "status": "bulk processing complete",
+        "processed_count": len(processed),
+        "failed_count": len(failed),
+        "processed": processed,
+        "failed": failed,
+        "remaining_queued": len([
+            q for q in queries
+            if q.get("status") == "queued"
+        ])
     }
 
 
@@ -198,9 +269,27 @@ def admin_status():
     requests = load_json(CATALOG_REQUESTS_FILE, {"requests": []})
     product_options = load_json(PRODUCT_OPTIONS_FILE, {})
 
+    completed = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "completed"
+    ])
+
+    queued = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "queued"
+    ])
+
+    failed = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "failed"
+    ])
+
     return {
         "status": "admin storage ready",
         "bulk_query_count": len(bulk.get("queries", [])),
+        "bulk_completed_count": completed,
+        "bulk_queued_count": queued,
+        "bulk_failed_count": failed,
         "catalog_request_count": len(requests.get("requests", [])),
         "catalog_category_count": len(product_options.keys())
     }
