@@ -14,6 +14,17 @@ try:
 except ImportError:
     from generator import generate_placeholder_walkthrough
 
+try:
+    from app.catalog import (
+        get_product_options_for_query,
+        query_has_known_brand_and_model
+    )
+except ImportError:
+    from catalog import (
+        get_product_options_for_query,
+        query_has_known_brand_and_model
+    )
+
 
 app = FastAPI(title="RocketSurgery API")
 
@@ -50,7 +61,7 @@ DEMO_WALKTHROUGH = {
             "instruction": "Find the wall studs before fastening the siding.",
             "detail": "Fasteners should penetrate framing or approved structural sheathing.",
             "imageLabel": "Step 1: Locate studs",
-            "imageUrl": "https://rocketsurgery-api.onrender.com/static/images/test-step.png",
+            "imageUrl": "https://rocketsurgery-api.onrender.com/static/images/test-step.svg",
             "hotspots": [
                 {
                     "id": "studs",
@@ -65,7 +76,7 @@ DEMO_WALKTHROUGH = {
             "instruction": "Place the siding board in position with the proper overlap.",
             "detail": "Keep laps consistent and follow the product-specific exposure limits.",
             "imageLabel": "Step 2: Set board overlap",
-            "imageUrl": "https://rocketsurgery-api.onrender.com/static/images/test-step.png",
+            "imageUrl": "https://rocketsurgery-api.onrender.com/static/images/test-step.svg",
             "hotspots": [
                 {
                     "id": "overlap",
@@ -80,7 +91,7 @@ DEMO_WALKTHROUGH = {
             "instruction": "Fasten near the top edge according to the manufacturer guide.",
             "detail": "Use corrosion-resistant fasteners suitable for fiber-cement siding.",
             "imageLabel": "Step 3: Nail placement",
-            "imageUrl": "https://rocketsurgery-api.onrender.com/static/images/test-step.png",
+            "imageUrl": "https://rocketsurgery-api.onrender.com/static/images/test-step.svg",
             "hotspots": [
                 {
                     "id": "nail",
@@ -102,9 +113,23 @@ def root():
 @app.get("/seed-demo")
 def seed_demo():
     save_walkthrough(DEMO_WALKTHROUGH_ID, DEMO_WALKTHROUGH)
+
     return {
         "status": "saved",
         "walkthrough_id": DEMO_WALKTHROUGH_ID
+    }
+
+
+@app.get("/product-options")
+def product_options(query: str):
+    options = get_product_options_for_query(query)
+
+    return {
+        "query": query,
+        "category": options.get("category", "generic"),
+        "brands": options.get("brands", []),
+        "query_has_known_brand_and_model":
+            query_has_known_brand_and_model(query)
     }
 
 
@@ -116,6 +141,7 @@ def get_walkthrough(request: WalkthroughRequest):
         return cached
 
     generated = generate_placeholder_walkthrough(request.query)
+
     save_walkthrough(generated["walkthrough_id"], generated)
 
     return generated
