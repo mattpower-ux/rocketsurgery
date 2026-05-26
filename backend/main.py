@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from pathlib import Path
 
 try:
     from app.storage import load_walkthrough, save_walkthrough
@@ -14,6 +16,14 @@ except ImportError:
 
 
 app = FastAPI(title="RocketSurgery API")
+
+Path("/data/rocketsurgery/images").mkdir(parents=True, exist_ok=True)
+
+app.mount(
+    "/static/images",
+    StaticFiles(directory="/data/rocketsurgery/images"),
+    name="images"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,6 +50,7 @@ DEMO_WALKTHROUGH = {
             "instruction": "Find the wall studs before fastening the siding.",
             "detail": "Fasteners should penetrate framing or approved structural sheathing.",
             "imageLabel": "Step 1: Locate studs",
+            "imageUrl": "https://rocketsurgery-api.onrender.com/static/images/test-step.png",
             "hotspots": [
                 {
                     "id": "studs",
@@ -54,6 +65,7 @@ DEMO_WALKTHROUGH = {
             "instruction": "Place the siding board in position with the proper overlap.",
             "detail": "Keep laps consistent and follow the product-specific exposure limits.",
             "imageLabel": "Step 2: Set board overlap",
+            "imageUrl": "https://rocketsurgery-api.onrender.com/static/images/test-step.png",
             "hotspots": [
                 {
                     "id": "overlap",
@@ -68,6 +80,7 @@ DEMO_WALKTHROUGH = {
             "instruction": "Fasten near the top edge according to the manufacturer guide.",
             "detail": "Use corrosion-resistant fasteners suitable for fiber-cement siding.",
             "imageLabel": "Step 3: Nail placement",
+            "imageUrl": "https://rocketsurgery-api.onrender.com/static/images/test-step.png",
             "hotspots": [
                 {
                     "id": "nail",
