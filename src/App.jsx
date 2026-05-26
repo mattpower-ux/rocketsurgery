@@ -50,7 +50,7 @@ function App() {
   const [walkthrough, setWalkthrough] = useState(null);
   const [started, setStarted] = useState(false);
   const [clarifying, setClarifying] = useState(false);
-  const [installMode, setInstallMode] = useState("generic");
+  const [installMode, setInstallMode] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [loading, setLoading] = useState(false);
@@ -99,7 +99,7 @@ function App() {
       return;
     }
 
-    setInstallMode("generic");
+    setInstallMode("");
     setSelectedBrand("");
     setSelectedModel("");
     setClarifying(true);
@@ -125,7 +125,7 @@ function App() {
     setWalkthrough(null);
     setStarted(false);
     setClarifying(false);
-    setInstallMode("generic");
+    setInstallMode("");
     setSelectedBrand("");
     setSelectedModel("");
     setLoading(false);
@@ -154,6 +154,7 @@ function App() {
       setStarted(false);
       setWalkthrough(null);
       setComplete(false);
+      setInstallMode("");
       setClarifying(true);
     }
   }
@@ -164,6 +165,9 @@ function App() {
     setStarted(false);
     setWalkthrough(null);
     setComplete(false);
+    setInstallMode("");
+    setSelectedBrand("");
+    setSelectedModel("");
     setStepIndex(0);
     setActiveHotspot(null);
   }
@@ -200,6 +204,7 @@ function App() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !loading) {
+                e.preventDefault();
                 startWalkthrough();
               }
             }}
@@ -305,13 +310,17 @@ function App() {
               >
                 {loading ? "BUILDING..." : "CONTINUE SPECIFIC"}
               </button>
-            ) : (
+            ) : installMode === "generic" ? (
               <button
                 className="startButton"
                 onClick={continueGeneric}
                 disabled={loading}
               >
                 {loading ? "BUILDING..." : "CONTINUE GENERIC"}
+              </button>
+            ) : (
+              <button className="startButton" disabled>
+                CHOOSE AN OPTION
               </button>
             )}
           </div>
