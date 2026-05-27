@@ -54,6 +54,11 @@ function App() {
 
   const [overlayData, setOverlayData] = useState(null);
 
+  const [imageRegistry, setImageRegistry] = useState(null);
+  const [promoteFilename, setPromoteFilename] = useState("");
+  const [promoteCanonicalKey, setPromoteCanonicalKey] = useState("");
+  const [promoteStepNumber, setPromoteStepNumber] = useState(1);
+
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
   const selectedBrandRecord = availableBrands.find(
@@ -474,6 +479,91 @@ function App() {
   }
 
 
+  async function loadImageRegistry() {
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/image-registry`);
+      const data = await response.json();
+
+      setImageRegistry(data);
+      setAdminMessage(`Image registry loaded: ${data.image_count || 0} assets.`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not load image registry.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function rebuildImageRegistry() {
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/admin/rebuild-image-registry`,
+        {
+          method: "POST"
+        }
+      );
+
+      const data = await response.json();
+
+      setImageRegistry(data);
+      setAdminMessage(`Image registry rebuilt: ${data.image_count || 0} assets.`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not rebuild image registry.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function promoteImageToCanonical(filenameOverride = "") {
+    const filename = filenameOverride || promoteFilename;
+
+    if (!filename || !promoteCanonicalKey) {
+      setAdminMessage("Choose an image filename and canonical key first.");
+      return;
+    }
+
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/promote-image`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          filename,
+          canonical_key: promoteCanonicalKey,
+          step_number: Number(promoteStepNumber || 1)
+        })
+      });
+
+      const data = await response.json();
+
+      setAdminMessage(
+        data.status === "promoted"
+          ? `Promoted ${filename} to ${data.filename}.`
+          : data.message || "Image promotion failed."
+      );
+
+      loadCanonicalStatus();
+      loadImageRegistry();
+
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not promote image.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
   async function processModelDiscovery() {
     setAdminLoading(true);
     setAdminMessage("");
@@ -718,6 +808,102 @@ function App() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="adminCard">
+            <div className="adminCardHeader">
+              <h2>Generated Image Registry</h2>
+
+              <div>
+                <button
+                  className="secondaryButton"
+                  onClick={loadImageRegistry}
+                  disabled={adminLoading}
+                >
+                  Load Registry
+                </button>
+
+                <button
+                  className="secondaryButton"
+                  onClick={rebuildImageRegistry}
+                  disabled={adminLoading}
+                  style={{ marginLeft: "8px" }}
+                >
+                  Rebuild
+                </button>
+              </div>
+            </div>
+
+            <p className="adminHelp">
+              Review generated images and promote useful ones into canonical image sets.
+            </p>
+
+            <input
+              className="queryBox"
+              type="text"
+              value={promoteCanonicalKey}
+              onChange={(e) => setPromoteCanonicalKey(e.target.value)}
+              placeholder="Promote to canonical key, example: replace toilet"
+            />
+
+            <input
+              className="queryBox"
+              type="number"
+              min="1"
+              value={promoteStepNumber}
+              onChange={(e) => setPromoteStepNumber(e.target.value)}
+              placeholder="Canonical step number"
+            />
+
+            <input
+              className="queryBox"
+              type="text"
+              value={promoteFilename}
+              onChange={(e) => setPromoteFilename(e.target.value)}
+              placeholder="Optional filename to promote manually"
+            />
+
+            <button
+              className="startButton"
+              onClick={() => promoteImageToCanonical()}
+              disabled={adminLoading || !promoteFilename || !promoteCanonicalKey}
+            >
+              PROMOTE MANUAL FILENAME
+            </button>
+
+            {imageRegistry?.images?.length > 0 && (
+              <div className="canonicalGrid">
+                {imageRegistry.images.slice(0, 60).map((image) => (
+                  <div className="canonicalCard" key={image.filename}>
+                    <h3>{image.filename}</h3>
+
+                    <p>
+                      {Math.round((image.size_bytes || 0) / 1024)} KB
+                    </p>
+
+                    <div className="canonicalThumbs">
+                      <div className="canonicalThumb exists">
+                        <img
+                          src={`${API_URL}/static/images/${image.filename}`}
+                          alt={image.filename}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      className="secondaryButton"
+                      onClick={() => {
+                        setPromoteFilename(image.filename);
+                        promoteImageToCanonical(image.filename);
+                      }}
+                      disabled={adminLoading || !promoteCanonicalKey}
+                    >
+                      Promote
+                    </button>
                   </div>
                 ))}
               </div>
