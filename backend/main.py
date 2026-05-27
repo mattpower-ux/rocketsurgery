@@ -100,6 +100,11 @@ except ImportError:
         load_image_registry
     )
 
+try:
+    from app.image_promotion import promote_image_to_canonical
+except ImportError:
+    from image_promotion import promote_image_to_canonical
+
 
 app = FastAPI(title="RocketSurgery API")
 
@@ -160,6 +165,12 @@ class OverlayRequest(BaseModel):
     brand: str = ""
     model: str = ""
     extracted_specs: dict = {}
+
+
+class PromoteImageRequest(BaseModel):
+    filename: str
+    canonical_key: str
+    step_number: int
 
 
 DEMO_WALKTHROUGH_ID = "james-hardie-lap-siding-nailing-schedule"
@@ -337,6 +348,15 @@ def get_image_registry():
 @app.post("/admin/rebuild-image-registry")
 def rebuild_image_registry():
     return build_image_registry()
+
+
+@app.post("/admin/promote-image")
+def promote_image(request: PromoteImageRequest):
+    return promote_image_to_canonical(
+        filename=request.filename,
+        canonical_key=request.canonical_key,
+        step_number=request.step_number
+    )
 
 
 @app.post("/walkthrough/overlay")
