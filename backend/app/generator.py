@@ -18,6 +18,11 @@ try:
 except ImportError:
     from labor_estimator import estimate_labor_minutes
 
+try:
+    from app.canonical_images import get_canonical_image_urls
+except ImportError:
+    from canonical_images import get_canonical_image_urls
+
 
 def generate_placeholder_walkthrough(query: str) -> dict:
     walkthrough_id = query_to_walkthrough_id(query)
@@ -30,13 +35,19 @@ def generate_placeholder_walkthrough(query: str) -> dict:
         step_count=len(planned_steps)
     )
 
+    canonical_images = get_canonical_image_urls(clean_query)
+
     steps = []
 
     for index, planned_step in enumerate(planned_steps[:8], start=1):
-        image_url = generate_step_image(
-            f"{clean_query} — {planned_step.get('title', f'Step {index}')}",
-            index
-        )
+
+        if index - 1 < len(canonical_images):
+            image_url = canonical_images[index - 1]
+        else:
+            image_url = generate_step_image(
+                f"{clean_query} — {planned_step.get('title', f'Step {index}')}",
+                index
+            )
 
         steps.append(
             {
