@@ -47,6 +47,11 @@ function App() {
   const [discoverTopModels, setDiscoverTopModels] = useState(true);
   const [adminLoading, setAdminLoading] = useState(false);
 
+  const [canonicalStatus, setCanonicalStatus] = useState(null);
+  const [canonicalKey, setCanonicalKey] = useState("");
+  const [canonicalStep, setCanonicalStep] = useState(1);
+  const [canonicalFile, setCanonicalFile] = useState(null);
+
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
   const selectedBrandRecord = availableBrands.find(
@@ -372,6 +377,68 @@ function App() {
   }
 
 
+  async function loadCanonicalStatus() {
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/admin/canonical-image-status`
+      );
+
+      const data = await response.json();
+
+      setCanonicalStatus(data);
+      setAdminMessage("Canonical image status loaded.");
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not load canonical image status.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function uploadCanonicalImage() {
+    if (!canonicalFile || !canonicalKey) {
+      return;
+    }
+
+    setAdminLoading(true);
+
+    try {
+      const formData = new FormData();
+
+      formData.append("canonical_key", canonicalKey);
+      formData.append("step_number", canonicalStep);
+      formData.append("file", canonicalFile);
+
+      const response = await fetch(
+        `${API_URL}/admin/upload-canonical-image`,
+        {
+          method: "POST",
+          body: formData
+        }
+      );
+
+      const data = await response.json();
+
+      setAdminMessage(
+        `Uploaded canonical image: ${data.filename}`
+      );
+
+      setCanonicalFile(null);
+
+      loadCanonicalStatus();
+
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not upload canonical image.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
   async function processModelDiscovery() {
     setAdminLoading(true);
     setAdminMessage("");
@@ -539,6 +606,87 @@ function App() {
                 ? "DISCOVERING..."
                 : "PROCESS MODEL DISCOVERY"}
             </button>
+          </section>
+
+          <section className="adminCard">
+            <div className="adminCardHeader">
+              <h2>Canonical Image Manager</h2>
+
+              <button
+                className="secondaryButton"
+                onClick={loadCanonicalStatus}
+                disabled={adminLoading}
+              >
+                Refresh Images
+              </button>
+            </div>
+
+            <p className="adminHelp">
+              Upload reusable canonical walkthrough images.
+            </p>
+
+            <input
+              className="queryBox"
+              type="text"
+              value={canonicalKey}
+              onChange={(e) => setCanonicalKey(e.target.value)}
+              placeholder="Canonical key, example: replace kitchen faucet"
+            />
+
+            <input
+              className="queryBox"
+              type="number"
+              min="1"
+              value={canonicalStep}
+              onChange={(e) => setCanonicalStep(e.target.value)}
+              placeholder="Step number"
+            />
+
+            <input
+              type="file"
+              onChange={(e) => setCanonicalFile(e.target.files?.[0] || null)}
+            />
+
+            <button
+              className="startButton"
+              onClick={uploadCanonicalImage}
+              disabled={adminLoading || !canonicalFile || !canonicalKey}
+            >
+              UPLOAD CANONICAL IMAGE
+            </button>
+
+            {canonicalStatus?.sets?.length > 0 && (
+              <div className="canonicalGrid">
+                {canonicalStatus.sets.map((set) => (
+                  <div className="canonicalCard" key={set.slug}>
+                    <h3>{set.canonical_key}</h3>
+
+                    <p>
+                      {set.available_count} / {set.expected_count} images
+                    </p>
+
+                    <div className="canonicalThumbs">
+                      {set.images.map((img) => (
+                        <div
+                          key={img.filename}
+                          className={`canonicalThumb ${
+                            img.exists ? "exists" : "missing"
+                          }`}
+                        >
+                          {img.exists ? (
+                            <img src={img.url} alt={img.filename} />
+                          ) : (
+                            <div className="missingThumb">
+                              Missing
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="adminCard">
