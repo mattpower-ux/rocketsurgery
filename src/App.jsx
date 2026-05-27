@@ -951,7 +951,8 @@ function App() {
               </section>
             )}
 
-            {overlayData?.overlays?.length > 0 && (
+            {installMode === "specific" &&
+              overlayData?.overlays?.length > 0 && (
               <section className="overlayPanel">
                 <h3>MODEL-SPECIFIC NOTES</h3>
 
@@ -985,7 +986,8 @@ function App() {
 
                 <div className="illustrationLabel">{currentStep.imageLabel}</div>
 
-                {currentStep.hotspots.map((hotspot, index) => (
+                {installMode === "specific" &&
+                  currentStep.hotspots.map((hotspot, index) => (
                   <button
                     key={hotspot.id}
                     className={`hotspot hotspot${index + 1}`}
@@ -1027,7 +1029,9 @@ function App() {
               </button>
 
               <button className="doneButton" onClick={nextStep}>
-                ✓ Done
+                {stepIndex < walkthrough.steps.length - 1
+                  ? "NEXT →"
+                  : "✓ DONE"}
               </button>
             </footer>
 
