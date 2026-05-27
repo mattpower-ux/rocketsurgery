@@ -52,6 +52,11 @@ except ImportError:
     from model_discovery import process_model_discovery
 
 try:
+    from app.canonical import seed_canonical_walkthroughs
+except ImportError:
+    from canonical import seed_canonical_walkthroughs
+
+try:
     from app.admin import (
         admin_status,
         save_bulk_queries,
@@ -271,6 +276,11 @@ def post_process_bulk_queries(limit: int = 5):
 @app.post("/admin/process-model-discovery")
 def post_process_model_discovery(limit: int = 5):
     return process_model_discovery(limit=limit)
+
+
+@app.post("/admin/seed-canonical-walkthroughs")
+def post_seed_canonical_walkthroughs():
+    return seed_canonical_walkthroughs()
 
 
 @app.post("/walkthrough")
