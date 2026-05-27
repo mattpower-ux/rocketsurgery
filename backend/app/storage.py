@@ -26,7 +26,37 @@ def query_to_walkthrough_id(query: str) -> str:
         if "siding" in q or "lap" in q or "nailing" in q:
             return "james-hardie-lap-siding-nailing-schedule"
 
-    return slugify(query)
+    synonym_map = {
+        "footers": "footings",
+        "footer": "footing",
+        "sonotube": "form tube",
+        "sonotubes": "form tubes",
+        "post holes": "footings",
+        "deck post": "post",
+        "fence post": "post"
+    }
+
+    filler_words = [
+        "how to",
+        "install",
+        "replace",
+        "build",
+        "repair",
+        "fix",
+        "tutorial",
+        "guide",
+        "diy"
+    ]
+
+    for old_word, new_word in synonym_map.items():
+        q = q.replace(old_word, new_word)
+
+    for filler in filler_words:
+        q = q.replace(filler, "")
+
+    q = re.sub(r"\s+", " ", q).strip()
+
+    return slugify(q)
 
 
 def walkthrough_path(walkthrough_id: str) -> Path:
