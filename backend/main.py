@@ -5,9 +5,15 @@ from pydantic import BaseModel
 from pathlib import Path
 
 try:
-    from app.canonical_images import CANONICAL_IMAGE_DIR
+    from app.canonical_images import (
+        CANONICAL_IMAGE_DIR,
+        canonical_image_status
+    )
 except ImportError:
-    from canonical_images import CANONICAL_IMAGE_DIR
+    from canonical_images import (
+        CANONICAL_IMAGE_DIR,
+        canonical_image_status
+    )
 
 try:
     from app.storage import load_walkthrough, save_walkthrough
@@ -60,11 +66,6 @@ try:
     from app.canonical import seed_canonical_walkthroughs
 except ImportError:
     from canonical import seed_canonical_walkthroughs
-
-try:
-    from app.canonical_upload import save_canonical_image
-except ImportError:
-    from canonical_upload import save_canonical_image
 
 try:
     from app.admin import (
@@ -299,20 +300,9 @@ def post_seed_canonical_walkthroughs():
     return seed_canonical_walkthroughs()
 
 
-@app.post("/admin/upload-canonical-image")
-async def upload_canonical_image(
-    canonical_key: str = Form(...),
-    step_number: int = Form(...),
-    file: UploadFile = File(...)
-):
-    contents = await file.read()
-
-    return save_canonical_image(
-        file_bytes=contents,
-        filename=file.filename,
-        canonical_key=canonical_key,
-        step_number=step_number
-    )
+@app.get("/admin/canonical-image-status")
+def get_canonical_image_status():
+    return canonical_image_status()
 
 
 @app.post("/walkthrough")
