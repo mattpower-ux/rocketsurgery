@@ -5,3 +5,5 @@ openai
 pymupdf
 python-multipart
 pillow
+gspread
+google-auth
