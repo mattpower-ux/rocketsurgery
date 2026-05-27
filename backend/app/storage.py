@@ -19,21 +19,20 @@ def slugify(text: str) -> str:
     return text.strip("-")
 
 
-def query_to_walkthrough_id(query: str) -> str:
-    q = query.lower()
-
-    if "james hardie" in q or "hardie" in q:
-        if "siding" in q or "lap" in q or "nailing" in q:
-            return "james-hardie-lap-siding-nailing-schedule"
+def normalize_query_text(query: str) -> str:
+    q = (query or "").lower().strip()
 
     synonym_map = {
         "footers": "footings",
         "footer": "footing",
-        "sonotube": "form tube",
         "sonotubes": "form tubes",
+        "sonotube": "form tube",
         "post holes": "footings",
+        "post hole": "footing",
         "deck post": "post",
-        "fence post": "post"
+        "deck posts": "posts",
+        "fence post": "post",
+        "fence posts": "posts"
     }
 
     filler_words = [
@@ -45,39 +44,63 @@ def query_to_walkthrough_id(query: str) -> str:
         "fix",
         "tutorial",
         "guide",
-        "diy"
+        "diy",
+        "the",
+        "a",
+        "an"
     ]
 
     for old_word, new_word in synonym_map.items():
         q = q.replace(old_word, new_word)
 
     for filler in filler_words:
-        q = q.replace(filler, "")
+        q = re.sub(rf"\b{re.escape(filler)}\b", " ", q)
 
     q = re.sub(r"\s+", " ", q).strip()
 
-    # Canonical construction task aliases
+    return q
+
+
+def query_to_walkthrough_id(query: str) -> str:
+    q = normalize_query_text(query)
+
+    if "james hardie" in q or "hardie" in q:
+        if "siding" in q or "lap" in q or "nailing" in q:
+            return "james-hardie-lap-siding-nailing-schedule"
+
+    # Canonical construction task aliases.
+    # Keep high-frequency tasks mapped to one reusable cache key.
+    if (
+        "post" in q and
+        ("footing" in q or "footings" in q) and
+        (
+            "concrete" in q or
+            "pour" in q or
+            "deck" in q or
+            "fence" in q or
+            "form tube" in q or
+            "form tubes" in q
+        )
+    ):
+        return "concrete-post-footings"
 
     if (
         "concrete" in q and
-        "post" in q and
-        ("footing" in q or "footings" in q)
+        "slab" in q
     ):
-        return "concrete-post-footings"
+        return "pour-concrete-slab"
 
     if (
-        "pour" in q and
-        "post" in q and
-        ("footing" in q or "footings" in q)
+        "load bearing" in q and
+        "wall" in q
     ):
-        return "concrete-post-footings"
+        return "find-load-bearing-wall"
 
     if (
-        "deck" in q and
-        "post" in q and
-        ("footing" in q or "footer" in q)
+        "non load bearing" in q and
+        "wall" in q
     ):
-        return "concrete-post-footings"
+        return "remove-non-load-bearing-wall"
 
     return slugify(q)
 
