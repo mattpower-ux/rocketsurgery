@@ -4,3 +4,4 @@ pydantic
 openai
 pymupdf
 python-multipart
+pillow
