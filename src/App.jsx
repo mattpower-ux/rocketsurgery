@@ -758,6 +758,16 @@ function App() {
               Step {stepIndex + 1} of {walkthrough.steps.length}
             </div>
 
+            {walkthrough.estimated_labor_label && (
+              <section className="laborEstimateCard">
+                <div className="laborEstimateIcon">🛠</div>
+                <div>
+                  <strong>{walkthrough.estimated_labor_label}</strong>
+                  <span>Generic estimate before model-specific adjustments.</span>
+                </div>
+              </section>
+            )}
+
             <section className="imagePanel">
               <div className={`illustrationFrame ${currentStep.imageUrl ? "realIllustration" : `fakeIllustration stepArt${currentStep.id}`}`}>
                 {currentStep.imageUrl ? (
