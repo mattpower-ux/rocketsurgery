@@ -56,6 +56,29 @@ def query_to_walkthrough_id(query: str) -> str:
 
     q = re.sub(r"\s+", " ", q).strip()
 
+    # Canonical construction task aliases
+
+    if (
+        "concrete" in q and
+        "post" in q and
+        ("footing" in q or "footings" in q)
+    ):
+        return "concrete-post-footings"
+
+    if (
+        "pour" in q and
+        "post" in q and
+        ("footing" in q or "footings" in q)
+    ):
+        return "concrete-post-footings"
+
+    if (
+        "deck" in q and
+        "post" in q and
+        ("footing" in q or "footer" in q)
+    ):
+        return "concrete-post-footings"
+
     return slugify(q)
 
 
