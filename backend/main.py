@@ -62,6 +62,11 @@ except ImportError:
     from canonical import seed_canonical_walkthroughs
 
 try:
+    from app.canonical_upload import save_canonical_image
+except ImportError:
+    from canonical_upload import save_canonical_image
+
+try:
     from app.admin import (
         admin_status,
         save_bulk_queries,
@@ -292,6 +297,22 @@ def post_process_model_discovery(limit: int = 5):
 @app.post("/admin/seed-canonical-walkthroughs")
 def post_seed_canonical_walkthroughs():
     return seed_canonical_walkthroughs()
+
+
+@app.post("/admin/upload-canonical-image")
+async def upload_canonical_image(
+    canonical_key: str = Form(...),
+    step_number: int = Form(...),
+    file: UploadFile = File(...)
+):
+    contents = await file.read()
+
+    return save_canonical_image(
+        file_bytes=contents,
+        filename=file.filename,
+        canonical_key=canonical_key,
+        step_number=step_number
+    )
 
 
 @app.post("/walkthrough")
