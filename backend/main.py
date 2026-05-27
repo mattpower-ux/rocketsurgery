@@ -110,6 +110,14 @@ try:
 except ImportError:
     from build_status import get_build_status
 
+try:
+    from app.query_logger import log_query_event
+except ImportError:
+    from query_logger import log_query_event
+
+import time
+from fastapi import Request
+
 
 app = FastAPI(title="RocketSurgery API")
 
@@ -381,14 +389,54 @@ def walkthrough_overlay(request: OverlayRequest):
 
 
 @app.post("/walkthrough")
-def get_walkthrough(request: WalkthroughRequest):
+def get_walkthrough(
+    request: WalkthroughRequest,
+    http_request: Request
+):
+    start_time = time.time()
+
     cached = load_walkthrough(request.query)
 
+    client_ip = (
+        http_request.headers.get("x-forwarded-for")
+        or (http_request.client.host if http_request.client else "")
+    )
+
+    user_agent = http_request.headers.get("user-agent", "")
+
     if cached:
+        elapsed_ms = int((time.time() - start_time) * 1000)
+
+        try:
+            log_query_event(
+                query=request.query,
+                walkthrough_id=cached.get("walkthrough_id", ""),
+                cache_hit=True,
+                response_time_ms=elapsed_ms,
+                ip_address=client_ip,
+                user_agent=user_agent
+            )
+        except Exception as e:
+            print("Query logging failed:", e)
+
         return cached
 
     generated = generate_placeholder_walkthrough(request.query)
 
     save_walkthrough(generated["walkthrough_id"], generated)
+
+    elapsed_ms = int((time.time() - start_time) * 1000)
+
+    try:
+        log_query_event(
+            query=request.query,
+            walkthrough_id=generated.get("walkthrough_id", ""),
+            cache_hit=False,
+            response_time_ms=elapsed_ms,
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+    except Exception as e:
+        print("Query logging failed:", e)
 
     return generated
