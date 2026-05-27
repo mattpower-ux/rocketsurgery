@@ -105,6 +105,11 @@ try:
 except ImportError:
     from image_promotion import promote_image_to_canonical
 
+try:
+    from app.build_status import get_build_status
+except ImportError:
+    from build_status import get_build_status
+
 
 app = FastAPI(title="RocketSurgery API")
 
@@ -357,6 +362,11 @@ def promote_image(request: PromoteImageRequest):
         canonical_key=request.canonical_key,
         step_number=request.step_number
     )
+
+
+@app.get("/admin/walkthrough-build-status")
+def walkthrough_build_status():
+    return get_build_status()
 
 
 @app.post("/walkthrough/overlay")
