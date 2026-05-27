@@ -5,6 +5,11 @@ from pydantic import BaseModel
 from pathlib import Path
 
 try:
+    from app.canonical_images import CANONICAL_IMAGE_DIR
+except ImportError:
+    from canonical_images import CANONICAL_IMAGE_DIR
+
+try:
     from app.storage import load_walkthrough, save_walkthrough
 except ImportError:
     from storage import load_walkthrough, save_walkthrough
@@ -82,6 +87,12 @@ app.mount(
     "/static/images",
     StaticFiles(directory="/data/rocketsurgery/images"),
     name="images"
+)
+
+app.mount(
+    "/static/canonical-images",
+    StaticFiles(directory=str(CANONICAL_IMAGE_DIR)),
+    name="canonical-images"
 )
 
 app.add_middleware(
