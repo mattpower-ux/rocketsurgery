@@ -52,6 +52,8 @@ function App() {
   const [canonicalStep, setCanonicalStep] = useState(1);
   const [canonicalFile, setCanonicalFile] = useState(null);
 
+  const [overlayData, setOverlayData] = useState(null);
+
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
   const selectedBrandRecord = availableBrands.find(
@@ -91,6 +93,9 @@ function App() {
       const data = await response.json();
 
       setWalkthrough(data);
+
+      await fetchOverlay(finalQuery);
+
       setStarted(true);
       setClarifying(false);
       setScreen("home");
@@ -101,6 +106,36 @@ function App() {
       setLoading(false);
     }
   }
+
+
+  async function fetchOverlay(finalQuery) {
+    try {
+      const response = await fetch(
+        `${API_URL}/walkthrough/overlay`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            query: finalQuery,
+            category: productOptions?.category || "",
+            brand: selectedBrand,
+            model: selectedModel
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      setOverlayData(data);
+
+    } catch (error) {
+      console.error(error);
+      setOverlayData(null);
+    }
+  }
+
 
   async function startWalkthrough() {
     const trimmedQuery = query.trim() || "generic installation walkthrough";
@@ -912,6 +947,28 @@ function App() {
                 <div>
                   <strong>{walkthrough.estimated_labor_label}</strong>
                   <span>Generic estimate before model-specific adjustments.</span>
+                </div>
+              </section>
+            )}
+
+            {overlayData?.overlays?.length > 0 && (
+              <section className="overlayPanel">
+                <h3>MODEL-SPECIFIC NOTES</h3>
+
+                <div className="overlayGrid">
+                  {overlayData.overlays.map((overlay, index) => (
+                    <div
+                      key={`${overlay.title}-${index}`}
+                      className={`overlayCard overlay-${overlay.type}`}
+                    >
+                      <strong>{overlay.title}</strong>
+                      <p>{overlay.content}</p>
+
+                      <small>
+                        {overlay.type.replace("_", " ").toUpperCase()}
+                      </small>
+                    </div>
+                  ))}
                 </div>
               </section>
             )}
