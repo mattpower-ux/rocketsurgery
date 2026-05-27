@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
 const API_URL = "https://rocketsurgery-api.onrender.com";
@@ -58,6 +58,8 @@ function App() {
   const [promoteFilename, setPromoteFilename] = useState("");
   const [promoteCanonicalKey, setPromoteCanonicalKey] = useState("");
   const [promoteStepNumber, setPromoteStepNumber] = useState(1);
+
+  const [buildStatus, setBuildStatus] = useState(null);
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
@@ -595,6 +597,39 @@ function App() {
     }
   }
 
+
+  async function loadBuildStatus() {
+    try {
+      const response = await fetch(
+        `${API_URL}/admin/walkthrough-build-status`
+      );
+
+      const data = await response.json();
+
+      setBuildStatus(data);
+
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+
+  useEffect(() => {
+    if (screen !== "admin") {
+      return;
+    }
+
+    loadBuildStatus();
+
+    const interval = setInterval(() => {
+      loadBuildStatus();
+    }, 15000);
+
+    return () => clearInterval(interval);
+
+  }, [screen]);
+
+
   return (
     <div className="app">
       <header className="topbar">
@@ -659,6 +694,81 @@ function App() {
               </div>
             ) : (
               <p className="adminHelp">Click refresh to load admin status.</p>
+            )}
+          </section>
+
+          <section className="adminCard">
+            <div className="adminCardHeader">
+              <h2>Walkthrough Build Activity</h2>
+
+              <button
+                className="secondaryButton"
+                onClick={loadBuildStatus}
+              >
+                Refresh Activity
+              </button>
+            </div>
+
+            {buildStatus ? (
+              <>
+                <div className="adminStats">
+                  <div>
+                    <strong>{buildStatus.activity_state?.toUpperCase()}</strong>
+                    <span>Activity</span>
+                  </div>
+
+                  <div>
+                    <strong>
+                      {buildStatus.seconds_since_activity
+                        ? Math.round(buildStatus.seconds_since_activity)
+                        : 0}
+                    </strong>
+                    <span>Seconds idle</span>
+                  </div>
+
+                  <div>
+                    <strong>{buildStatus.walkthrough_count || 0}</strong>
+                    <span>Walkthroughs</span>
+                  </div>
+
+                  <div>
+                    <strong>{buildStatus.image_count || 0}</strong>
+                    <span>Images</span>
+                  </div>
+                </div>
+
+                <div className="activityColumns">
+                  <div>
+                    <h3>Recent Walkthroughs</h3>
+
+                    <ul className="activityList">
+                      {(buildStatus.recent_walkthroughs || []).map((item) => (
+                        <li key={item.name}>
+                          <strong>{item.name}</strong>
+                          <small>{item.modified_at}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h3>Recent Images</h3>
+
+                    <ul className="activityList">
+                      {(buildStatus.recent_images || []).map((item) => (
+                        <li key={item.name}>
+                          <strong>{item.name}</strong>
+                          <small>{item.modified_at}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="adminHelp">
+                Loading build activity...
+              </p>
             )}
           </section>
 
