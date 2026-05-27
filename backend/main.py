@@ -58,6 +58,11 @@ except ImportError:
     from spec_walkthrough_builder import build_walkthrough_from_specs
 
 try:
+    from app.spec_overlay import build_spec_overlay
+except ImportError:
+    from spec_overlay import build_spec_overlay
+
+try:
     from app.model_discovery import process_model_discovery
 except ImportError:
     from model_discovery import process_model_discovery
@@ -136,6 +141,14 @@ class CatalogEntryRequest(BaseModel):
 
 class BulkCatalogRequest(BaseModel):
     raw_text: str
+
+
+class OverlayRequest(BaseModel):
+    query: str
+    category: str = ""
+    brand: str = ""
+    model: str = ""
+    extracted_specs: dict = {}
 
 
 DEMO_WALKTHROUGH_ID = "james-hardie-lap-siding-nailing-schedule"
@@ -303,6 +316,17 @@ def post_seed_canonical_walkthroughs():
 @app.get("/admin/canonical-image-status")
 def get_canonical_image_status():
     return canonical_image_status()
+
+
+@app.post("/walkthrough/overlay")
+def walkthrough_overlay(request: OverlayRequest):
+    return build_spec_overlay(
+        query=request.query,
+        category=request.category,
+        brand=request.brand,
+        model=request.model,
+        extracted_specs=request.extracted_specs
+    )
 
 
 @app.post("/walkthrough")
