@@ -89,6 +89,17 @@ except ImportError:
         save_bulk_catalog_requests
     )
 
+try:
+    from app.image_registry import (
+        build_image_registry,
+        load_image_registry
+    )
+except ImportError:
+    from image_registry import (
+        build_image_registry,
+        load_image_registry
+    )
+
 
 app = FastAPI(title="RocketSurgery API")
 
@@ -316,6 +327,16 @@ def post_seed_canonical_walkthroughs():
 @app.get("/admin/canonical-image-status")
 def get_canonical_image_status():
     return canonical_image_status()
+
+
+@app.get("/admin/image-registry")
+def get_image_registry():
+    return load_image_registry()
+
+
+@app.post("/admin/rebuild-image-registry")
+def rebuild_image_registry():
+    return build_image_registry()
 
 
 @app.post("/walkthrough/overlay")
