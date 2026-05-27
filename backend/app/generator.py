@@ -13,12 +13,22 @@ try:
 except ImportError:
     from step_planner import generate_installation_steps
 
+try:
+    from app.labor_estimator import estimate_labor_minutes
+except ImportError:
+    from labor_estimator import estimate_labor_minutes
+
 
 def generate_placeholder_walkthrough(query: str) -> dict:
     walkthrough_id = query_to_walkthrough_id(query)
     clean_query = query.strip() or "Untitled installation walkthrough"
 
     planned_steps = generate_installation_steps(clean_query)
+
+    labor = estimate_labor_minutes(
+        query=clean_query,
+        step_count=len(planned_steps)
+    )
 
     steps = []
 
@@ -50,5 +60,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
         "walkthrough_id": walkthrough_id,
         "title": f"PLANNED WALKTHROUGH: {clean_query}",
         "disclaimer": "Draft walkthrough only. Manufacturer instructions and local codes must be verified.",
+        "estimated_labor_minutes": labor["estimated_labor_minutes"],
+        "estimated_labor_label": labor["estimated_labor_label"],
         "steps": steps
     }
