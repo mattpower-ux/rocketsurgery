@@ -76,11 +76,18 @@ def append_google_sheet(row):
     )
 
     client = gspread.authorize(credentials)
-    sheet = client.open_by_key(sheet_id).sheet1
+
+    sheet_name = os.getenv(
+        "GOOGLE_SHEET_TAB",
+        "Sheet1"
+    )
+
+    sheet = client.open_by_key(sheet_id).worksheet(sheet_name)
 
     sheet.append_row(
         [row.get(header, "") for header in HEADERS],
-        value_input_option="USER_ENTERED"
+        value_input_option="USER_ENTERED",
+        insert_data_option="INSERT_ROWS"
     )
 
     return {"status": "logged"}
