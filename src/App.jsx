@@ -794,16 +794,94 @@ function App() {
             </button>
 
 
-            <button
-              className="doneButton"
-              onClick={processQueuedWalkthroughs}
-              disabled={adminLoading}
-              style={{ marginTop: "12px" }}
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                flexWrap: "wrap",
+                marginTop: "12px"
+              }}
             >
-              {adminLoading
-                ? "PROCESSING..."
-                : "PROCESS QUEUED WALKTHROUGHS"}
-            </button>
+              <button
+                className="doneButton"
+                onClick={processQueuedWalkthroughs}
+                disabled={adminLoading}
+              >
+                {adminLoading
+                  ? "PROCESSING..."
+                  : "RUN 5 JOBS"}
+              </button>
+
+              <button
+                className="secondaryButton"
+                onClick={async () => {
+                  setAdminLoading(true);
+
+                  try {
+                    const response = await fetch(
+                      `${API_URL}/admin/process-bulk-queries?limit=1`,
+                      {
+                        method: "POST"
+                      }
+                    );
+
+                    const data = await response.json();
+
+                    setAdminMessage(
+                      `Worker Automation processed ${data.processed_count || 0} job. Remaining queued: ${data.remaining_queued || 0}.`
+                    );
+
+                    loadAdminStatus();
+                    loadBuildStatus();
+
+                  } catch (error) {
+                    console.error(error);
+                    setAdminMessage("Worker Automation failed.");
+
+                  } finally {
+                    setAdminLoading(false);
+                  }
+                }}
+                disabled={adminLoading}
+              >
+                WORKER AUTOMATION
+              </button>
+
+              <button
+                className="secondaryButton"
+                onClick={async () => {
+                  setAdminLoading(true);
+
+                  try {
+                    const response = await fetch(
+                      `${API_URL}/admin/process-bulk-queries?limit=20`,
+                      {
+                        method: "POST"
+                      }
+                    );
+
+                    const data = await response.json();
+
+                    setAdminMessage(
+                      `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
+                    );
+
+                    loadAdminStatus();
+                    loadBuildStatus();
+
+                  } catch (error) {
+                    console.error(error);
+                    setAdminMessage("Could not process walkthroughs.");
+
+                  } finally {
+                    setAdminLoading(false);
+                  }
+                }}
+                disabled={adminLoading}
+              >
+                RUN 20 JOBS
+              </button>
+            </div>
           </section>
 
           <section className="adminCard">
