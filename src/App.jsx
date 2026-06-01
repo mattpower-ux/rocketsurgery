@@ -61,6 +61,11 @@ function App() {
 
   const [buildStatus, setBuildStatus] = useState(null);
 
+  const [bulkJobList, setBulkJobList] = useState(null);
+  const [walkthroughList, setWalkthroughList] = useState([]);
+  const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
+  const [repairCorrections, setRepairCorrections] = useState({});
+
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
   const selectedBrandRecord = availableBrands.find(
@@ -223,6 +228,8 @@ function App() {
     setComplete(false);
     setActiveHotspot(null);
     loadAdminStatus();
+    loadBulkJobList();
+    loadAdminWalkthroughs();
   }
 
   function nextStep() {
@@ -614,6 +621,203 @@ function App() {
   }
 
 
+  async function loadBulkJobList() {
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/bulk-query-list`);
+      const data = await response.json();
+
+      setBulkJobList(data);
+      setAdminMessage(`Queue loaded: ${data.counts?.queued || 0} queued, ${data.counts?.failed || 0} failed.`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not load walkthrough queue.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function updateBulkJob(querySlug, action) {
+    setAdminLoading(true);
+
+    const endpointMap = {
+      retry: "bulk-query-retry",
+      ignore: "bulk-query-ignore",
+      delete: "bulk-query-delete"
+    };
+
+    try {
+      const response = await fetch(`${API_URL}/admin/${endpointMap[action]}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          query_slug: querySlug
+        })
+      });
+
+      const data = await response.json();
+      setAdminMessage(`Queue item ${data.status || action}.`);
+      loadBulkJobList();
+      loadAdminStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not update queue item.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function loadAdminWalkthroughs() {
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250`);
+      const data = await response.json();
+
+      setWalkthroughList(data.walkthroughs || []);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not load walkthrough list.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function loadAdminWalkthrough(walkthroughId) {
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/walkthroughs/${encodeURIComponent(walkthroughId)}`);
+      const data = await response.json();
+
+      if (data.walkthrough) {
+        setSelectedAdminWalkthrough(data.walkthrough);
+        setAdminMessage(`Loaded ${data.walkthrough.title || walkthroughId}.`);
+      } else {
+        setAdminMessage("Walkthrough not found.");
+      }
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not load walkthrough.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function regenerateStepImage(stepId) {
+    if (!selectedAdminWalkthrough) {
+      return;
+    }
+
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/regenerate-step-image`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
+          step_id: stepId,
+          correction: repairCorrections[stepId] || ""
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.walkthrough) {
+        setSelectedAdminWalkthrough(data.walkthrough);
+      }
+
+      setAdminMessage(data.status === "pending_review" ? "New image generated for review." : `Image regeneration: ${data.status}`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not regenerate image.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function acceptStepImage(stepId) {
+    if (!selectedAdminWalkthrough) {
+      return;
+    }
+
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/accept-step-image`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
+          step_id: stepId
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.walkthrough) {
+        setSelectedAdminWalkthrough(data.walkthrough);
+      }
+
+      setAdminMessage(`Image ${data.status}.`);
+      loadAdminWalkthroughs();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not accept image.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function revertStepImage(stepId) {
+    if (!selectedAdminWalkthrough) {
+      return;
+    }
+
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/revert-step-image`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
+          step_id: stepId
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.walkthrough) {
+        setSelectedAdminWalkthrough(data.walkthrough);
+      }
+
+      setAdminMessage(`Image ${data.status}.`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not revert image.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
   useEffect(() => {
     if (screen !== "admin") {
       return;
@@ -770,6 +974,277 @@ function App() {
                 Loading build activity...
               </p>
             )}
+          </section>
+
+          <section className="adminCard">
+            <div className="adminCardHeader">
+              <h2>Walkthrough Queue Manager</h2>
+
+              <button
+                className="secondaryButton"
+                onClick={loadBulkJobList}
+                disabled={adminLoading}
+              >
+                Refresh Queue
+              </button>
+            </div>
+
+            <p className="adminHelp">
+              Review failed, queued, and completed walkthrough jobs. Failed items can be retried, ignored, or removed.
+            </p>
+
+            {bulkJobList ? (
+              <>
+                <div className="adminStats">
+                  <div>
+                    <strong>{bulkJobList.counts?.queued || 0}</strong>
+                    <span>Queued</span>
+                  </div>
+
+                  <div>
+                    <strong>{bulkJobList.counts?.failed || 0}</strong>
+                    <span>Failed</span>
+                  </div>
+
+                  <div>
+                    <strong>{bulkJobList.counts?.completed || 0}</strong>
+                    <span>Completed</span>
+                  </div>
+
+                  <div>
+                    <strong>{bulkJobList.counts?.ignored || 0}</strong>
+                    <span>Ignored</span>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
+                  {(["failed", "queued", "completed", "ignored"]).map((groupName) => (
+                    <div key={groupName}>
+                      <h3 style={{ textTransform: "capitalize" }}>{groupName}</h3>
+
+                      {(bulkJobList[groupName] || []).slice(0, 30).length === 0 ? (
+                        <p className="adminHelp">No {groupName} jobs.</p>
+                      ) : (
+                        <div style={{ display: "grid", gap: "8px" }}>
+                          {(bulkJobList[groupName] || []).slice(0, 30).map((job) => (
+                            <div
+                              key={`${groupName}-${job.query_slug || job.query}`}
+                              style={{
+                                border: "1px solid rgba(0,0,0,0.12)",
+                                borderRadius: "12px",
+                                padding: "12px",
+                                background: "rgba(255,255,255,0.75)"
+                              }}
+                            >
+                              <strong>{job.query}</strong>
+
+                              <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>
+                                ID: {job.walkthrough_id || job.query_slug || "not built yet"} · Attempts: {job.attempts || 0}
+                              </div>
+
+                              {job.error && (
+                                <div style={{ fontSize: "12px", color: "#8a1f11", marginTop: "6px" }}>
+                                  Error: {job.error}
+                                </div>
+                              )}
+
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
+                                <button
+                                  className="secondaryButton"
+                                  onClick={() => updateBulkJob(job.query_slug, "retry")}
+                                  disabled={adminLoading}
+                                >
+                                  Retry
+                                </button>
+
+                                <button
+                                  className="secondaryButton"
+                                  onClick={() => updateBulkJob(job.query_slug, "ignore")}
+                                  disabled={adminLoading}
+                                >
+                                  Ignore
+                                </button>
+
+                                <button
+                                  className="secondaryButton"
+                                  onClick={() => updateBulkJob(job.query_slug, "delete")}
+                                  disabled={adminLoading}
+                                >
+                                  Delete
+                                </button>
+
+                                {job.walkthrough_id && (
+                                  <button
+                                    className="secondaryButton"
+                                    onClick={() => loadAdminWalkthrough(job.walkthrough_id)}
+                                    disabled={adminLoading}
+                                  >
+                                    Inspect
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="adminHelp">Click Refresh Queue to load bulk job records.</p>
+            )}
+          </section>
+
+          <section className="adminCard">
+            <div className="adminCardHeader">
+              <h2>Walkthrough Repair Studio</h2>
+
+              <button
+                className="secondaryButton"
+                onClick={loadAdminWalkthroughs}
+                disabled={adminLoading}
+              >
+                Refresh Walkthroughs
+              </button>
+            </div>
+
+            <p className="adminHelp">
+              Open a saved walkthrough, cherry-pick a weak step image, describe the correction, regenerate it, then accept or discard the replacement.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 320px) 1fr", gap: "16px" }}>
+              <div style={{ display: "grid", gap: "8px", alignContent: "start", maxHeight: "680px", overflow: "auto" }}>
+                {(walkthroughList || []).slice(0, 100).map((item) => (
+                  <button
+                    key={item.walkthrough_id}
+                    className="secondaryButton"
+                    style={{ textAlign: "left" }}
+                    onClick={() => loadAdminWalkthrough(item.walkthrough_id)}
+                    disabled={adminLoading}
+                  >
+                    <strong>{item.title}</strong>
+                    <br />
+                    <span style={{ fontSize: "12px", opacity: 0.75 }}>
+                      {item.walkthrough_id} · {item.step_count} steps
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                {selectedAdminWalkthrough ? (
+                  <>
+                    <h3>{selectedAdminWalkthrough.title}</h3>
+                    <p className="adminHelp">{selectedAdminWalkthrough.walkthrough_id}</p>
+
+                    <div style={{ display: "grid", gap: "16px" }}>
+                      {(selectedAdminWalkthrough.steps || []).map((step) => (
+                        <div
+                          key={step.id}
+                          style={{
+                            border: "1px solid rgba(0,0,0,0.14)",
+                            borderRadius: "16px",
+                            padding: "14px",
+                            background: "rgba(255,255,255,0.8)"
+                          }}
+                        >
+                          <h4>{step.imageLabel || `Step ${step.id}`}</h4>
+                          <p>{step.instruction}</p>
+                          <p style={{ fontSize: "13px", opacity: 0.8 }}>{step.detail}</p>
+
+                          <div style={{ display: "grid", gridTemplateColumns: step.pendingImageUrl ? "1fr 1fr" : "1fr", gap: "12px" }}>
+                            <div>
+                              <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>Current Image</div>
+                              {step.imageUrl ? (
+                                <img
+                                  src={step.imageUrl.startsWith("http") ? step.imageUrl : `${API_URL}${step.imageUrl}`}
+                                  alt={step.imageLabel || `Step ${step.id}`}
+                                  style={{ width: "100%", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.1)" }}
+                                />
+                              ) : (
+                                <div className="missingThumb">No image</div>
+                              )}
+                            </div>
+
+                            {step.pendingImageUrl && (
+                              <div>
+                                <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>New Candidate</div>
+                                <img
+                                  src={step.pendingImageUrl.startsWith("http") ? step.pendingImageUrl : `${API_URL}${step.pendingImageUrl}`}
+                                  alt={`New candidate for step ${step.id}`}
+                                  style={{ width: "100%", borderRadius: "12px", border: "2px solid rgba(0,120,255,0.35)" }}
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <textarea
+                            className="adminTextArea small"
+                            style={{ marginTop: "12px" }}
+                            value={repairCorrections[step.id] || ""}
+                            onChange={(e) => setRepairCorrections({
+                              ...repairCorrections,
+                              [step.id]: e.target.value
+                            })}
+                            placeholder="Correction prompt, example: Make the pipe copper, remove PVC, show a propane torch heating the joint."
+                          />
+
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                            <button
+                              className="startButton"
+                              onClick={() => regenerateStepImage(step.id)}
+                              disabled={adminLoading}
+                            >
+                              Regenerate This Image
+                            </button>
+
+                            {step.pendingImageUrl && (
+                              <button
+                                className="doneButton"
+                                onClick={() => acceptStepImage(step.id)}
+                                disabled={adminLoading}
+                              >
+                                Keep New Image
+                              </button>
+                            )}
+
+                            <button
+                              className="secondaryButton"
+                              onClick={() => revertStepImage(step.id)}
+                              disabled={adminLoading}
+                            >
+                              Revert / Discard
+                            </button>
+
+                            <button
+                              className="secondaryButton"
+                              onClick={() => {
+                                const filename = (step.imageUrl || "").split("/").pop();
+                                setPromoteFilename(filename);
+                                setPromoteStepNumber(step.id);
+                              }}
+                              disabled={!step.imageUrl}
+                            >
+                              Stage for Canonical Promotion
+                            </button>
+                          </div>
+
+                          {step.imagePrompt && (
+                            <details style={{ marginTop: "10px", fontSize: "12px" }}>
+                              <summary>Prompt history</summary>
+                              <pre style={{ whiteSpace: "pre-wrap" }}>{step.imagePrompt}</pre>
+                            </details>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="adminHelp">Select a walkthrough to inspect and repair its images.</p>
+                )}
+              </div>
+            </div>
           </section>
 
           <section className="adminCard">
