@@ -133,6 +133,9 @@ def process_bulk_queries(limit: int = 5):
         query = item.get("query")
 
         try:
+            item["attempts"] = int(item.get("attempts", 0)) + 1
+            item["last_attempt_at"] = now_iso()
+
             walkthrough = generate_placeholder_walkthrough(query)
 
             save_walkthrough(
@@ -152,6 +155,8 @@ def process_bulk_queries(limit: int = 5):
         except Exception as e:
             item["status"] = "failed"
             item["error"] = str(e)
+            item["last_error"] = str(e)
+            item["failed_at"] = now_iso()
 
             failed.append({
                 "query": query,
@@ -341,4 +346,89 @@ def admin_status():
         "bulk_failed_count": failed,
         "catalog_request_count": len(requests.get("requests", [])),
         "catalog_category_count": len(product_options.keys())
+    }
+
+
+def list_bulk_query_jobs():
+    """Return queued, failed, completed, and ignored bulk query records for admin review."""
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    queries = bulk.get("queries", [])
+
+    grouped = {
+        "queued": [],
+        "failed": [],
+        "completed": [],
+        "ignored": [],
+        "all": queries
+    }
+
+    for item in queries:
+        status = item.get("status", "queued")
+        grouped.setdefault(status, []).append(item)
+
+    return {
+        "status": "loaded",
+        "counts": {
+            "all": len(queries),
+            "queued": len(grouped.get("queued", [])),
+            "failed": len(grouped.get("failed", [])),
+            "completed": len(grouped.get("completed", [])),
+            "ignored": len(grouped.get("ignored", []))
+        },
+        **grouped
+    }
+
+
+def retry_bulk_query(query_slug: str):
+    """Move a failed/completed/ignored bulk query back to queued."""
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+
+    for item in bulk.get("queries", []):
+        if item.get("query_slug") == query_slug or slugify(item.get("query", "")) == query_slug:
+            item["status"] = "queued"
+            item["retried_at"] = now_iso()
+            item.pop("error", None)
+            item.pop("completed_at", None)
+            item.pop("last_error", None)
+            save_json(BULK_QUERIES_FILE, bulk)
+            return {"status": "queued", "job": item}
+
+    return {"status": "not_found", "query_slug": query_slug}
+
+
+def ignore_bulk_query(query_slug: str):
+    """Mark a bulk query ignored without deleting its history."""
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+
+    for item in bulk.get("queries", []):
+        if item.get("query_slug") == query_slug or slugify(item.get("query", "")) == query_slug:
+            item["status"] = "ignored"
+            item["ignored_at"] = now_iso()
+            save_json(BULK_QUERIES_FILE, bulk)
+            return {"status": "ignored", "job": item}
+
+    return {"status": "not_found", "query_slug": query_slug}
+
+
+def delete_bulk_query(query_slug: str):
+    """Remove a bulk query from the queue file."""
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    before = len(bulk.get("queries", []))
+
+    bulk["queries"] = [
+        item for item in bulk.get("queries", [])
+        if item.get("query_slug") != query_slug and slugify(item.get("query", "")) != query_slug
+    ]
+
+    after = len(bulk.get("queries", []))
+    save_json(BULK_QUERIES_FILE, bulk)
+
+    return {
+        "status": "deleted" if after < before else "not_found",
+        "query_slug": query_slug,
+        "deleted_count": before - after
     }
