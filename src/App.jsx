@@ -71,7 +71,6 @@ function App() {
   const [walkthroughList, setWalkthroughList] = useState([]);
   const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
   const [repairCorrections, setRepairCorrections] = useState({});
-  const [repairStatus, setRepairStatus] = useState({});
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
@@ -291,7 +290,7 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/status`);
+      const response = await fetch(`${API_URL}/admin/status`, { cache: "no-store" });
       const data = await response.json();
 
       setAdminStatus(data);
@@ -405,31 +404,47 @@ function App() {
   }
 
 
-  async function processQueuedWalkthroughs() {
+  async function refreshWalkthroughOperations() {
+    await Promise.allSettled([
+      loadAdminStatus(),
+      loadBuildStatus(),
+      loadBulkJobList(),
+      loadAdminWalkthroughs()
+    ]);
+  }
+
+
+  async function runQueuedWalkthroughs(limit = 1) {
     setAdminLoading(true);
-    setAdminMessage("");
+    setAdminMessage(`Starting ${limit} queued walkthrough job${limit === 1 ? "" : "s"} now...`);
 
     try {
       const response = await fetch(
-        `${API_URL}/admin/process-bulk-queries?limit=5`,
+        `${API_URL}/admin/process-bulk-queries?limit=${encodeURIComponent(limit)}`,
         {
-          method: "POST"
+          method: "POST",
+          cache: "no-store"
         }
       );
 
       const data = await response.json();
 
       setAdminMessage(
-        `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
+        `Manual run complete. Processed ${data.processed_count || 0}; failed ${data.failed_count || 0}; remaining queued ${data.remaining_queued || 0}.`
       );
 
-      loadAdminStatus();
+      await refreshWalkthroughOperations();
     } catch (error) {
       console.error(error);
-      setAdminMessage("Could not process queued walkthroughs.");
+      setAdminMessage("Could not run queued walkthrough jobs.");
     } finally {
       setAdminLoading(false);
     }
+  }
+
+
+  async function processQueuedWalkthroughs() {
+    return runQueuedWalkthroughs(5);
   }
 
 
@@ -615,7 +630,8 @@ function App() {
   async function loadBuildStatus() {
     try {
       const response = await fetch(
-        `${API_URL}/admin/walkthrough-build-status`
+        `${API_URL}/admin/walkthrough-build-status`,
+        { cache: "no-store" }
       );
 
       const data = await response.json();
@@ -632,7 +648,7 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/bulk-query-list`);
+      const response = await fetch(`${API_URL}/admin/bulk-query-list`, { cache: "no-store" });
       const data = await response.json();
 
       setBulkJobList(data);
@@ -651,6 +667,8 @@ function App() {
 
     const endpointMap = {
       retry: "bulk-query-retry",
+      run: "bulk-query-run",
+      retryrun: "bulk-query-retry-run",
       ignore: "bulk-query-ignore",
       delete: "bulk-query-delete"
     };
@@ -667,9 +685,8 @@ function App() {
       });
 
       const data = await response.json();
-      setAdminMessage(`Queue item ${data.status || action}.`);
-      loadBulkJobList();
-      loadAdminStatus();
+      setAdminMessage(`Queue item ${data.status || action}. ${data.message || ""}`);
+      await refreshWalkthroughOperations();
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not update queue item.");
@@ -683,7 +700,7 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250`);
+      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250`, { cache: "no-store" });
       const data = await response.json();
 
       setWalkthroughList(data.walkthroughs || []);
@@ -705,8 +722,6 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
-        setRepairCorrections({});
-        setRepairStatus({});
         setAdminMessage(`Loaded ${data.walkthrough.title || walkthroughId}.`);
       } else {
         setAdminMessage("Walkthrough not found.");
@@ -725,13 +740,7 @@ function App() {
       return;
     }
 
-    const correction = (repairCorrections[stepId] || "").trim();
     setAdminLoading(true);
-    setAdminMessage(`Regenerating image for step ${stepId}. This can take a minute...`);
-    setRepairStatus((current) => ({
-      ...current,
-      [stepId]: "Generating new image..."
-    }));
 
     try {
       const response = await fetch(`${API_URL}/admin/regenerate-step-image`, {
@@ -739,51 +748,23 @@ function App() {
         headers: {
           "Content-Type": "application/json"
         },
-        cache: "no-store",
         body: JSON.stringify({
           walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
           step_id: stepId,
-          correction
+          correction: repairCorrections[stepId] || ""
         })
       });
 
-      let data = {};
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        const text = await response.text();
-        throw new Error(text || `Server returned ${response.status}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(data.detail || data.error || data.message || `Server returned ${response.status}`);
-      }
+      const data = await response.json();
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
       }
 
-      if (data.status === "pending_review") {
-        setRepairStatus((current) => ({
-          ...current,
-          [stepId]: "New candidate generated. Compare it with the current image, then keep or discard."
-        }));
-        setAdminMessage("New image generated for review.");
-      } else {
-        setRepairStatus((current) => ({
-          ...current,
-          [stepId]: `Image regeneration returned: ${data.status || "unknown status"}`
-        }));
-        setAdminMessage(`Image regeneration: ${data.status || "unknown status"}`);
-      }
+      setAdminMessage(data.status === "pending_review" ? "New image generated for review." : `Image regeneration: ${data.status}`);
     } catch (error) {
       console.error(error);
-      const message = error?.message || "Could not regenerate image.";
-      setRepairStatus((current) => ({
-        ...current,
-        [stepId]: `Error: ${message}`
-      }));
-      setAdminMessage(`Could not regenerate image: ${message}`);
+      setAdminMessage("Could not regenerate image.");
     } finally {
       setAdminLoading(false);
     }
@@ -1021,6 +1002,77 @@ function App() {
 
           <section className="adminCard">
             <div className="adminCardHeader">
+              <h2>Walkthrough Processing Controls</h2>
+              <button
+                className="secondaryButton"
+                onClick={refreshWalkthroughOperations}
+                disabled={adminLoading}
+              >
+                Refresh All Status
+              </button>
+            </div>
+
+            <p className="adminHelp">
+              Queued jobs are waiting. They do not build until the Render background worker is running or you manually run jobs here. These buttons run queued jobs immediately through the API.
+            </p>
+
+            <div className="adminStats">
+              <div>
+                <strong>{bulkJobList?.counts?.queued || adminStatus?.bulk_queued_count || 0}</strong>
+                <span>Waiting</span>
+              </div>
+              <div>
+                <strong>{bulkJobList?.counts?.processing || adminStatus?.bulk_processing_count || 0}</strong>
+                <span>Processing</span>
+              </div>
+              <div>
+                <strong>{bulkJobList?.counts?.completed || adminStatus?.bulk_completed_count || 0}</strong>
+                <span>Completed</span>
+              </div>
+              <div>
+                <strong>{bulkJobList?.counts?.failed || adminStatus?.bulk_failed_count || 0}</strong>
+                <span>Failed</span>
+              </div>
+            </div>
+
+            {buildStatus && (
+              <div style={{ marginTop: "12px", fontSize: "14px", lineHeight: 1.5 }}>
+                <strong>Build Activity:</strong> {buildStatus.status || "unknown"}
+                {typeof buildStatus.seconds_since_activity !== "undefined" && (
+                  <> · Last activity: {buildStatus.seconds_since_activity}s ago</>
+                )}
+                <> · Walkthroughs: {buildStatus.walkthrough_count || 0}</>
+                <> · Images: {buildStatus.image_count || 0}</>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "16px" }}>
+              <button
+                className="doneButton"
+                onClick={() => runQueuedWalkthroughs(1)}
+                disabled={adminLoading}
+              >
+                Run 1 Queued Job Now
+              </button>
+              <button
+                className="doneButton"
+                onClick={() => runQueuedWalkthroughs(5)}
+                disabled={adminLoading}
+              >
+                Run 5 Queued Jobs Now
+              </button>
+              <button
+                className="secondaryButton"
+                onClick={() => runQueuedWalkthroughs(20)}
+                disabled={adminLoading}
+              >
+                Run 20 Queued Jobs Now
+              </button>
+            </div>
+          </section>
+
+          <section className="adminCard">
+            <div className="adminCardHeader">
               <h2>Walkthrough Queue Manager</h2>
 
               <button
@@ -1045,6 +1097,11 @@ function App() {
                   </div>
 
                   <div>
+                    <strong>{bulkJobList.counts?.processing || 0}</strong>
+                    <span>Processing</span>
+                  </div>
+
+                  <div>
                     <strong>{bulkJobList.counts?.failed || 0}</strong>
                     <span>Failed</span>
                   </div>
@@ -1061,7 +1118,7 @@ function App() {
                 </div>
 
                 <div style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
-                  {(["failed", "queued", "completed", "ignored"]).map((groupName) => (
+                  {(["processing", "failed", "queued", "completed", "ignored"]).map((groupName) => (
                     <div key={groupName}>
                       <h3 style={{ textTransform: "capitalize" }}>{groupName}</h3>
 
@@ -1106,12 +1163,32 @@ function App() {
                               )}
 
                               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
+                                {groupName === "queued" && (
+                                  <button
+                                    className="doneButton"
+                                    onClick={() => updateBulkJob(job.query_slug, "run")}
+                                    disabled={adminLoading}
+                                  >
+                                    Run Now
+                                  </button>
+                                )}
+
+                                {(groupName === "failed" || groupName === "ignored") && (
+                                  <button
+                                    className="doneButton"
+                                    onClick={() => updateBulkJob(job.query_slug, "retryrun")}
+                                    disabled={adminLoading}
+                                  >
+                                    Retry + Run Now
+                                  </button>
+                                )}
+
                                 <button
                                   className="secondaryButton"
                                   onClick={() => updateBulkJob(job.query_slug, "retry")}
                                   disabled={adminLoading}
                                 >
-                                  Retry
+                                  Retry Only
                                 </button>
 
                                 <button
@@ -1247,15 +1324,8 @@ function App() {
                             placeholder="Correction prompt, example: Make the pipe copper, remove PVC, show a propane torch heating the joint."
                           />
 
-                          {repairStatus[step.id] && (
-                            <p style={{ fontSize: "13px", fontWeight: 700, marginTop: "8px" }}>
-                              {repairStatus[step.id]}
-                            </p>
-                          )}
-
                           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                             <button
-                              type="button"
                               className="startButton"
                               onClick={() => regenerateStepImage(step.id)}
                               disabled={adminLoading}
@@ -1265,7 +1335,6 @@ function App() {
 
                             {step.pendingImageUrl && (
                               <button
-                                type="button"
                                 className="doneButton"
                                 onClick={() => acceptStepImage(step.id)}
                                 disabled={adminLoading}
@@ -1349,7 +1418,7 @@ function App() {
               >
                 {adminLoading
                   ? "PROCESSING..."
-                  : "RUN 5 JOBS"}
+                  : "RUN 5 JOBS NOW"}
               </button>
 
               <button
@@ -1384,7 +1453,7 @@ function App() {
                 }}
                 disabled={adminLoading}
               >
-                WORKER AUTOMATION
+                RUN 1 JOB NOW
               </button>
 
               <button
