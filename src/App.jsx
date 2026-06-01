@@ -1,1915 +1,669 @@
-import { useEffect, useState } from "react";
-import "./App.css";
-
-const API_URL = "https://rocketsurgery-api.onrender.com";
-
-function displayText(value, max = 140) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  if (text.length <= max) return text;
-  return `${text.slice(0, max).trim()}…`;
-}
-
-function buildSpecificQuery(query, brand, model) {
-  const baseQuery = query.trim() || "installation walkthrough";
-
-  if (!brand) {
-    return baseQuery;
-  }
-
-  if (!model) {
-    return `${baseQuery} ${brand}`;
-  }
-
-  return `${baseQuery} ${brand} ${model}`;
-}
-
-function App() {
-  const [screen, setScreen] = useState("home");
-
-  const [query, setQuery] = useState("");
-  const [walkthrough, setWalkthrough] = useState(null);
-  const [started, setStarted] = useState(false);
-  const [clarifying, setClarifying] = useState(false);
-  const [installMode, setInstallMode] = useState("");
-  const [productOptions, setProductOptions] = useState({
-    category: "generic",
-    brands: [],
-    query_has_known_brand_and_model: false
-  });
-  const [selectedBrand, setSelectedBrand] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0);
-  const [activeHotspot, setActiveHotspot] = useState(null);
-  const [complete, setComplete] = useState(false);
-
-  const [adminStatus, setAdminStatus] = useState(null);
-  const [adminMessage, setAdminMessage] = useState("");
-  const [bulkQueries, setBulkQueries] = useState("");
-  const [bulkCatalog, setBulkCatalog] = useState("");
-  const [catalogBrand, setCatalogBrand] = useState("");
-  const [catalogCategory, setCatalogCategory] = useState("");
-  const [catalogModels, setCatalogModels] = useState("");
-  const [discoverTopModels, setDiscoverTopModels] = useState(true);
-  const [adminLoading, setAdminLoading] = useState(false);
-
-  const [canonicalStatus, setCanonicalStatus] = useState(null);
-  const [canonicalKey, setCanonicalKey] = useState("");
-  const [canonicalStep, setCanonicalStep] = useState(1);
-  const [canonicalFile, setCanonicalFile] = useState(null);
-
-  const [overlayData, setOverlayData] = useState(null);
-
-  const [imageRegistry, setImageRegistry] = useState(null);
-  const [promoteFilename, setPromoteFilename] = useState("");
-  const [promoteCanonicalKey, setPromoteCanonicalKey] = useState("");
-  const [promoteStepNumber, setPromoteStepNumber] = useState(1);
-
-  const [buildStatus, setBuildStatus] = useState(null);
-
-  const [bulkJobList, setBulkJobList] = useState(null);
-  const [walkthroughList, setWalkthroughList] = useState([]);
-  const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
-  const [repairCorrections, setRepairCorrections] = useState({});
-
-  const currentStep = walkthrough?.steps?.[stepIndex];
-  const availableBrands = productOptions?.brands || [];
-  const selectedBrandRecord = availableBrands.find(
-    (item) => item.brand === selectedBrand
-  );
-  const availableModels = selectedBrandRecord?.models || [];
-
-  async function fetchProductOptions(finalQuery) {
-    const response = await fetch(
-      `${API_URL}/product-options?query=${encodeURIComponent(finalQuery)}`
-    );
-
-    if (!response.ok) {
-      throw new Error("Could not load product options.");
-    }
-
-    return response.json();
-  }
-
-  async function fetchWalkthrough(finalQuery) {
-    setLoading(true);
-    setActiveHotspot(null);
-    setComplete(false);
-    setStepIndex(0);
-
-    try {
-      const response = await fetch(`${API_URL}/walkthrough`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          query: finalQuery || "James Hardie siding nailing schedule"
-        })
-      });
-
-      const data = await response.json();
-
-      setWalkthrough(data);
-
-      await fetchOverlay(finalQuery);
-
-      setStarted(true);
-      setClarifying(false);
-      setScreen("home");
-    } catch (error) {
-      alert("Could not load walkthrough from API.");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-
-  async function fetchOverlay(finalQuery) {
-    try {
-      const response = await fetch(
-        `${API_URL}/walkthrough/overlay`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            query: finalQuery,
-            category: productOptions?.category || "",
-            brand: selectedBrand,
-            model: selectedModel
-          })
-        }
-      );
-
-      const data = await response.json();
-
-      setOverlayData(data);
-
-    } catch (error) {
-      console.error(error);
-      setOverlayData(null);
-    }
-  }
-
-
-  async function startWalkthrough() {
-    const trimmedQuery = query.trim() || "generic installation walkthrough";
-
-    setLoading(true);
-    setInstallMode("");
-    setSelectedBrand("");
-    setSelectedModel("");
-    setActiveHotspot(null);
-    setComplete(false);
-
-    try {
-      const options = await fetchProductOptions(trimmedQuery);
-      setProductOptions(options);
-
-      if (options.query_has_known_brand_and_model) {
-        fetchWalkthrough(trimmedQuery);
-        return;
-      }
-
-      setClarifying(true);
-      setStarted(false);
-      setScreen("home");
-    } catch (error) {
-      console.error(error);
-
-      setProductOptions({
-        category: "generic",
-        brands: [],
-        query_has_known_brand_and_model: false
-      });
-
-      setClarifying(true);
-      setStarted(false);
-      setScreen("home");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function continueGeneric() {
-    setInstallMode("generic");
-    fetchWalkthrough(query.trim() || "generic installation walkthrough");
-  }
-
-  function continueSpecific() {
-    const finalQuery = buildSpecificQuery(query, selectedBrand, selectedModel);
-    setInstallMode("specific");
-    fetchWalkthrough(finalQuery);
-  }
-
-  function newJob() {
-    window.speechSynthesis.cancel();
-    setScreen("home");
-    setQuery("");
-    setWalkthrough(null);
-    setStarted(false);
-    setClarifying(false);
-    setInstallMode("");
-    setProductOptions({
-      category: "generic",
-      brands: [],
-      query_has_known_brand_and_model: false
-    });
-    setSelectedBrand("");
-    setSelectedModel("");
-    setLoading(false);
-    setComplete(false);
-    setStepIndex(0);
-    setActiveHotspot(null);
-  }
-
-  function openAdmin() {
-    window.speechSynthesis.cancel();
-    setScreen("admin");
-    setStarted(false);
-    setClarifying(false);
-    setComplete(false);
-    setActiveHotspot(null);
-    loadAdminStatus();
-    loadBulkJobList();
-    loadAdminWalkthroughs();
-  }
-
-  function nextStep() {
-    setActiveHotspot(null);
-
-    if (stepIndex < walkthrough.steps.length - 1) {
-      setStepIndex(stepIndex + 1);
-    } else {
-      setComplete(true);
-    }
-  }
-
-  function previousStep() {
-    window.speechSynthesis.cancel();
-    setActiveHotspot(null);
-
-    if (stepIndex > 0) {
-      setStepIndex(stepIndex - 1);
-    } else {
-      setStarted(false);
-      setWalkthrough(null);
-      setComplete(false);
-      setInstallMode("");
-      setClarifying(true);
-    }
-  }
-
-  function backToHome() {
-    window.speechSynthesis.cancel();
-    setScreen("home");
-    setClarifying(false);
-    setStarted(false);
-    setWalkthrough(null);
-    setComplete(false);
-    setInstallMode("");
-    setSelectedBrand("");
-    setSelectedModel("");
-    setStepIndex(0);
-    setActiveHotspot(null);
-  }
-
-  function readAloud() {
-    window.speechSynthesis.cancel();
-
-    const text = `${currentStep.instruction}. ${currentStep.detail}`;
-    const utterance = new SpeechSynthesisUtterance(text);
-
-    window.speechSynthesis.speak(utterance);
-  }
-
-  async function loadAdminStatus() {
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/admin/status`);
-      const data = await response.json();
-
-      setAdminStatus(data);
-      setAdminMessage("Admin status loaded.");
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not load admin status.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-  async function submitBulkQueries() {
-    setAdminLoading(true);
-    setAdminMessage("");
-
-    try {
-      const response = await fetch(`${API_URL}/admin/bulk-queries`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          raw_text: bulkQueries
-        })
-      });
-
-      const data = await response.json();
-
-      setAdminMessage(
-        `Bulk queries saved. Added ${data.added_count || 0}; duplicates ${data.duplicate_count || 0}.`
-      );
-      setBulkQueries("");
-      loadAdminStatus();
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not save bulk queries.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-  async function submitBulkCatalog() {
-    setAdminLoading(true);
-    setAdminMessage("");
-
-    try {
-      const response = await fetch(`${API_URL}/admin/bulk-catalog`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          raw_text: bulkCatalog
-        })
-      });
-
-      const data = await response.json();
-
-      setAdminMessage(
-        `Bulk catalog saved. Added ${data.added_count || 0}; failed ${data.failed_count || 0}.`
-      );
-
-      setBulkCatalog("");
-      loadAdminStatus();
-
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not save bulk catalog entries.");
-
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function submitCatalogEntry() {
-    setAdminLoading(true);
-    setAdminMessage("");
-
-    try {
-      const response = await fetch(`${API_URL}/admin/catalog-entry`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          brand: catalogBrand,
-          category: catalogCategory,
-          models_text: catalogModels,
-          discover_top_models: discoverTopModels
-        })
-      });
-
-      const data = await response.json();
-
-      setAdminMessage(
-        `Catalog request saved for ${data.request?.brand || catalogBrand} / ${data.request?.category || catalogCategory}.`
-      );
-      setCatalogBrand("");
-      setCatalogCategory("");
-      setCatalogModels("");
-      setDiscoverTopModels(true);
-      loadAdminStatus();
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not save catalog entry.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function processQueuedWalkthroughs() {
-    setAdminLoading(true);
-    setAdminMessage("");
-
-    try {
-      const response = await fetch(
-        `${API_URL}/admin/process-bulk-queries?limit=5`,
-        {
-          method: "POST"
-        }
-      );
-
-      const data = await response.json();
-
-      setAdminMessage(
-        `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
-      );
-
-      loadAdminStatus();
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not process queued walkthroughs.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function loadCanonicalStatus() {
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(
-        `${API_URL}/admin/canonical-image-status`
-      );
-
-      const data = await response.json();
-
-      setCanonicalStatus(data);
-      setAdminMessage("Canonical image status loaded.");
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not load canonical image status.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function uploadCanonicalImage() {
-    if (!canonicalFile || !canonicalKey) {
-      return;
-    }
-
-    setAdminLoading(true);
-
-    try {
-      const formData = new FormData();
-
-      formData.append("canonical_key", canonicalKey);
-      formData.append("step_number", canonicalStep);
-      formData.append("file", canonicalFile);
-
-      const response = await fetch(
-        `${API_URL}/admin/upload-canonical-image`,
-        {
-          method: "POST",
-          body: formData
-        }
-      );
-
-      const data = await response.json();
-
-      setAdminMessage(
-        `Uploaded canonical image: ${data.filename}`
-      );
-
-      setCanonicalFile(null);
-
-      loadCanonicalStatus();
-
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not upload canonical image.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function loadImageRegistry() {
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/admin/image-registry`);
-      const data = await response.json();
-
-      setImageRegistry(data);
-      setAdminMessage(`Image registry loaded: ${data.image_count || 0} assets.`);
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not load image registry.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function rebuildImageRegistry() {
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(
-        `${API_URL}/admin/rebuild-image-registry`,
-        {
-          method: "POST"
-        }
-      );
-
-      const data = await response.json();
-
-      setImageRegistry(data);
-      setAdminMessage(`Image registry rebuilt: ${data.image_count || 0} assets.`);
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not rebuild image registry.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function promoteImageToCanonical(filenameOverride = "") {
-    const filename = filenameOverride || promoteFilename;
-
-    if (!filename || !promoteCanonicalKey) {
-      setAdminMessage("Choose an image filename and canonical key first.");
-      return;
-    }
-
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/admin/promote-image`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          filename,
-          canonical_key: promoteCanonicalKey,
-          step_number: Number(promoteStepNumber || 1)
-        })
-      });
-
-      const data = await response.json();
-
-      setAdminMessage(
-        data.status === "promoted"
-          ? `Promoted ${filename} to ${data.filename}.`
-          : data.message || "Image promotion failed."
-      );
-
-      loadCanonicalStatus();
-      loadImageRegistry();
-
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not promote image.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function processModelDiscovery() {
-    setAdminLoading(true);
-    setAdminMessage("");
-
-    try {
-      const response = await fetch(
-        `${API_URL}/admin/process-model-discovery?limit=5`,
-        {
-          method: "POST"
-        }
-      );
-
-      const data = await response.json();
-
-      const discovered = (data.processed || [])
-        .map((item) => `${item.brand} / ${item.category}: ${(item.models || []).join(", ")}`)
-        .join(" | ");
-
-      setAdminMessage(
-        `Model discovery processed ${data.processed_count || 0} requests. Remaining queued: ${data.remaining_queued || 0}. ${discovered}`
-      );
-
-      loadAdminStatus();
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not process model discovery.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function loadBuildStatus() {
-    try {
-      const response = await fetch(
-        `${API_URL}/admin/walkthrough-build-status`
-      );
-
-      const data = await response.json();
-
-      setBuildStatus(data);
-
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-
-  async function loadBulkJobList() {
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/admin/bulk-query-list`);
-      const data = await response.json();
-
-      setBulkJobList(data);
-      setAdminMessage(`Queue loaded: ${data.counts?.queued || 0} queued, ${data.counts?.failed || 0} failed.`);
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not load walkthrough queue.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function updateBulkJob(querySlug, action) {
-    setAdminLoading(true);
-
-    const endpointMap = {
-      retry: "bulk-query-retry",
-      ignore: "bulk-query-ignore",
-      delete: "bulk-query-delete"
-    };
-
-    try {
-      const response = await fetch(`${API_URL}/admin/${endpointMap[action]}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          query_slug: querySlug
-        })
-      });
-
-      const data = await response.json();
-      setAdminMessage(`Queue item ${data.status || action}.`);
-      loadBulkJobList();
-      loadAdminStatus();
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not update queue item.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function loadAdminWalkthroughs() {
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250`);
-      const data = await response.json();
-
-      setWalkthroughList(data.walkthroughs || []);
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not load walkthrough list.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function loadAdminWalkthrough(walkthroughId) {
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/admin/walkthroughs/${encodeURIComponent(walkthroughId)}`);
-      const data = await response.json();
-
-      if (data.walkthrough) {
-        setSelectedAdminWalkthrough(data.walkthrough);
-        setAdminMessage(`Loaded ${data.walkthrough.title || walkthroughId}.`);
-      } else {
-        setAdminMessage("Walkthrough not found.");
-      }
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not load walkthrough.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function regenerateStepImage(stepId) {
-    if (!selectedAdminWalkthrough) {
-      return;
-    }
-
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/admin/regenerate-step-image`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
-          step_id: stepId,
-          correction: repairCorrections[stepId] || ""
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.walkthrough) {
-        setSelectedAdminWalkthrough(data.walkthrough);
-      }
-
-      setAdminMessage(data.status === "pending_review" ? "New image generated for review." : `Image regeneration: ${data.status}`);
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not regenerate image.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function acceptStepImage(stepId) {
-    if (!selectedAdminWalkthrough) {
-      return;
-    }
-
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/admin/accept-step-image`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
-          step_id: stepId
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.walkthrough) {
-        setSelectedAdminWalkthrough(data.walkthrough);
-      }
-
-      setAdminMessage(`Image ${data.status}.`);
-      loadAdminWalkthroughs();
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not accept image.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  async function revertStepImage(stepId) {
-    if (!selectedAdminWalkthrough) {
-      return;
-    }
-
-    setAdminLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/admin/revert-step-image`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
-          step_id: stepId
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.walkthrough) {
-        setSelectedAdminWalkthrough(data.walkthrough);
-      }
-
-      setAdminMessage(`Image ${data.status}.`);
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not revert image.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
-
-  useEffect(() => {
-    if (screen !== "admin") {
-      return;
-    }
-
-    loadBuildStatus();
-
-    const interval = setInterval(() => {
-      loadBuildStatus();
-    }, 15000);
-
-    return () => clearInterval(interval);
-
-  }, [screen]);
-
-
-  return (
-    <div className="app">
-      <header className="topbar">
-        <button className="adminButton" onClick={openAdmin}>
-          ADMIN
-        </button>
-        <div className="logo">RocketSurgery</div>
-        <button className="newJobButton" onClick={newJob}>
-          NEW JOB
-        </button>
-      </header>
-
-      {screen === "admin" ? (
-        <main className="adminScreen">
-          <div className="homeBadge">ADMIN</div>
-
-          <h1>RocketSurgery Builder</h1>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>System Status</h2>
-              <button
-                className="secondaryButton"
-                onClick={loadAdminStatus}
-                disabled={adminLoading}
-              >
-                Refresh
-              </button>
-            </div>
-
-            {adminStatus ? (
-              <div className="adminStats">
-                <div>
-                  <strong>{adminStatus.bulk_query_count}</strong>
-                  <span>Total queries</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.bulk_completed_count || 0}</strong>
-                  <span>Completed</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.bulk_queued_count || 0}</strong>
-                  <span>Queued</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.bulk_failed_count || 0}</strong>
-                  <span>Failed</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.catalog_request_count}</strong>
-                  <span>Catalog requests</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.catalog_category_count}</strong>
-                  <span>Catalog categories</span>
-                </div>
-              </div>
-            ) : (
-              <p className="adminHelp">Click refresh to load admin status.</p>
-            )}
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Walkthrough Build Activity</h2>
-
-              <button
-                className="secondaryButton"
-                onClick={loadBuildStatus}
-              >
-                Refresh Activity
-              </button>
-            </div>
-
-            {buildStatus ? (
-              <>
-                <div className="adminStats">
-                  <div>
-                    <strong>{buildStatus.activity_state?.toUpperCase()}</strong>
-                    <span>Activity</span>
-                  </div>
-
-                  <div>
-                    <strong>
-                      {buildStatus.seconds_since_activity
-                        ? Math.round(buildStatus.seconds_since_activity)
-                        : 0}
-                    </strong>
-                    <span>Seconds idle</span>
-                  </div>
-
-                  <div>
-                    <strong>{buildStatus.walkthrough_count || 0}</strong>
-                    <span>Walkthroughs</span>
-                  </div>
-
-                  <div>
-                    <strong>{buildStatus.image_count || 0}</strong>
-                    <span>Images</span>
-                  </div>
-                </div>
-
-                <div className="activityColumns">
-                  <div>
-                    <h3>Recent Walkthroughs</h3>
-
-                    <ul className="activityList">
-                      {(buildStatus.recent_walkthroughs || []).map((item) => (
-                        <li key={item.name}>
-                          <strong>{item.name}</strong>
-                          <small>{item.modified_at}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h3>Recent Images</h3>
-
-                    <ul className="activityList">
-                      {(buildStatus.recent_images || []).map((item) => (
-                        <li key={item.name}>
-                          <strong>{item.name}</strong>
-                          <small>{item.modified_at}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p className="adminHelp">
-                Loading build activity...
-              </p>
-            )}
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Walkthrough Queue Manager</h2>
-
-              <button
-                className="secondaryButton"
-                onClick={loadBulkJobList}
-                disabled={adminLoading}
-              >
-                Refresh Queue
-              </button>
-            </div>
-
-            <p className="adminHelp">
-              Review failed, queued, and completed walkthrough jobs. Failed items can be retried, ignored, or removed.
-            </p>
-
-            {bulkJobList ? (
-              <>
-                <div className="adminStats">
-                  <div>
-                    <strong>{bulkJobList.counts?.queued || 0}</strong>
-                    <span>Queued</span>
-                  </div>
-
-                  <div>
-                    <strong>{bulkJobList.counts?.failed || 0}</strong>
-                    <span>Failed</span>
-                  </div>
-
-                  <div>
-                    <strong>{bulkJobList.counts?.completed || 0}</strong>
-                    <span>Completed</span>
-                  </div>
-
-                  <div>
-                    <strong>{bulkJobList.counts?.ignored || 0}</strong>
-                    <span>Ignored</span>
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
-                  {(["failed", "queued", "completed", "ignored"]).map((groupName) => (
-                    <div key={groupName}>
-                      <h3 style={{ textTransform: "capitalize" }}>{groupName}</h3>
-
-                      {(bulkJobList[groupName] || []).slice(0, 30).length === 0 ? (
-                        <p className="adminHelp">No {groupName} jobs.</p>
-                      ) : (
-                        <div style={{ display: "grid", gap: "8px" }}>
-                          {(bulkJobList[groupName] || []).slice(0, 30).map((job) => (
-                            <div
-                              key={`${groupName}-${job.query_slug || job.query}`}
-                              style={{
-                                border: "1px solid rgba(0,0,0,0.12)",
-                                borderRadius: "12px",
-                                padding: "12px",
-                                background: "rgba(255,255,255,0.75)"
-                              }}
-                            >
-                              <strong title={job.query}>{displayText(job.query, 120)}</strong>
-
-                              <div
-                                title={job.walkthrough_id || job.query_slug || "not built yet"}
-                                style={{
-                                  fontSize: "12px",
-                                  opacity: 0.8,
-                                  marginTop: "4px",
-                                  overflowWrap: "anywhere"
-                                }}
-                              >
-                                ID: {displayText(job.walkthrough_id || job.query_slug || "not built yet", 90)} · Attempts: {job.attempts || 0}
-                              </div>
-
-                              {job.quarantine_reason && (
-                                <div style={{ fontSize: "12px", color: "#8a5a00", marginTop: "6px", overflowWrap: "anywhere" }}>
-                                  Quarantined: {displayText(job.quarantine_reason, 180)}
-                                </div>
-                              )}
-
-                              {job.error && (
-                                <div title={job.error} style={{ fontSize: "12px", color: "#8a1f11", marginTop: "6px", overflowWrap: "anywhere" }}>
-                                  Error: {displayText(job.error, 220)}
-                                </div>
-                              )}
-
-                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
-                                <button
-                                  className="secondaryButton"
-                                  onClick={() => updateBulkJob(job.query_slug, "retry")}
-                                  disabled={adminLoading}
-                                >
-                                  Retry
-                                </button>
-
-                                <button
-                                  className="secondaryButton"
-                                  onClick={() => updateBulkJob(job.query_slug, "ignore")}
-                                  disabled={adminLoading}
-                                >
-                                  Ignore
-                                </button>
-
-                                <button
-                                  className="secondaryButton"
-                                  onClick={() => updateBulkJob(job.query_slug, "delete")}
-                                  disabled={adminLoading}
-                                >
-                                  Delete
-                                </button>
-
-                                {job.walkthrough_id && (
-                                  <button
-                                    className="secondaryButton"
-                                    onClick={() => loadAdminWalkthrough(job.walkthrough_id)}
-                                    disabled={adminLoading}
-                                  >
-                                    Inspect
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="adminHelp">Click Refresh Queue to load bulk job records.</p>
-            )}
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Walkthrough Repair Studio</h2>
-
-              <button
-                className="secondaryButton"
-                onClick={loadAdminWalkthroughs}
-                disabled={adminLoading}
-              >
-                Refresh Walkthroughs
-              </button>
-            </div>
-
-            <p className="adminHelp">
-              Open a saved walkthrough, cherry-pick a weak step image, describe the correction, regenerate it, then accept or discard the replacement.
-            </p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 320px) 1fr", gap: "16px" }}>
-              <div style={{ display: "grid", gap: "8px", alignContent: "start", maxHeight: "680px", overflow: "auto" }}>
-                {(walkthroughList || []).slice(0, 100).map((item) => (
-                  <button
-                    key={item.walkthrough_id}
-                    className="secondaryButton"
-                    style={{ textAlign: "left" }}
-                    onClick={() => loadAdminWalkthrough(item.walkthrough_id)}
-                    disabled={adminLoading}
-                  >
-                    <strong>{item.title}</strong>
-                    <br />
-                    <span style={{ fontSize: "12px", opacity: 0.75 }}>
-                      {item.walkthrough_id} · {item.step_count} steps
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div>
-                {selectedAdminWalkthrough ? (
-                  <>
-                    <h3>{selectedAdminWalkthrough.title}</h3>
-                    <p className="adminHelp">{selectedAdminWalkthrough.walkthrough_id}</p>
-
-                    <div style={{ display: "grid", gap: "16px" }}>
-                      {(selectedAdminWalkthrough.steps || []).map((step) => (
-                        <div
-                          key={step.id}
-                          style={{
-                            border: "1px solid rgba(0,0,0,0.14)",
-                            borderRadius: "16px",
-                            padding: "14px",
-                            background: "rgba(255,255,255,0.8)"
-                          }}
-                        >
-                          <h4>{step.imageLabel || `Step ${step.id}`}</h4>
-                          <p>{step.instruction}</p>
-                          <p style={{ fontSize: "13px", opacity: 0.8 }}>{step.detail}</p>
-
-                          <div style={{ display: "grid", gridTemplateColumns: step.pendingImageUrl ? "1fr 1fr" : "1fr", gap: "12px" }}>
-                            <div>
-                              <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>Current Image</div>
-                              {step.imageUrl ? (
-                                <img
-                                  src={step.imageUrl.startsWith("http") ? step.imageUrl : `${API_URL}${step.imageUrl}`}
-                                  alt={step.imageLabel || `Step ${step.id}`}
-                                  style={{ width: "100%", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.1)" }}
-                                />
-                              ) : (
-                                <div className="missingThumb">No image</div>
-                              )}
-                            </div>
-
-                            {step.pendingImageUrl && (
-                              <div>
-                                <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>New Candidate</div>
-                                <img
-                                  src={step.pendingImageUrl.startsWith("http") ? step.pendingImageUrl : `${API_URL}${step.pendingImageUrl}`}
-                                  alt={`New candidate for step ${step.id}`}
-                                  style={{ width: "100%", borderRadius: "12px", border: "2px solid rgba(0,120,255,0.35)" }}
-                                />
-                              </div>
-                            )}
-                          </div>
-
-                          <textarea
-                            className="adminTextArea small"
-                            style={{ marginTop: "12px" }}
-                            value={repairCorrections[step.id] || ""}
-                            onChange={(e) => setRepairCorrections({
-                              ...repairCorrections,
-                              [step.id]: e.target.value
-                            })}
-                            placeholder="Correction prompt, example: Make the pipe copper, remove PVC, show a propane torch heating the joint."
-                          />
-
-                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                            <button
-                              className="startButton"
-                              onClick={() => regenerateStepImage(step.id)}
-                              disabled={adminLoading}
-                            >
-                              Regenerate This Image
-                            </button>
-
-                            {step.pendingImageUrl && (
-                              <button
-                                className="doneButton"
-                                onClick={() => acceptStepImage(step.id)}
-                                disabled={adminLoading}
-                              >
-                                Keep New Image
-                              </button>
-                            )}
-
-                            <button
-                              className="secondaryButton"
-                              onClick={() => revertStepImage(step.id)}
-                              disabled={adminLoading}
-                            >
-                              Revert / Discard
-                            </button>
-
-                            <button
-                              className="secondaryButton"
-                              onClick={() => {
-                                const filename = (step.imageUrl || "").split("/").pop();
-                                setPromoteFilename(filename);
-                                setPromoteStepNumber(step.id);
-                              }}
-                              disabled={!step.imageUrl}
-                            >
-                              Stage for Canonical Promotion
-                            </button>
-                          </div>
-
-                          {step.imagePrompt && (
-                            <details style={{ marginTop: "10px", fontSize: "12px" }}>
-                              <summary>Prompt history</summary>
-                              <pre style={{ whiteSpace: "pre-wrap" }}>{step.imagePrompt}</pre>
-                            </details>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <p className="adminHelp">Select a walkthrough to inspect and repair its images.</p>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="adminCard">
-            <h2>Bulk Query Seeder</h2>
-            <p className="adminHelp">
-              Paste one common installation or repair query per line.
-            </p>
-
-            <textarea
-              className="adminTextArea"
-              value={bulkQueries}
-              onChange={(e) => setBulkQueries(e.target.value)}
-              placeholder={"replace sink disposal\nreplace toilet\ninstall bathroom exhaust fan\nreplace shower cartridge"}
-            />
-
-            <button
-              className="startButton"
-              onClick={submitBulkQueries}
-              disabled={adminLoading || !bulkQueries.trim()}
-            >
-              SAVE BULK QUERIES
-            </button>
-
-
-            <div
-              style={{
-                display: "flex",
-                gap: "12px",
-                flexWrap: "wrap",
-                marginTop: "12px"
-              }}
-            >
-              <button
-                className="doneButton"
-                onClick={processQueuedWalkthroughs}
-                disabled={adminLoading}
-              >
-                {adminLoading
-                  ? "PROCESSING..."
-                  : "RUN 5 JOBS"}
-              </button>
-
-              <button
-                className="secondaryButton"
-                onClick={async () => {
-                  setAdminLoading(true);
-
-                  try {
-                    const response = await fetch(
-                      `${API_URL}/admin/process-bulk-queries?limit=1`,
-                      {
-                        method: "POST"
-                      }
-                    );
-
-                    const data = await response.json();
-
-                    setAdminMessage(
-                      `Worker Automation processed ${data.processed_count || 0} job. Remaining queued: ${data.remaining_queued || 0}.`
-                    );
-
-                    loadAdminStatus();
-                    loadBuildStatus();
-
-                  } catch (error) {
-                    console.error(error);
-                    setAdminMessage("Worker Automation failed.");
-
-                  } finally {
-                    setAdminLoading(false);
-                  }
-                }}
-                disabled={adminLoading}
-              >
-                WORKER AUTOMATION
-              </button>
-
-              <button
-                className="secondaryButton"
-                onClick={async () => {
-                  setAdminLoading(true);
-
-                  try {
-                    const response = await fetch(
-                      `${API_URL}/admin/process-bulk-queries?limit=20`,
-                      {
-                        method: "POST"
-                      }
-                    );
-
-                    const data = await response.json();
-
-                    setAdminMessage(
-                      `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
-                    );
-
-                    loadAdminStatus();
-                    loadBuildStatus();
-
-                  } catch (error) {
-                    console.error(error);
-                    setAdminMessage("Could not process walkthroughs.");
-
-                  } finally {
-                    setAdminLoading(false);
-                  }
-                }}
-                disabled={adminLoading}
-              >
-                RUN 20 JOBS
-              </button>
-            </div>
-          </section>
-
-          <section className="adminCard">
-            <h2>Bulk Brand Ingestion</h2>
-
-            <p className="adminHelp">
-              Paste one brand and category per line using:
-              Brand | Category
-            </p>
-
-            <textarea
-              className="adminTextArea"
-              value={bulkCatalog}
-              onChange={(e) => setBulkCatalog(e.target.value)}
-              placeholder={
-                "Kohler | Bidets\nDelta | Shower Valves\nMoen | Kitchen Faucets\nRheem | Heat Pumps\nLeviton | Smart Switches"
-              }
-            />
-
-            <button
-              className="startButton"
-              onClick={submitBulkCatalog}
-              disabled={adminLoading || !bulkCatalog.trim()}
-            >
-              SAVE BULK BRAND LIST
-            </button>
-
-            <button
-              className="doneButton"
-              onClick={processModelDiscovery}
-              disabled={adminLoading}
-              style={{ marginTop: "12px" }}
-            >
-              {adminLoading
-                ? "DISCOVERING..."
-                : "PROCESS MODEL DISCOVERY"}
-            </button>
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Canonical Image Manager</h2>
-
-              <button
-                className="secondaryButton"
-                onClick={loadCanonicalStatus}
-                disabled={adminLoading}
-              >
-                Refresh Images
-              </button>
-            </div>
-
-            <p className="adminHelp">
-              Upload reusable canonical walkthrough images.
-            </p>
-
-            <input
-              className="queryBox"
-              type="text"
-              value={canonicalKey}
-              onChange={(e) => setCanonicalKey(e.target.value)}
-              placeholder="Canonical key, example: replace kitchen faucet"
-            />
-
-            <input
-              className="queryBox"
-              type="number"
-              min="1"
-              value={canonicalStep}
-              onChange={(e) => setCanonicalStep(e.target.value)}
-              placeholder="Step number"
-            />
-
-            <input
-              type="file"
-              onChange={(e) => setCanonicalFile(e.target.files?.[0] || null)}
-            />
-
-            <button
-              className="startButton"
-              onClick={uploadCanonicalImage}
-              disabled={adminLoading || !canonicalFile || !canonicalKey}
-            >
-              UPLOAD CANONICAL IMAGE
-            </button>
-
-            {canonicalStatus?.sets?.length > 0 && (
-              <div className="canonicalGrid">
-                {canonicalStatus.sets.map((set) => (
-                  <div className="canonicalCard" key={set.slug}>
-                    <h3>{set.canonical_key}</h3>
-
-                    <p>
-                      {set.available_count} / {set.expected_count} images
-                    </p>
-
-                    <div className="canonicalThumbs">
-                      {set.images.map((img) => (
-                        <div
-                          key={img.filename}
-                          className={`canonicalThumb ${
-                            img.exists ? "exists" : "missing"
-                          }`}
-                        >
-                          {img.exists ? (
-                            <img src={img.url} alt={img.filename} />
-                          ) : (
-                            <div className="missingThumb">
-                              Missing
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Generated Image Registry</h2>
-
-              <div>
-                <button
-                  className="secondaryButton"
-                  onClick={loadImageRegistry}
-                  disabled={adminLoading}
-                >
-                  Load Registry
-                </button>
-
-                <button
-                  className="secondaryButton"
-                  onClick={rebuildImageRegistry}
-                  disabled={adminLoading}
-                  style={{ marginLeft: "8px" }}
-                >
-                  Rebuild
-                </button>
-              </div>
-            </div>
-
-            <p className="adminHelp">
-              Review generated images and promote useful ones into canonical image sets.
-            </p>
-
-            <input
-              className="queryBox"
-              type="text"
-              value={promoteCanonicalKey}
-              onChange={(e) => setPromoteCanonicalKey(e.target.value)}
-              placeholder="Promote to canonical key, example: replace toilet"
-            />
-
-            <input
-              className="queryBox"
-              type="number"
-              min="1"
-              value={promoteStepNumber}
-              onChange={(e) => setPromoteStepNumber(e.target.value)}
-              placeholder="Canonical step number"
-            />
-
-            <input
-              className="queryBox"
-              type="text"
-              value={promoteFilename}
-              onChange={(e) => setPromoteFilename(e.target.value)}
-              placeholder="Optional filename to promote manually"
-            />
-
-            <button
-              className="startButton"
-              onClick={() => promoteImageToCanonical()}
-              disabled={adminLoading || !promoteFilename || !promoteCanonicalKey}
-            >
-              PROMOTE MANUAL FILENAME
-            </button>
-
-            {imageRegistry?.images?.length > 0 && (
-              <div className="canonicalGrid">
-                {imageRegistry.images.slice(0, 60).map((image) => (
-                  <div className="canonicalCard" key={image.filename}>
-                    <h3>{image.filename}</h3>
-
-                    <p>
-                      {Math.round((image.size_bytes || 0) / 1024)} KB
-                    </p>
-
-                    <div className="canonicalThumbs">
-                      <div className="canonicalThumb exists">
-                        <img
-                          src={`${API_URL}/static/images/${image.filename}`}
-                          alt={image.filename}
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      className="secondaryButton"
-                      onClick={() => {
-                        setPromoteFilename(image.filename);
-                        promoteImageToCanonical(image.filename);
-                      }}
-                      disabled={adminLoading || !promoteCanonicalKey}
-                    >
-                      Promote
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="adminCard">
-            <h2>Brand + Category Catalog Builder</h2>
-            <p className="adminHelp">
-              Add product categories and known models. Leave models blank to queue top-10 model discovery.
-            </p>
-
-            <input
-              className="queryBox"
-              type="text"
-              value={catalogBrand}
-              onChange={(e) => setCatalogBrand(e.target.value)}
-              placeholder="Brand, example: Kohler"
-            />
-
-            <input
-              className="queryBox"
-              type="text"
-              value={catalogCategory}
-              onChange={(e) => setCatalogCategory(e.target.value)}
-              placeholder="Category, example: Bidets"
-            />
-
-            <textarea
-              className="adminTextArea small"
-              value={catalogModels}
-              onChange={(e) => setCatalogModels(e.target.value)}
-              placeholder={"Optional models, one per line\nK-8298\nK-4108\nK-5724"}
-            />
-
-            <label className="adminCheck">
-              <input
-                type="checkbox"
-                checked={discoverTopModels}
-                onChange={(e) => setDiscoverTopModels(e.target.checked)}
-              />
-              Auto-discover top 10 models later if no models are supplied
-            </label>
-
-            <button
-              className="startButton"
-              onClick={submitCatalogEntry}
-              disabled={adminLoading || !catalogBrand.trim() || !catalogCategory.trim()}
-            >
-              SAVE CATALOG ENTRY
-            </button>
-          </section>
-
-          {adminMessage && (
-            <p className="adminMessage">{adminMessage}</p>
-          )}
-
-          <button className="secondaryButton" onClick={backToHome}>
-            ← Back to App
-          </button>
-        </main>
-      ) : !started && !clarifying ? (
-        <main className="homeScreen">
-          <div className="homeBadge">FIELD WALKTHROUGHS</div>
-
-          <h1>What do you need help installing?</h1>
-
-          <input
-            className="queryBox"
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !loading) {
-                e.preventDefault();
-                startWalkthrough();
-              }
-            }}
-            placeholder="Example: replace shower cartridge"
-          />
-
-          <button
-            className="startButton"
-            onClick={startWalkthrough}
-            disabled={loading}
-          >
-            {loading ? "CHECKING PRODUCT OPTIONS..." : "START WALKTHROUGH"}
-          </button>
-        </main>
-      ) : clarifying ? (
-        <main className="clarifyScreen">
-          <div className="homeBadge">CLARIFY INSTALLATION</div>
-
-          <h1>Generic or product-specific?</h1>
-
-          <p className="clarifyPrompt">
-            Query: <strong>{query || "Generic installation walkthrough"}</strong>
-          </p>
-
-          <section className="choicePanel">
-            <label className={`choiceCard ${installMode === "generic" ? "choiceSelected" : ""}`}>
-              <input
-                type="radio"
-                name="installMode"
-                checked={installMode === "generic"}
-                onChange={() => setInstallMode("generic")}
-              />
-              <span>
-                <strong>GENERIC</strong>
-                <small>Use common installation principles and typical field practice.</small>
-              </span>
-            </label>
-
-            <label className={`choiceCard ${installMode === "specific" ? "choiceSelected" : ""}`}>
-              <input
-                type="radio"
-                name="installMode"
-                checked={installMode === "specific"}
-                onChange={() => setInstallMode("specific")}
-              />
-              <span>
-                <strong>SPECIFIC BRAND AND MODEL</strong>
-                <small>
-                  {availableBrands.length > 0
-                    ? "Use product-specific instructions when manufacturer data is available."
-                    : "No matching product catalog is loaded yet for this query."}
-                </small>
-              </span>
-            </label>
-          </section>
-
-          {installMode === "specific" && (
-            <section className="brandModelPanel">
-              <label>
-                Brand
-                <select
-                  className="selectBox"
-                  value={selectedBrand}
-                  onChange={(e) => {
-                    setSelectedBrand(e.target.value);
-                    setSelectedModel("");
-                  }}
-                  disabled={availableBrands.length === 0}
-                >
-                  <option value="">Select brand</option>
-                  {availableBrands.map((entry) => (
-                    <option key={entry.brand} value={entry.brand}>
-                      {entry.brand}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Model
-                <select
-                  className="selectBox"
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  disabled={!selectedBrand}
-                >
-                  <option value="">Select model</option>
-                  {availableModels.map((model) => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </section>
-          )}
-
-          <div className="clarifyActions">
-            <button className="secondaryButton" onClick={backToHome}>
-              ← Back
-            </button>
-
-            {installMode === "specific" ? (
-              <button
-                className="startButton"
-                onClick={continueSpecific}
-                disabled={loading || !selectedBrand}
-              >
-                {loading ? "BUILDING..." : "CONTINUE SPECIFIC"}
-              </button>
-            ) : installMode === "generic" ? (
-              <button
-                className="startButton"
-                onClick={continueGeneric}
-                disabled={loading}
-              >
-                {loading ? "BUILDING..." : "CONTINUE GENERIC"}
-              </button>
-            ) : (
-              <button className="startButton" disabled>
-                CHOOSE AN OPTION
-              </button>
-            )}
-          </div>
-        </main>
-      ) : complete ? (
-        <main className="completionScreen">
-          <div className="completionCard">
-            <div className="completionIcon">✓</div>
-            <h1>Walkthrough complete</h1>
-            <p>
-              This job sequence is finished. Start a new job when you are ready
-              for the next installation question.
-            </p>
-            <button className="startButton" onClick={newJob}>
-              NEW JOB
-            </button>
-          </div>
-        </main>
-      ) : (
-        currentStep && (
-          <main className="walkthroughScreen">
-            <div className="walkthroughTitle">{walkthrough.title}</div>
-
-            <div className="progressText">
-              Step {stepIndex + 1} of {walkthrough.steps.length}
-            </div>
-
-            {walkthrough.estimated_labor_label && (
-              <section className="laborEstimateCard">
-                <div className="laborEstimateIcon">🛠</div>
-                <div>
-                  <strong>{walkthrough.estimated_labor_label}</strong>
-                  <span>Generic estimate before model-specific adjustments.</span>
-                </div>
-              </section>
-            )}
-
-            {installMode === "specific" &&
-              overlayData?.overlays?.length > 0 && (
-              <section className="overlayPanel">
-                <h3>MODEL-SPECIFIC NOTES</h3>
-
-                <div className="overlayGrid">
-                  {overlayData.overlays.map((overlay, index) => (
-                    <div
-                      key={`${overlay.title}-${index}`}
-                      className={`overlayCard overlay-${overlay.type}`}
-                    >
-                      <strong>{overlay.title}</strong>
-                      <p>{overlay.content}</p>
-
-                      <small>
-                        {overlay.type.replace("_", " ").toUpperCase()}
-                      </small>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <section className="imagePanel">
-              <div className={`illustrationFrame ${currentStep.imageUrl ? "realIllustration" : `fakeIllustration stepArt${currentStep.id}`}`}>
-                {currentStep.imageUrl ? (
-                  <img
-                    className="stepImage"
-                    src={currentStep.imageUrl}
-                    alt={currentStep.imageLabel || currentStep.instruction}
-                  />
-                ) : null}
-
-                <div className="illustrationLabel">{currentStep.imageLabel}</div>
-
-                {installMode === "specific" &&
-                  currentStep.hotspots.map((hotspot, index) => (
-                  <button
-                    key={hotspot.id}
-                    className={`hotspot hotspot${index + 1}`}
-                    onClick={() => setActiveHotspot(hotspot)}
-                    aria-label={hotspot.label}
-                  >
-                    +
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="captionPanel">
-              <p className="instruction">{currentStep.instruction}</p>
-              <p className="detail">{currentStep.detail}</p>
-            </section>
-
-            {activeHotspot && (
-              <section className="specCard">
-                <button
-                  className="closeSpec"
-                  onClick={() => setActiveHotspot(null)}
-                >
-                  ×
-                </button>
-                <h3>{activeHotspot.title}</h3>
-                <p>{activeHotspot.content}</p>
-                <small>Source type: manufacturer installation guide</small>
-              </section>
-            )}
-
-            <footer className="actionBar">
-              <button className="secondaryButton" onClick={previousStep}>
-                ← Back
-              </button>
-
-              <button className="audioButton" onClick={readAloud}>
-                🔊 Read
-              </button>
-
-              <button className="doneButton" onClick={nextStep}>
-                {stepIndex < walkthrough.steps.length - 1
-                  ? "NEXT →"
-                  : "✓ DONE"}
-              </button>
-            </footer>
-
-            <p className="disclaimer">{walkthrough.disclaimer}</p>
-          </main>
+import json
+import re
+from datetime import datetime, timezone
+
+try:
+    from app.storage import (
+        BASE_DIR,
+        slugify,
+        save_walkthrough
+    )
+except ImportError:
+    from storage import (
+        BASE_DIR,
+        slugify,
+        save_walkthrough
+    )
+
+try:
+    from app.generator import generate_placeholder_walkthrough
+except ImportError:
+    from generator import generate_placeholder_walkthrough
+
+
+ADMIN_DIR = BASE_DIR / "admin"
+CATALOG_DIR = BASE_DIR / "catalog"
+
+BULK_QUERIES_FILE = ADMIN_DIR / "bulk-queries.json"
+CATALOG_REQUESTS_FILE = CATALOG_DIR / "catalog-requests.json"
+PRODUCT_OPTIONS_FILE = CATALOG_DIR / "product-options.json"
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def ensure_admin_storage():
+    ADMIN_DIR.mkdir(parents=True, exist_ok=True)
+    CATALOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not BULK_QUERIES_FILE.exists():
+        BULK_QUERIES_FILE.write_text(
+            json.dumps({"queries": []}, indent=2),
+            encoding="utf-8"
         )
-      )}
-    </div>
-  );
-}
 
-export default App;
+    if not CATALOG_REQUESTS_FILE.exists():
+        CATALOG_REQUESTS_FILE.write_text(
+            json.dumps({"requests": []}, indent=2),
+            encoding="utf-8"
+        )
+
+
+def load_json(path, default):
+    if not path.exists():
+        return default
+
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+    return data
+
+
+MAX_QUERY_LENGTH = 180
+MAX_SLUG_LENGTH = 110
+
+
+CATEGORY_HEADING_PATTERN = re.compile(
+    r"^(?:[\W_]*\s*)?(framing|plumbing|electrical|windows|doors|siding|flooring|tiling|structural|fastening|permits)\b.*$",
+    re.IGNORECASE
+)
+
+KNOWN_TASK_STARTERS = [
+    "How to",
+    "Drywall taping",
+    "Spray foam",
+    "Building permit",
+]
+
+
+def shorten_text(text: str, max_len: int = MAX_QUERY_LENGTH) -> str:
+    text = re.sub(r"\s+", " ", (text or "")).strip()
+    if len(text) <= max_len:
+        return text
+    return text[:max_len].rstrip(" ,;:-")
+
+
+def safe_query_slug(query: str) -> str:
+    base = slugify(shorten_text(query, MAX_QUERY_LENGTH))
+    if len(base) <= MAX_SLUG_LENGTH:
+        return base
+    return base[:MAX_SLUG_LENGTH].rstrip("-")
+
+
+def split_concatenated_tasks(text: str) -> list[str]:
+    """Turn pasted category lists into one clean job per task.
+
+    This protects the queue from a common paste problem where a formatted list
+    loses line breaks and becomes one enormous query, which later creates
+    filesystem errors from very long image filenames.
+    """
+    if not text:
+        return []
+
+    cleaned = text.replace("\r", "\n")
+    cleaned = re.sub(r"[🏗️💧🚪🧱🏠]+", "\n", cleaned)
+
+    # Force a line break before known task starters when rich text loses bullets/newlines.
+    for starter in KNOWN_TASK_STARTERS:
+        cleaned = re.sub(rf"(?<!^)(?={re.escape(starter)}\b)", "\n", cleaned)
+
+    # Also split before category labels embedded in one long line.
+    cleaned = re.sub(
+        r"(?i)(framing and drywall|plumbing and electrical|windows, doors, and siding|flooring and tiling|structural, fastening, and permits)",
+        "\n",
+        cleaned,
+    )
+
+    candidates = []
+    for line in cleaned.splitlines():
+        line = re.sub(r"^[\-•*\d\.\)\s]+", "", line).strip()
+        line = re.sub(r"\s+", " ", line)
+        if not line:
+            continue
+        if CATEGORY_HEADING_PATTERN.match(line) and not line.lower().startswith("how to"):
+            continue
+        if len(line) < 6:
+            continue
+        candidates.append(shorten_text(line))
+
+    # De-duplicate while preserving order.
+    seen = set()
+    result = []
+    for item in candidates:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(item)
+    return result
+
+
+def quarantine_bad_bulk_records(bulk: dict) -> int:
+    """Move malformed giant queue records out of active processing."""
+    changed = 0
+    for item in bulk.get("queries", []):
+        query = item.get("query", "") or ""
+        slug = item.get("query_slug", "") or ""
+        if item.get("status") in {"queued", "failed"} and (len(query) > MAX_QUERY_LENGTH or len(slug) > MAX_SLUG_LENGTH):
+            item["status"] = "ignored"
+            item["ignored_at"] = now_iso()
+            item["quarantine_reason"] = "Query was too long and likely came from a pasted category list. Delete it and re-add split tasks."
+            changed += 1
+    return changed
+
+
+def save_bulk_queries(raw_text: str):
+    ensure_admin_storage()
+
+    lines = split_concatenated_tasks(raw_text)
+
+    existing = load_json(BULK_QUERIES_FILE, {"queries": []})
+    quarantine_bad_bulk_records(existing)
+    existing_queries = existing.get("queries", [])
+
+    existing_texts = {
+        item.get("query", "").lower()
+        for item in existing_queries
+    }
+
+    added = []
+
+    for line in lines:
+        line = shorten_text(line)
+        normalized = line.lower()
+
+        if normalized in existing_texts:
+            continue
+
+        record = {
+            "query": line,
+            "query_slug": safe_query_slug(line),
+            "status": "queued",
+            "attempts": 0,
+            "created_at": now_iso()
+        }
+
+        existing_queries.append(record)
+        existing_texts.add(normalized)
+        added.append(record)
+
+    existing["queries"] = existing_queries
+    save_json(BULK_QUERIES_FILE, existing)
+
+    return {
+        "status": "saved",
+        "submitted_count": len(lines),
+        "added_count": len(added),
+        "duplicate_count": len(lines) - len(added),
+        "total_count": len(existing_queries),
+        "added": added
+    }
+
+
+def process_bulk_queries(limit: int = 5):
+    ensure_admin_storage()
+
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    quarantine_bad_bulk_records(bulk)
+    queries = bulk.get("queries", [])
+
+    processed = []
+    failed = []
+
+    queued = [
+        item for item in queries
+        if item.get("status") == "queued"
+    ]
+
+    for item in queued[:limit]:
+        query = shorten_text(item.get("query", ""))
+        item["query"] = query
+        item["query_slug"] = safe_query_slug(query)
+        item["status"] = "processing"
+        item["processing_started_at"] = now_iso()
+        save_json(BULK_QUERIES_FILE, bulk)
+
+        try:
+            item["attempts"] = int(item.get("attempts", 0)) + 1
+            item["last_attempt_at"] = now_iso()
+
+            walkthrough = generate_placeholder_walkthrough(query)
+
+            save_walkthrough(
+                walkthrough["walkthrough_id"],
+                walkthrough
+            )
+
+            item["status"] = "completed"
+            item["completed_at"] = now_iso()
+            item["walkthrough_id"] = walkthrough["walkthrough_id"]
+
+            processed.append({
+                "query": query,
+                "walkthrough_id": walkthrough["walkthrough_id"]
+            })
+
+        except Exception as e:
+            item["status"] = "failed"
+            item["error"] = str(e)
+            item["last_error"] = str(e)
+            item["failed_at"] = now_iso()
+
+            failed.append({
+                "query": query,
+                "error": str(e)
+            })
+
+    save_json(BULK_QUERIES_FILE, bulk)
+
+    return {
+        "status": "bulk processing complete",
+        "processed_count": len(processed),
+        "failed_count": len(failed),
+        "processed": processed,
+        "failed": failed,
+        "remaining_queued": len([
+            q for q in queries
+            if q.get("status") == "queued"
+        ])
+    }
+
+
+
+def save_bulk_catalog_requests(raw_text: str):
+    ensure_admin_storage()
+
+    lines = [
+        line.strip()
+        for line in raw_text.splitlines()
+        if line.strip()
+    ]
+
+    added = []
+    failed = []
+
+    for line in lines:
+        try:
+            if "|" not in line:
+                failed.append({
+                    "line": line,
+                    "error": "Missing | separator"
+                })
+                continue
+
+            brand, category = line.split("|", 1)
+
+            result = save_catalog_request(
+                brand=brand.strip(),
+                category=category.strip(),
+                models_text="",
+                discover_top_models=True
+            )
+
+            added.append(result["request"])
+
+        except Exception as e:
+            failed.append({
+                "line": line,
+                "error": str(e)
+            })
+
+    return {
+        "status": "bulk catalog requests processed",
+        "submitted_count": len(lines),
+        "added_count": len(added),
+        "failed_count": len(failed),
+        "added": added,
+        "failed": failed
+    }
+
+
+def save_catalog_request(
+    brand: str,
+    category: str,
+    models_text: str = "",
+    discover_top_models: bool = True
+):
+    ensure_admin_storage()
+
+    brand = brand.strip()
+    category = category.strip()
+
+    models = [
+        line.strip()
+        for line in models_text.splitlines()
+        if line.strip()
+    ]
+
+    request_record = {
+        "brand": brand,
+        "brand_slug": slugify(brand),
+        "category": category,
+        "category_slug": slugify(category),
+        "models": models,
+        "discover_top_models": discover_top_models and len(models) == 0,
+        "requested_model_count": 10 if discover_top_models and len(models) == 0 else len(models),
+        "status": "queued_for_model_discovery" if discover_top_models and len(models) == 0 else "models_supplied",
+        "created_at": now_iso()
+    }
+
+    requests = load_json(CATALOG_REQUESTS_FILE, {"requests": []})
+    requests["requests"].append(request_record)
+    save_json(CATALOG_REQUESTS_FILE, requests)
+
+    update_product_options_from_catalog_request(request_record)
+
+    return {
+        "status": "saved",
+        "request": request_record
+    }
+
+
+def update_product_options_from_catalog_request(request_record: dict):
+    product_options = load_json(PRODUCT_OPTIONS_FILE, {})
+
+    category_slug = request_record["category_slug"]
+    category_name = request_record["category"]
+
+    if category_slug not in product_options:
+        product_options[category_slug] = {
+            "keywords": [
+                category_name.lower(),
+                category_slug.replace("-", " ")
+            ],
+            "brands": []
+        }
+
+    brands = product_options[category_slug].setdefault("brands", [])
+
+    brand_name = request_record["brand"]
+    models = request_record.get("models", [])
+
+    existing_brand = None
+
+    for brand_entry in brands:
+        if brand_entry.get("brand", "").lower() == brand_name.lower():
+            existing_brand = brand_entry
+            break
+
+    if existing_brand is None:
+        existing_brand = {
+            "brand": brand_name,
+            "models": []
+        }
+        brands.append(existing_brand)
+
+    existing_models = {
+        model.lower()
+        for model in existing_brand.get("models", [])
+    }
+
+    for model in models:
+        if model.lower() not in existing_models:
+            existing_brand["models"].append(model)
+
+    save_json(PRODUCT_OPTIONS_FILE, product_options)
+
+    return product_options
+
+
+def admin_status():
+    ensure_admin_storage()
+
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    requests = load_json(CATALOG_REQUESTS_FILE, {"requests": []})
+    product_options = load_json(PRODUCT_OPTIONS_FILE, {})
+
+    completed = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "completed"
+    ])
+
+    queued = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "queued"
+    ])
+
+    failed = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "failed"
+    ])
+
+    processing = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "processing"
+    ])
+
+    ignored = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "ignored"
+    ])
+
+    return {
+        "status": "admin storage ready",
+        "bulk_query_count": len(bulk.get("queries", [])),
+        "bulk_completed_count": completed,
+        "bulk_queued_count": queued,
+        "bulk_processing_count": processing,
+        "bulk_failed_count": failed,
+        "bulk_ignored_count": ignored,
+        "catalog_request_count": len(requests.get("requests", [])),
+        "catalog_category_count": len(product_options.keys())
+    }
+
+
+def list_bulk_query_jobs():
+    """Return queued, failed, completed, and ignored bulk query records for admin review."""
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    changed = quarantine_bad_bulk_records(bulk)
+    if changed:
+        save_json(BULK_QUERIES_FILE, bulk)
+    queries = bulk.get("queries", [])
+
+    grouped = {
+        "queued": [],
+        "processing": [],
+        "failed": [],
+        "completed": [],
+        "ignored": [],
+        "all": queries
+    }
+
+    for item in queries:
+        status = item.get("status", "queued")
+        grouped.setdefault(status, []).append(item)
+
+    return {
+        "status": "loaded",
+        "counts": {
+            "all": len(queries),
+            "queued": len(grouped.get("queued", [])),
+            "processing": len(grouped.get("processing", [])),
+            "failed": len(grouped.get("failed", [])),
+            "completed": len(grouped.get("completed", [])),
+            "ignored": len(grouped.get("ignored", []))
+        },
+        **grouped
+    }
+
+
+def retry_bulk_query(query_slug: str):
+    """Move a failed/completed/ignored bulk query back to queued."""
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+
+    for item in bulk.get("queries", []):
+        if item.get("query_slug") == query_slug or safe_query_slug(item.get("query", "")) == query_slug:
+            if item.get("status") == "queued":
+                return {"status": "already_queued", "job": item}
+
+            item["status"] = "queued"
+            item["retried_at"] = now_iso()
+            item.pop("error", None)
+            item.pop("completed_at", None)
+            item.pop("last_error", None)
+            item.pop("failed_at", None)
+            save_json(BULK_QUERIES_FILE, bulk)
+            return {
+                "status": "queued",
+                "message": "Job was returned to the waiting queue. It will not run until the worker runs or you click Run Now.",
+                "job": item
+            }
+
+    return {"status": "not_found", "query_slug": query_slug}
+
+
+def ignore_bulk_query(query_slug: str):
+    """Mark a bulk query ignored without deleting its history."""
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+
+    for item in bulk.get("queries", []):
+        if item.get("query_slug") == query_slug or safe_query_slug(item.get("query", "")) == query_slug:
+            item["status"] = "ignored"
+            item["ignored_at"] = now_iso()
+            save_json(BULK_QUERIES_FILE, bulk)
+            return {"status": "ignored", "job": item}
+
+    return {"status": "not_found", "query_slug": query_slug}
+
+
+def delete_bulk_query(query_slug: str):
+    """Remove a bulk query from the queue file."""
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    before = len(bulk.get("queries", []))
+
+    bulk["queries"] = [
+        item for item in bulk.get("queries", [])
+        if item.get("query_slug") != query_slug and safe_query_slug(item.get("query", "")) != query_slug
+    ]
+
+    after = len(bulk.get("queries", []))
+    save_json(BULK_QUERIES_FILE, bulk)
+
+    return {
+        "status": "deleted" if after < before else "not_found",
+        "query_slug": query_slug,
+        "deleted_count": before - after
+    }
+
+
+
+def process_specific_bulk_query(query_slug: str):
+    """Process one specific queued job immediately.
+
+    This is different from retry_bulk_query(): retry only puts a job back in
+    line; this function actually runs generation for the selected job now.
+    """
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    quarantine_bad_bulk_records(bulk)
+
+    target = None
+    for item in bulk.get("queries", []):
+        item_slug = item.get("query_slug") or safe_query_slug(item.get("query", ""))
+        if item_slug == query_slug:
+            target = item
+            break
+
+    if target is None:
+        return {
+            "status": "not_found",
+            "query_slug": query_slug,
+            "message": "No matching bulk query job was found."
+        }
+
+    if target.get("status") != "queued":
+        return {
+            "status": "not_queued",
+            "query_slug": query_slug,
+            "job_status": target.get("status"),
+            "message": "This job must be queued before it can be run. Use Retry + Run Now for failed or ignored jobs."
+        }
+
+    query = shorten_text(target.get("query", ""))
+    target["query"] = query
+    target["query_slug"] = safe_query_slug(query)
+    target["status"] = "processing"
+    target["processing_started_at"] = now_iso()
+    save_json(BULK_QUERIES_FILE, bulk)
+
+    try:
+        target["attempts"] = int(target.get("attempts", 0)) + 1
+        target["last_attempt_at"] = now_iso()
+
+        walkthrough = generate_placeholder_walkthrough(query)
+
+        save_walkthrough(
+            walkthrough["walkthrough_id"],
+            walkthrough
+        )
+
+        target["status"] = "completed"
+        target["completed_at"] = now_iso()
+        target["walkthrough_id"] = walkthrough["walkthrough_id"]
+        target.pop("error", None)
+        target.pop("last_error", None)
+
+        save_json(BULK_QUERIES_FILE, bulk)
+
+        return {
+            "status": "completed",
+            "message": "Job was run immediately and completed.",
+            "query": query,
+            "walkthrough_id": walkthrough["walkthrough_id"],
+            "job": target
+        }
+
+    except Exception as e:
+        target["status"] = "failed"
+        target["error"] = str(e)
+        target["last_error"] = str(e)
+        target["failed_at"] = now_iso()
+        save_json(BULK_QUERIES_FILE, bulk)
+
+        return {
+            "status": "failed",
+            "message": "Job was run immediately but failed.",
+            "query": query,
+            "error": str(e),
+            "job": target
+        }
+
+
+def retry_and_run_bulk_query(query_slug: str):
+    """Queue a selected job, then process that exact job immediately.
+
+    Admin should label this as 'Retry + Run Now' so it is clear that the
+    job is not merely returned to the waiting queue.
+    """
+    retry_result = retry_bulk_query(query_slug)
+    if retry_result.get("status") not in {"queued", "already_queued"}:
+        return retry_result
+
+    return process_specific_bulk_query(query_slug)
+
+
+def run_next_bulk_queries(limit: int = 1):
+    """Manual admin trigger for processing the next queued jobs.
+
+    This does not start the Render background worker service. It runs queued
+    jobs inside the current API request and returns the result.
+    """
+    try:
+        limit = int(limit)
+    except Exception:
+        limit = 1
+
+    limit = max(1, min(limit, 20))
+    return process_bulk_queries(limit=limit)
