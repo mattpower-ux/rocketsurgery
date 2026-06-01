@@ -41,11 +41,16 @@ def generate_placeholder_walkthrough(query: str) -> dict:
 
     for index, planned_step in enumerate(planned_steps[:8], start=1):
 
+        image_prompt = (
+            f"{clean_query} — {planned_step.get('title', f'Step {index}')}. "
+            "Create a clear professional construction training illustration with accurate materials, tools, and safe work positioning."
+        )
+
         if index - 1 < len(canonical_images):
             image_url = canonical_images[index - 1]
         else:
             image_url = generate_step_image(
-                f"{clean_query} — {planned_step.get('title', f'Step {index}')}",
+                image_prompt,
                 index
             )
 
@@ -55,7 +60,9 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                 "instruction": planned_step.get("instruction", "Complete this installation step."),
                 "detail": planned_step.get("detail", "Follow manufacturer instructions and local code requirements."),
                 "imageLabel": f"Step {index}: {planned_step.get('title', 'Installation step')}",
+                "imagePrompt": image_prompt,
                 "imageUrl": image_url,
+                "imageRepairHistory": [],
                 "hotspots": [
                     {
                         "id": f"step-{index}-spec",
