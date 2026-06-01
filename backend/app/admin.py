@@ -227,6 +227,9 @@ def process_bulk_queries(limit: int = 5):
         query = shorten_text(item.get("query", ""))
         item["query"] = query
         item["query_slug"] = safe_query_slug(query)
+        item["status"] = "processing"
+        item["processing_started_at"] = now_iso()
+        save_json(BULK_QUERIES_FILE, bulk)
 
         try:
             item["attempts"] = int(item.get("attempts", 0)) + 1
@@ -434,12 +437,24 @@ def admin_status():
         if q.get("status") == "failed"
     ])
 
+    processing = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "processing"
+    ])
+
+    ignored = len([
+        q for q in bulk.get("queries", [])
+        if q.get("status") == "ignored"
+    ])
+
     return {
         "status": "admin storage ready",
         "bulk_query_count": len(bulk.get("queries", [])),
         "bulk_completed_count": completed,
         "bulk_queued_count": queued,
+        "bulk_processing_count": processing,
         "bulk_failed_count": failed,
+        "bulk_ignored_count": ignored,
         "catalog_request_count": len(requests.get("requests", [])),
         "catalog_category_count": len(product_options.keys())
     }
@@ -456,6 +471,7 @@ def list_bulk_query_jobs():
 
     grouped = {
         "queued": [],
+        "processing": [],
         "failed": [],
         "completed": [],
         "ignored": [],
@@ -471,6 +487,7 @@ def list_bulk_query_jobs():
         "counts": {
             "all": len(queries),
             "queued": len(grouped.get("queued", [])),
+            "processing": len(grouped.get("processing", [])),
             "failed": len(grouped.get("failed", [])),
             "completed": len(grouped.get("completed", [])),
             "ignored": len(grouped.get("ignored", []))
@@ -486,13 +503,21 @@ def retry_bulk_query(query_slug: str):
 
     for item in bulk.get("queries", []):
         if item.get("query_slug") == query_slug or safe_query_slug(item.get("query", "")) == query_slug:
+            if item.get("status") == "queued":
+                return {"status": "already_queued", "job": item}
+
             item["status"] = "queued"
             item["retried_at"] = now_iso()
             item.pop("error", None)
             item.pop("completed_at", None)
             item.pop("last_error", None)
+            item.pop("failed_at", None)
             save_json(BULK_QUERIES_FILE, bulk)
-            return {"status": "queued", "job": item}
+            return {
+                "status": "queued",
+                "message": "Job was returned to the waiting queue. It will not run until the worker runs or you click Run Now.",
+                "job": item
+            }
 
     return {"status": "not_found", "query_slug": query_slug}
 
@@ -531,3 +556,114 @@ def delete_bulk_query(query_slug: str):
         "query_slug": query_slug,
         "deleted_count": before - after
     }
+
+
+
+def process_specific_bulk_query(query_slug: str):
+    """Process one specific queued job immediately.
+
+    This is different from retry_bulk_query(): retry only puts a job back in
+    line; this function actually runs generation for the selected job now.
+    """
+    ensure_admin_storage()
+    bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    quarantine_bad_bulk_records(bulk)
+
+    target = None
+    for item in bulk.get("queries", []):
+        item_slug = item.get("query_slug") or safe_query_slug(item.get("query", ""))
+        if item_slug == query_slug:
+            target = item
+            break
+
+    if target is None:
+        return {
+            "status": "not_found",
+            "query_slug": query_slug,
+            "message": "No matching bulk query job was found."
+        }
+
+    if target.get("status") != "queued":
+        return {
+            "status": "not_queued",
+            "query_slug": query_slug,
+            "job_status": target.get("status"),
+            "message": "This job must be queued before it can be run. Use Retry + Run Now for failed or ignored jobs."
+        }
+
+    query = shorten_text(target.get("query", ""))
+    target["query"] = query
+    target["query_slug"] = safe_query_slug(query)
+    target["status"] = "processing"
+    target["processing_started_at"] = now_iso()
+    save_json(BULK_QUERIES_FILE, bulk)
+
+    try:
+        target["attempts"] = int(target.get("attempts", 0)) + 1
+        target["last_attempt_at"] = now_iso()
+
+        walkthrough = generate_placeholder_walkthrough(query)
+
+        save_walkthrough(
+            walkthrough["walkthrough_id"],
+            walkthrough
+        )
+
+        target["status"] = "completed"
+        target["completed_at"] = now_iso()
+        target["walkthrough_id"] = walkthrough["walkthrough_id"]
+        target.pop("error", None)
+        target.pop("last_error", None)
+
+        save_json(BULK_QUERIES_FILE, bulk)
+
+        return {
+            "status": "completed",
+            "message": "Job was run immediately and completed.",
+            "query": query,
+            "walkthrough_id": walkthrough["walkthrough_id"],
+            "job": target
+        }
+
+    except Exception as e:
+        target["status"] = "failed"
+        target["error"] = str(e)
+        target["last_error"] = str(e)
+        target["failed_at"] = now_iso()
+        save_json(BULK_QUERIES_FILE, bulk)
+
+        return {
+            "status": "failed",
+            "message": "Job was run immediately but failed.",
+            "query": query,
+            "error": str(e),
+            "job": target
+        }
+
+
+def retry_and_run_bulk_query(query_slug: str):
+    """Queue a selected job, then process that exact job immediately.
+
+    Admin should label this as 'Retry + Run Now' so it is clear that the
+    job is not merely returned to the waiting queue.
+    """
+    retry_result = retry_bulk_query(query_slug)
+    if retry_result.get("status") not in {"queued", "already_queued"}:
+        return retry_result
+
+    return process_specific_bulk_query(query_slug)
+
+
+def run_next_bulk_queries(limit: int = 1):
+    """Manual admin trigger for processing the next queued jobs.
+
+    This does not start the Render background worker service. It runs queued
+    jobs inside the current API request and returns the result.
+    """
+    try:
+        limit = int(limit)
+    except Exception:
+        limit = 1
+
+    limit = max(1, min(limit, 20))
+    return process_bulk_queries(limit=limit)
