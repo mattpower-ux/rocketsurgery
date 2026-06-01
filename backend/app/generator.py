@@ -24,9 +24,40 @@ except ImportError:
     from canonical_images import get_canonical_image_urls
 
 
+MAX_GENERATION_QUERY_LENGTH = 160
+MAX_IMAGE_PROMPT_LENGTH = 420
+
+
+def safe_task_text(text: str, max_len: int = MAX_GENERATION_QUERY_LENGTH) -> str:
+    text = " ".join((text or "").split())
+    if not text:
+        return "Untitled installation walkthrough"
+    if len(text) <= max_len:
+        return text
+    return text[:max_len].rstrip(" ,;:-")
+
+
+def safe_image_prompt(text: str) -> str:
+    prompt = " ".join((text or "").split())
+
+    # Reduce false moderation hits from ambiguous short construction phrases.
+    prompt = prompt.replace("house wrap", "weather-resistive wall barrier")
+    prompt = prompt.replace("House wrap", "weather-resistive wall barrier")
+
+    base = (
+        "Professional construction training illustration. "
+        "Show a safe residential building installation step with realistic materials, "
+        "clear tool placement, no injuries, no weapons, no illegal activity. "
+    )
+    prompt = f"{base}{prompt}"
+    if len(prompt) > MAX_IMAGE_PROMPT_LENGTH:
+        prompt = prompt[:MAX_IMAGE_PROMPT_LENGTH].rstrip(" ,;:-")
+    return prompt
+
+
 def generate_placeholder_walkthrough(query: str) -> dict:
-    walkthrough_id = query_to_walkthrough_id(query)
-    clean_query = query.strip() or "Untitled installation walkthrough"
+    clean_query = safe_task_text(query)
+    walkthrough_id = query_to_walkthrough_id(clean_query)
 
     planned_steps = generate_installation_steps(clean_query)
 
@@ -41,9 +72,8 @@ def generate_placeholder_walkthrough(query: str) -> dict:
 
     for index, planned_step in enumerate(planned_steps[:8], start=1):
 
-        image_prompt = (
-            f"{clean_query} — {planned_step.get('title', f'Step {index}')}. "
-            "Create a clear professional construction training illustration with accurate materials, tools, and safe work positioning."
+        image_prompt = safe_image_prompt(
+            f"{clean_query} — {planned_step.get('title', f'Step {index}')}"
         )
 
         if index - 1 < len(canonical_images):
