@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timezone
 
 try:
@@ -66,16 +67,106 @@ def save_json(path, data):
     return data
 
 
+MAX_QUERY_LENGTH = 180
+MAX_SLUG_LENGTH = 110
+
+
+CATEGORY_HEADING_PATTERN = re.compile(
+    r"^(?:[\W_]*\s*)?(framing|plumbing|electrical|windows|doors|siding|flooring|tiling|structural|fastening|permits)\b.*$",
+    re.IGNORECASE
+)
+
+KNOWN_TASK_STARTERS = [
+    "How to",
+    "Drywall taping",
+    "Spray foam",
+    "Building permit",
+]
+
+
+def shorten_text(text: str, max_len: int = MAX_QUERY_LENGTH) -> str:
+    text = re.sub(r"\s+", " ", (text or "")).strip()
+    if len(text) <= max_len:
+        return text
+    return text[:max_len].rstrip(" ,;:-")
+
+
+def safe_query_slug(query: str) -> str:
+    base = slugify(shorten_text(query, MAX_QUERY_LENGTH))
+    if len(base) <= MAX_SLUG_LENGTH:
+        return base
+    return base[:MAX_SLUG_LENGTH].rstrip("-")
+
+
+def split_concatenated_tasks(text: str) -> list[str]:
+    """Turn pasted category lists into one clean job per task.
+
+    This protects the queue from a common paste problem where a formatted list
+    loses line breaks and becomes one enormous query, which later creates
+    filesystem errors from very long image filenames.
+    """
+    if not text:
+        return []
+
+    cleaned = text.replace("\r", "\n")
+    cleaned = re.sub(r"[🏗️💧🚪🧱🏠]+", "\n", cleaned)
+
+    # Force a line break before known task starters when rich text loses bullets/newlines.
+    for starter in KNOWN_TASK_STARTERS:
+        cleaned = re.sub(rf"(?<!^)(?={re.escape(starter)}\b)", "\n", cleaned)
+
+    # Also split before category labels embedded in one long line.
+    cleaned = re.sub(
+        r"(?i)(framing and drywall|plumbing and electrical|windows, doors, and siding|flooring and tiling|structural, fastening, and permits)",
+        "\n",
+        cleaned,
+    )
+
+    candidates = []
+    for line in cleaned.splitlines():
+        line = re.sub(r"^[\-•*\d\.\)\s]+", "", line).strip()
+        line = re.sub(r"\s+", " ", line)
+        if not line:
+            continue
+        if CATEGORY_HEADING_PATTERN.match(line) and not line.lower().startswith("how to"):
+            continue
+        if len(line) < 6:
+            continue
+        candidates.append(shorten_text(line))
+
+    # De-duplicate while preserving order.
+    seen = set()
+    result = []
+    for item in candidates:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(item)
+    return result
+
+
+def quarantine_bad_bulk_records(bulk: dict) -> int:
+    """Move malformed giant queue records out of active processing."""
+    changed = 0
+    for item in bulk.get("queries", []):
+        query = item.get("query", "") or ""
+        slug = item.get("query_slug", "") or ""
+        if item.get("status") in {"queued", "failed"} and (len(query) > MAX_QUERY_LENGTH or len(slug) > MAX_SLUG_LENGTH):
+            item["status"] = "ignored"
+            item["ignored_at"] = now_iso()
+            item["quarantine_reason"] = "Query was too long and likely came from a pasted category list. Delete it and re-add split tasks."
+            changed += 1
+    return changed
+
+
 def save_bulk_queries(raw_text: str):
     ensure_admin_storage()
 
-    lines = [
-        line.strip()
-        for line in raw_text.splitlines()
-        if line.strip()
-    ]
+    lines = split_concatenated_tasks(raw_text)
 
     existing = load_json(BULK_QUERIES_FILE, {"queries": []})
+    quarantine_bad_bulk_records(existing)
     existing_queries = existing.get("queries", [])
 
     existing_texts = {
@@ -86,6 +177,7 @@ def save_bulk_queries(raw_text: str):
     added = []
 
     for line in lines:
+        line = shorten_text(line)
         normalized = line.lower()
 
         if normalized in existing_texts:
@@ -93,8 +185,9 @@ def save_bulk_queries(raw_text: str):
 
         record = {
             "query": line,
-            "query_slug": slugify(line),
+            "query_slug": safe_query_slug(line),
             "status": "queued",
+            "attempts": 0,
             "created_at": now_iso()
         }
 
@@ -119,6 +212,7 @@ def process_bulk_queries(limit: int = 5):
     ensure_admin_storage()
 
     bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    quarantine_bad_bulk_records(bulk)
     queries = bulk.get("queries", [])
 
     processed = []
@@ -130,7 +224,9 @@ def process_bulk_queries(limit: int = 5):
     ]
 
     for item in queued[:limit]:
-        query = item.get("query")
+        query = shorten_text(item.get("query", ""))
+        item["query"] = query
+        item["query_slug"] = safe_query_slug(query)
 
         try:
             item["attempts"] = int(item.get("attempts", 0)) + 1
@@ -353,6 +449,9 @@ def list_bulk_query_jobs():
     """Return queued, failed, completed, and ignored bulk query records for admin review."""
     ensure_admin_storage()
     bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
+    changed = quarantine_bad_bulk_records(bulk)
+    if changed:
+        save_json(BULK_QUERIES_FILE, bulk)
     queries = bulk.get("queries", [])
 
     grouped = {
@@ -386,7 +485,7 @@ def retry_bulk_query(query_slug: str):
     bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
 
     for item in bulk.get("queries", []):
-        if item.get("query_slug") == query_slug or slugify(item.get("query", "")) == query_slug:
+        if item.get("query_slug") == query_slug or safe_query_slug(item.get("query", "")) == query_slug:
             item["status"] = "queued"
             item["retried_at"] = now_iso()
             item.pop("error", None)
@@ -404,7 +503,7 @@ def ignore_bulk_query(query_slug: str):
     bulk = load_json(BULK_QUERIES_FILE, {"queries": []})
 
     for item in bulk.get("queries", []):
-        if item.get("query_slug") == query_slug or slugify(item.get("query", "")) == query_slug:
+        if item.get("query_slug") == query_slug or safe_query_slug(item.get("query", "")) == query_slug:
             item["status"] = "ignored"
             item["ignored_at"] = now_iso()
             save_json(BULK_QUERIES_FILE, bulk)
@@ -421,7 +520,7 @@ def delete_bulk_query(query_slug: str):
 
     bulk["queries"] = [
         item for item in bulk.get("queries", [])
-        if item.get("query_slug") != query_slug and slugify(item.get("query", "")) != query_slug
+        if item.get("query_slug") != query_slug and safe_query_slug(item.get("query", "")) != query_slug
     ]
 
     after = len(bulk.get("queries", []))
