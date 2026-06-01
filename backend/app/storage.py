@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -12,11 +13,23 @@ def ensure_storage():
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def slugify(text: str) -> str:
-    text = text.lower().strip()
+MAX_SLUG_LENGTH = 110
+
+
+def slugify(text: str, max_length: int = MAX_SLUG_LENGTH) -> str:
+    text = (text or "").lower().strip()
     text = re.sub(r"[^a-z0-9]+", "-", text)
-    text = re.sub(r"-+", "-", text)
-    return text.strip("-")
+    text = re.sub(r"-+", "-", text).strip("-")
+
+    if not text:
+        return "untitled"
+
+    if len(text) <= max_length:
+        return text
+
+    digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
+    trimmed = text[: max_length - 9].rstrip("-")
+    return f"{trimmed}-{digest}"
 
 
 def normalize_query_text(query: str) -> str:
