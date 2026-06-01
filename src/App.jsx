@@ -889,39 +889,23 @@ function App() {
             </div>
 
             {adminStatus ? (
-              <div className="adminStats">
-                <div>
-                  <strong>{adminStatus.bulk_query_count}</strong>
-                  <span>Total queries</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.bulk_completed_count || 0}</strong>
-                  <span>Completed</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.bulk_queued_count || 0}</strong>
-                  <span>Queued</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.bulk_failed_count || 0}</strong>
-                  <span>Failed</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.catalog_request_count}</strong>
-                  <span>Catalog requests</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.catalog_category_count}</strong>
-                  <span>Catalog categories</span>
-                </div>
-              </div>
+              <p className="adminHelp" style={{ marginBottom: 0 }}>
+                <strong>{adminStatus.bulk_query_count || 0}</strong> total queries
+                {" · "}
+                <strong>{adminStatus.bulk_completed_count || 0}</strong> completed
+                {" · "}
+                <strong>{adminStatus.bulk_queued_count || 0}</strong> queued
+                {" · "}
+                <strong>{adminStatus.bulk_failed_count || 0}</strong> failed
+                {" · "}
+                <strong>{adminStatus.catalog_request_count || 0}</strong> catalog requests
+                {" · "}
+                <strong>{adminStatus.catalog_category_count || 0}</strong> catalog categories
+              </p>
             ) : (
-              <p className="adminHelp">Click refresh to load admin status.</p>
+              <p className="adminHelp" style={{ marginBottom: 0 }}>
+                Click refresh to load admin status.
+              </p>
             )}
           </section>
 
@@ -932,69 +916,29 @@ function App() {
               <button
                 className="secondaryButton"
                 onClick={loadBuildStatus}
+                disabled={adminLoading}
               >
                 Refresh Activity
               </button>
             </div>
 
             {buildStatus ? (
-              <>
-                <div className="adminStats">
-                  <div>
-                    <strong>{buildStatus.activity_state?.toUpperCase()}</strong>
-                    <span>Activity</span>
-                  </div>
-
-                  <div>
-                    <strong>
-                      {buildStatus.seconds_since_activity
-                        ? Math.round(buildStatus.seconds_since_activity)
-                        : 0}
-                    </strong>
-                    <span>Seconds idle</span>
-                  </div>
-
-                  <div>
-                    <strong>{buildStatus.walkthrough_count || 0}</strong>
-                    <span>Walkthroughs</span>
-                  </div>
-
-                  <div>
-                    <strong>{buildStatus.image_count || 0}</strong>
-                    <span>Images</span>
-                  </div>
-                </div>
-
-                <div className="activityColumns">
-                  <div>
-                    <h3>Recent Walkthroughs</h3>
-
-                    <ul className="activityList">
-                      {(buildStatus.recent_walkthroughs || []).map((item) => (
-                        <li key={item.name}>
-                          <strong>{item.name}</strong>
-                          <small>{item.modified_at}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h3>Recent Images</h3>
-
-                    <ul className="activityList">
-                      {(buildStatus.recent_images || []).map((item) => (
-                        <li key={item.name}>
-                          <strong>{item.name}</strong>
-                          <small>{item.modified_at}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </>
+              <p className="adminHelp" style={{ marginBottom: 0 }}>
+                <strong>{(buildStatus.activity_state || buildStatus.status || "unknown").toUpperCase()}</strong>
+                {" · "}
+                Last activity:{" "}
+                <strong>
+                  {typeof buildStatus.seconds_since_activity !== "undefined"
+                    ? `${Math.round(buildStatus.seconds_since_activity)}s ago`
+                    : "unknown"}
+                </strong>
+                {" · "}
+                Walkthroughs: <strong>{buildStatus.walkthrough_count || 0}</strong>
+                {" · "}
+                Images: <strong>{buildStatus.image_count || 0}</strong>
+              </p>
             ) : (
-              <p className="adminHelp">
+              <p className="adminHelp" style={{ marginBottom: 0 }}>
                 Loading build activity...
               </p>
             )}
@@ -1528,183 +1472,6 @@ function App() {
                 ? "DISCOVERING..."
                 : "PROCESS MODEL DISCOVERY"}
             </button>
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Canonical Image Manager</h2>
-
-              <button
-                className="secondaryButton"
-                onClick={loadCanonicalStatus}
-                disabled={adminLoading}
-              >
-                Refresh Images
-              </button>
-            </div>
-
-            <p className="adminHelp">
-              Upload reusable canonical walkthrough images.
-            </p>
-
-            <input
-              className="queryBox"
-              type="text"
-              value={canonicalKey}
-              onChange={(e) => setCanonicalKey(e.target.value)}
-              placeholder="Canonical key, example: replace kitchen faucet"
-            />
-
-            <input
-              className="queryBox"
-              type="number"
-              min="1"
-              value={canonicalStep}
-              onChange={(e) => setCanonicalStep(e.target.value)}
-              placeholder="Step number"
-            />
-
-            <input
-              type="file"
-              onChange={(e) => setCanonicalFile(e.target.files?.[0] || null)}
-            />
-
-            <button
-              className="startButton"
-              onClick={uploadCanonicalImage}
-              disabled={adminLoading || !canonicalFile || !canonicalKey}
-            >
-              UPLOAD CANONICAL IMAGE
-            </button>
-
-            {canonicalStatus?.sets?.length > 0 && (
-              <div className="canonicalGrid">
-                {canonicalStatus.sets.map((set) => (
-                  <div className="canonicalCard" key={set.slug}>
-                    <h3>{set.canonical_key}</h3>
-
-                    <p>
-                      {set.available_count} / {set.expected_count} images
-                    </p>
-
-                    <div className="canonicalThumbs">
-                      {set.images.map((img) => (
-                        <div
-                          key={img.filename}
-                          className={`canonicalThumb ${
-                            img.exists ? "exists" : "missing"
-                          }`}
-                        >
-                          {img.exists ? (
-                            <img src={img.url} alt={img.filename} />
-                          ) : (
-                            <div className="missingThumb">
-                              Missing
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Generated Image Registry</h2>
-
-              <div>
-                <button
-                  className="secondaryButton"
-                  onClick={loadImageRegistry}
-                  disabled={adminLoading}
-                >
-                  Load Registry
-                </button>
-
-                <button
-                  className="secondaryButton"
-                  onClick={rebuildImageRegistry}
-                  disabled={adminLoading}
-                  style={{ marginLeft: "8px" }}
-                >
-                  Rebuild
-                </button>
-              </div>
-            </div>
-
-            <p className="adminHelp">
-              Review generated images and promote useful ones into canonical image sets.
-            </p>
-
-            <input
-              className="queryBox"
-              type="text"
-              value={promoteCanonicalKey}
-              onChange={(e) => setPromoteCanonicalKey(e.target.value)}
-              placeholder="Promote to canonical key, example: replace toilet"
-            />
-
-            <input
-              className="queryBox"
-              type="number"
-              min="1"
-              value={promoteStepNumber}
-              onChange={(e) => setPromoteStepNumber(e.target.value)}
-              placeholder="Canonical step number"
-            />
-
-            <input
-              className="queryBox"
-              type="text"
-              value={promoteFilename}
-              onChange={(e) => setPromoteFilename(e.target.value)}
-              placeholder="Optional filename to promote manually"
-            />
-
-            <button
-              className="startButton"
-              onClick={() => promoteImageToCanonical()}
-              disabled={adminLoading || !promoteFilename || !promoteCanonicalKey}
-            >
-              PROMOTE MANUAL FILENAME
-            </button>
-
-            {imageRegistry?.images?.length > 0 && (
-              <div className="canonicalGrid">
-                {imageRegistry.images.slice(0, 60).map((image) => (
-                  <div className="canonicalCard" key={image.filename}>
-                    <h3>{image.filename}</h3>
-
-                    <p>
-                      {Math.round((image.size_bytes || 0) / 1024)} KB
-                    </p>
-
-                    <div className="canonicalThumbs">
-                      <div className="canonicalThumb exists">
-                        <img
-                          src={`${API_URL}/static/images/${image.filename}`}
-                          alt={image.filename}
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      className="secondaryButton"
-                      onClick={() => {
-                        setPromoteFilename(image.filename);
-                        promoteImageToCanonical(image.filename);
-                      }}
-                      disabled={adminLoading || !promoteCanonicalKey}
-                    >
-                      Promote
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </section>
 
           <section className="adminCard">
