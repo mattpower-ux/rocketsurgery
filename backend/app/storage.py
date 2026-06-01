@@ -139,3 +139,55 @@ def save_walkthrough(walkthrough_id: str, manifest: dict):
         json.dump(manifest, f, indent=2)
 
     return path
+
+
+def load_walkthrough_by_id(walkthrough_id: str):
+    """Load a walkthrough manifest directly by its stored walkthrough_id."""
+    ensure_storage()
+    safe_id = slugify(walkthrough_id or "")
+    path = walkthrough_path(safe_id)
+
+    if not path.exists():
+        return None
+
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def list_walkthrough_manifests(limit: int = 250):
+    """Return a lightweight list of saved walkthrough manifests."""
+    ensure_storage()
+    items = []
+
+    for manifest_path in WALKTHROUGHS_DIR.glob("*/manifest.json"):
+        try:
+            with manifest_path.open("r", encoding="utf-8") as f:
+                manifest = json.load(f)
+
+            stat = manifest_path.stat()
+            steps = manifest.get("steps", []) or []
+
+            items.append({
+                "walkthrough_id": manifest.get("walkthrough_id") or manifest_path.parent.name,
+                "title": manifest.get("title", manifest_path.parent.name),
+                "step_count": len(steps),
+                "modified_at": stat.st_mtime,
+                "modified_at_iso": __import__("datetime").datetime.fromtimestamp(
+                    stat.st_mtime,
+                    tz=__import__("datetime").timezone.utc
+                ).isoformat(),
+                "first_image_url": steps[0].get("imageUrl") if steps else ""
+            })
+        except Exception as e:
+            items.append({
+                "walkthrough_id": manifest_path.parent.name,
+                "title": manifest_path.parent.name,
+                "step_count": 0,
+                "modified_at": 0,
+                "modified_at_iso": "",
+                "first_image_url": "",
+                "error": str(e)
+            })
+
+    items.sort(key=lambda item: item.get("modified_at", 0), reverse=True)
+    return items[:limit]
