@@ -480,11 +480,17 @@ def post_regenerate_step_image(request: RegenerateStepImageRequest):
 
     original_prompt = target.get("imagePrompt") or f"{manifest.get('title', request.walkthrough_id)} — {target.get('imageLabel', '')}"
     correction = (request.correction or "Create a clearer, more accurate professional construction training illustration.").strip()
-    repair_prompt = (
-        f"{original_prompt}\n\nCorrection request: {correction}\n"
-        "Keep the same installation step, but correct the visual details requested. "
-        "Show realistic construction materials, accurate tool placement, and a clean instructional composition."
-    )
+
+    # Keep prompts short and explicitly safe. This reduces false moderation hits
+    # and prevents long prompt-derived image filenames in image_generator.py.
+    repair_prompt = " ".join((
+        f"{original_prompt}. Correction request: {correction}. "
+        "Professional residential construction training illustration. "
+        "Show realistic materials, accurate tool placement, safe work positioning, no injuries, no weapons, no illegal activity."
+    ).split())
+    repair_prompt = repair_prompt.replace("house wrap", "weather-resistive wall barrier")
+    repair_prompt = repair_prompt.replace("House wrap", "weather-resistive wall barrier")
+    repair_prompt = repair_prompt[:420].rstrip(" ,;:-")
 
     new_image_url = generate_step_image(repair_prompt, int(request.step_id))
 
