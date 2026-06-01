@@ -94,7 +94,10 @@ try:
         list_bulk_query_jobs,
         retry_bulk_query,
         ignore_bulk_query,
-        delete_bulk_query
+        delete_bulk_query,
+        retry_and_run_bulk_query,
+        process_specific_bulk_query,
+        run_next_bulk_queries
     )
 except ImportError:
     from admin import (
@@ -106,7 +109,10 @@ except ImportError:
         list_bulk_query_jobs,
         retry_bulk_query,
         ignore_bulk_query,
-        delete_bulk_query
+        delete_bulk_query,
+        retry_and_run_bulk_query,
+        process_specific_bulk_query,
+        run_next_bulk_queries
     )
 
 try:
@@ -380,7 +386,9 @@ def post_bulk_catalog(request: BulkCatalogRequest):
 
 @app.post("/admin/process-bulk-queries")
 def post_process_bulk_queries(limit: int = 5):
-    return process_bulk_queries(limit=limit)
+    # Manual processing trigger from Admin.
+    # This does not start the external Render worker service; it runs queued jobs now.
+    return run_next_bulk_queries(limit=limit)
 
 
 @app.post("/admin/process-model-discovery")
@@ -430,6 +438,16 @@ def get_bulk_query_list():
 @app.post("/admin/bulk-query-retry")
 def post_bulk_query_retry(request: QuerySlugRequest):
     return retry_bulk_query(request.query_slug)
+
+
+@app.post("/admin/bulk-query-run")
+def post_bulk_query_run(request: QuerySlugRequest):
+    return process_specific_bulk_query(request.query_slug)
+
+
+@app.post("/admin/bulk-query-retry-run")
+def post_bulk_query_retry_run(request: QuerySlugRequest):
+    return retry_and_run_bulk_query(request.query_slug)
 
 
 @app.post("/admin/bulk-query-ignore")
