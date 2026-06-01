@@ -3,6 +3,12 @@ import "./App.css";
 
 const API_URL = "https://rocketsurgery-api.onrender.com";
 
+function displayText(value, max = 140) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trim()}…`;
+}
+
 function buildSpecificQuery(query, brand, model) {
   const baseQuery = query.trim() || "installation walkthrough";
 
@@ -1036,15 +1042,29 @@ function App() {
                                 background: "rgba(255,255,255,0.75)"
                               }}
                             >
-                              <strong>{job.query}</strong>
+                              <strong title={job.query}>{displayText(job.query, 120)}</strong>
 
-                              <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>
-                                ID: {job.walkthrough_id || job.query_slug || "not built yet"} · Attempts: {job.attempts || 0}
+                              <div
+                                title={job.walkthrough_id || job.query_slug || "not built yet"}
+                                style={{
+                                  fontSize: "12px",
+                                  opacity: 0.8,
+                                  marginTop: "4px",
+                                  overflowWrap: "anywhere"
+                                }}
+                              >
+                                ID: {displayText(job.walkthrough_id || job.query_slug || "not built yet", 90)} · Attempts: {job.attempts || 0}
                               </div>
 
+                              {job.quarantine_reason && (
+                                <div style={{ fontSize: "12px", color: "#8a5a00", marginTop: "6px", overflowWrap: "anywhere" }}>
+                                  Quarantined: {displayText(job.quarantine_reason, 180)}
+                                </div>
+                              )}
+
                               {job.error && (
-                                <div style={{ fontSize: "12px", color: "#8a1f11", marginTop: "6px" }}>
-                                  Error: {job.error}
+                                <div title={job.error} style={{ fontSize: "12px", color: "#8a1f11", marginTop: "6px", overflowWrap: "anywhere" }}>
+                                  Error: {displayText(job.error, 220)}
                                 </div>
                               )}
 
