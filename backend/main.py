@@ -16,9 +16,21 @@ except ImportError:
     )
 
 try:
-    from app.storage import load_walkthrough, save_walkthrough
+    from app.storage import (
+        load_walkthrough,
+        save_walkthrough,
+        load_walkthrough_by_id,
+        list_walkthrough_manifests,
+        slugify
+    )
 except ImportError:
-    from storage import load_walkthrough, save_walkthrough
+    from storage import (
+        load_walkthrough,
+        save_walkthrough,
+        load_walkthrough_by_id,
+        list_walkthrough_manifests,
+        slugify
+    )
 
 try:
     from app.generator import generate_placeholder_walkthrough
@@ -78,7 +90,11 @@ try:
         save_bulk_queries,
         save_catalog_request,
         process_bulk_queries,
-        save_bulk_catalog_requests
+        save_bulk_catalog_requests,
+        list_bulk_query_jobs,
+        retry_bulk_query,
+        ignore_bulk_query,
+        delete_bulk_query
     )
 except ImportError:
     from admin import (
@@ -86,7 +102,11 @@ except ImportError:
         save_bulk_queries,
         save_catalog_request,
         process_bulk_queries,
-        save_bulk_catalog_requests
+        save_bulk_catalog_requests,
+        list_bulk_query_jobs,
+        retry_bulk_query,
+        ignore_bulk_query,
+        delete_bulk_query
     )
 
 try:
@@ -114,6 +134,11 @@ try:
     from app.query_logger import log_query_event
 except ImportError:
     from query_logger import log_query_event
+
+try:
+    from app.image_generator import generate_step_image
+except ImportError:
+    from image_generator import generate_step_image
 
 import time
 from fastapi import Request
@@ -184,6 +209,26 @@ class PromoteImageRequest(BaseModel):
     filename: str
     canonical_key: str
     step_number: int
+
+
+class QuerySlugRequest(BaseModel):
+    query_slug: str
+
+
+class RegenerateStepImageRequest(BaseModel):
+    walkthrough_id: str
+    step_id: int
+    correction: str = ""
+
+
+class AcceptStepImageRequest(BaseModel):
+    walkthrough_id: str
+    step_id: int
+
+
+class RevertStepImageRequest(BaseModel):
+    walkthrough_id: str
+    step_id: int
 
 
 DEMO_WALKTHROUGH_ID = "james-hardie-lap-siding-nailing-schedule"
@@ -375,6 +420,159 @@ def promote_image(request: PromoteImageRequest):
 @app.get("/admin/walkthrough-build-status")
 def walkthrough_build_status():
     return get_build_status()
+
+
+@app.get("/admin/bulk-query-list")
+def get_bulk_query_list():
+    return list_bulk_query_jobs()
+
+
+@app.post("/admin/bulk-query-retry")
+def post_bulk_query_retry(request: QuerySlugRequest):
+    return retry_bulk_query(request.query_slug)
+
+
+@app.post("/admin/bulk-query-ignore")
+def post_bulk_query_ignore(request: QuerySlugRequest):
+    return ignore_bulk_query(request.query_slug)
+
+
+@app.post("/admin/bulk-query-delete")
+def post_bulk_query_delete(request: QuerySlugRequest):
+    return delete_bulk_query(request.query_slug)
+
+
+@app.get("/admin/walkthroughs")
+def get_admin_walkthroughs(limit: int = 250):
+    return {
+        "status": "loaded",
+        "walkthroughs": list_walkthrough_manifests(limit=limit)
+    }
+
+
+@app.get("/admin/walkthroughs/{walkthrough_id}")
+def get_admin_walkthrough(walkthrough_id: str):
+    manifest = load_walkthrough_by_id(walkthrough_id)
+
+    if not manifest:
+        return {"status": "not_found", "walkthrough_id": walkthrough_id}
+
+    return {"status": "loaded", "walkthrough": manifest}
+
+
+@app.post("/admin/regenerate-step-image")
+def post_regenerate_step_image(request: RegenerateStepImageRequest):
+    manifest = load_walkthrough_by_id(request.walkthrough_id)
+
+    if not manifest:
+        return {"status": "not_found", "walkthrough_id": request.walkthrough_id}
+
+    steps = manifest.get("steps", []) or []
+    target = None
+
+    for step in steps:
+        if int(step.get("id", 0)) == int(request.step_id):
+            target = step
+            break
+
+    if not target:
+        return {"status": "step_not_found", "step_id": request.step_id}
+
+    original_prompt = target.get("imagePrompt") or f"{manifest.get('title', request.walkthrough_id)} — {target.get('imageLabel', '')}"
+    correction = (request.correction or "Create a clearer, more accurate professional construction training illustration.").strip()
+    repair_prompt = (
+        f"{original_prompt}\n\nCorrection request: {correction}\n"
+        "Keep the same installation step, but correct the visual details requested. "
+        "Show realistic construction materials, accurate tool placement, and a clean instructional composition."
+    )
+
+    new_image_url = generate_step_image(repair_prompt, int(request.step_id))
+
+    target["imagePrompt"] = original_prompt
+    target["pendingImageUrl"] = new_image_url
+    target["pendingImagePrompt"] = repair_prompt
+    target["pendingCorrection"] = correction
+
+    history = target.setdefault("imageRepairHistory", [])
+    history.append({
+        "status": "pending",
+        "oldImageUrl": target.get("imageUrl", ""),
+        "newImageUrl": new_image_url,
+        "correctionPrompt": correction,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    })
+
+    save_walkthrough(manifest.get("walkthrough_id") or slugify(request.walkthrough_id), manifest)
+
+    return {
+        "status": "pending_review",
+        "walkthrough_id": manifest.get("walkthrough_id"),
+        "step_id": request.step_id,
+        "old_image_url": target.get("imageUrl", ""),
+        "new_image_url": new_image_url,
+        "walkthrough": manifest
+    }
+
+
+@app.post("/admin/accept-step-image")
+def post_accept_step_image(request: AcceptStepImageRequest):
+    manifest = load_walkthrough_by_id(request.walkthrough_id)
+
+    if not manifest:
+        return {"status": "not_found", "walkthrough_id": request.walkthrough_id}
+
+    for step in manifest.get("steps", []) or []:
+        if int(step.get("id", 0)) == int(request.step_id):
+            pending = step.get("pendingImageUrl")
+            if not pending:
+                return {"status": "no_pending_image", "step_id": request.step_id}
+
+            previous = step.get("imageUrl", "")
+            step["previousImageUrl"] = previous
+            step["imageUrl"] = pending
+            step["imagePrompt"] = step.get("pendingImagePrompt") or step.get("imagePrompt", "")
+            step.pop("pendingImageUrl", None)
+            step.pop("pendingImagePrompt", None)
+            step.pop("pendingCorrection", None)
+
+            for item in step.get("imageRepairHistory", []):
+                if item.get("newImageUrl") == pending and item.get("status") == "pending":
+                    item["status"] = "accepted"
+                    item["accepted_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+            save_walkthrough(manifest.get("walkthrough_id") or slugify(request.walkthrough_id), manifest)
+            return {"status": "accepted", "walkthrough": manifest}
+
+    return {"status": "step_not_found", "step_id": request.step_id}
+
+
+@app.post("/admin/revert-step-image")
+def post_revert_step_image(request: RevertStepImageRequest):
+    manifest = load_walkthrough_by_id(request.walkthrough_id)
+
+    if not manifest:
+        return {"status": "not_found", "walkthrough_id": request.walkthrough_id}
+
+    for step in manifest.get("steps", []) or []:
+        if int(step.get("id", 0)) == int(request.step_id):
+            if step.get("pendingImageUrl"):
+                step.pop("pendingImageUrl", None)
+                step.pop("pendingImagePrompt", None)
+                step.pop("pendingCorrection", None)
+                save_walkthrough(manifest.get("walkthrough_id") or slugify(request.walkthrough_id), manifest)
+                return {"status": "discarded_pending", "walkthrough": manifest}
+
+            previous = step.get("previousImageUrl")
+            if previous:
+                current = step.get("imageUrl", "")
+                step["imageUrl"] = previous
+                step["previousImageUrl"] = current
+                save_walkthrough(manifest.get("walkthrough_id") or slugify(request.walkthrough_id), manifest)
+                return {"status": "reverted", "walkthrough": manifest}
+
+            return {"status": "nothing_to_revert", "step_id": request.step_id}
+
+    return {"status": "step_not_found", "step_id": request.step_id}
 
 
 @app.post("/walkthrough/overlay")
