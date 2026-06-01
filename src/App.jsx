@@ -71,7 +71,7 @@ function App() {
   const [walkthroughList, setWalkthroughList] = useState([]);
   const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
   const [repairCorrections, setRepairCorrections] = useState({});
-  const [repairStudioVersion, setRepairStudioVersion] = useState(0);
+  const [repairStatus, setRepairStatus] = useState({});
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
@@ -234,7 +234,9 @@ function App() {
     setClarifying(false);
     setComplete(false);
     setActiveHotspot(null);
-    refreshAdminDashboard();
+    loadAdminStatus();
+    loadBulkJobList();
+    loadAdminWalkthroughs();
   }
 
   function nextStep() {
@@ -285,22 +287,15 @@ function App() {
     window.speechSynthesis.speak(utterance);
   }
 
-  async function loadAdminStatus(options = {}) {
-    const { silent = false } = options;
-
+  async function loadAdminStatus() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/status?t=${Date.now()}`, {
-        cache: "no-store"
-      });
+      const response = await fetch(`${API_URL}/admin/status`);
       const data = await response.json();
 
       setAdminStatus(data);
-
-      if (!silent) {
-        setAdminMessage(`Admin status refreshed at ${new Date().toLocaleTimeString()}.`);
-      }
+      setAdminMessage("Admin status loaded.");
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not load admin status.");
@@ -308,48 +303,6 @@ function App() {
       setAdminLoading(false);
     }
   }
-
-
-  async function refreshAdminDashboard() {
-    setAdminLoading(true);
-    setAdminMessage("Refreshing admin dashboard...");
-
-    try {
-      const [
-        statusResponse,
-        queueResponse,
-        buildResponse,
-        walkthroughsResponse
-      ] = await Promise.all([
-        fetch(`${API_URL}/admin/status?t=${Date.now()}`, { cache: "no-store" }),
-        fetch(`${API_URL}/admin/bulk-query-list?t=${Date.now()}`, { cache: "no-store" }),
-        fetch(`${API_URL}/admin/walkthrough-build-status?t=${Date.now()}`, { cache: "no-store" }),
-        fetch(`${API_URL}/admin/walkthroughs?limit=250&t=${Date.now()}`, { cache: "no-store" })
-      ]);
-
-      const [statusData, queueData, buildData, walkthroughsData] = await Promise.all([
-        statusResponse.json(),
-        queueResponse.json(),
-        buildResponse.json(),
-        walkthroughsResponse.json()
-      ]);
-
-      setAdminStatus(statusData);
-      setBulkJobList(queueData);
-      setBuildStatus(buildData);
-      setWalkthroughList(walkthroughsData.walkthroughs || []);
-
-      setAdminMessage(
-        `Admin refreshed at ${new Date().toLocaleTimeString()}. Queue: ${queueData.counts?.queued || 0} queued, ${queueData.counts?.failed || 0} failed.`
-      );
-    } catch (error) {
-      console.error(error);
-      setAdminMessage("Could not refresh admin dashboard.");
-    } finally {
-      setAdminLoading(false);
-    }
-  }
-
 
   async function submitBulkQueries() {
     setAdminLoading(true);
@@ -372,7 +325,7 @@ function App() {
         `Bulk queries saved. Added ${data.added_count || 0}; duplicates ${data.duplicate_count || 0}.`
       );
       setBulkQueries("");
-      await refreshAdminDashboard();
+      loadAdminStatus();
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not save bulk queries.");
@@ -403,7 +356,7 @@ function App() {
       );
 
       setBulkCatalog("");
-      await refreshAdminDashboard();
+      loadAdminStatus();
 
     } catch (error) {
       console.error(error);
@@ -442,7 +395,7 @@ function App() {
       setCatalogCategory("");
       setCatalogModels("");
       setDiscoverTopModels(true);
-      await refreshAdminDashboard();
+      loadAdminStatus();
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not save catalog entry.");
@@ -470,7 +423,7 @@ function App() {
         `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
       );
 
-      await refreshAdminDashboard();
+      loadAdminStatus();
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not process queued walkthroughs.");
@@ -662,8 +615,7 @@ function App() {
   async function loadBuildStatus() {
     try {
       const response = await fetch(
-        `${API_URL}/admin/walkthrough-build-status?t=${Date.now()}`,
-        { cache: "no-store" }
+        `${API_URL}/admin/walkthrough-build-status`
       );
 
       const data = await response.json();
@@ -680,13 +632,11 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/bulk-query-list?t=${Date.now()}`, {
-        cache: "no-store"
-      });
+      const response = await fetch(`${API_URL}/admin/bulk-query-list`);
       const data = await response.json();
 
       setBulkJobList(data);
-      setAdminMessage(`Queue refreshed at ${new Date().toLocaleTimeString()}: ${data.counts?.queued || 0} queued, ${data.counts?.failed || 0} failed.`);
+      setAdminMessage(`Queue loaded: ${data.counts?.queued || 0} queued, ${data.counts?.failed || 0} failed.`);
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not load walkthrough queue.");
@@ -718,7 +668,8 @@ function App() {
 
       const data = await response.json();
       setAdminMessage(`Queue item ${data.status || action}.`);
-      await refreshAdminDashboard();
+      loadBulkJobList();
+      loadAdminStatus();
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not update queue item.");
@@ -732,13 +683,10 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250&t=${Date.now()}`, {
-        cache: "no-store"
-      });
+      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250`);
       const data = await response.json();
 
       setWalkthroughList(data.walkthroughs || []);
-      setAdminMessage(`Walkthrough list refreshed at ${new Date().toLocaleTimeString()}.`);
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not load walkthrough list.");
@@ -750,24 +698,15 @@ function App() {
 
   async function loadAdminWalkthrough(walkthroughId) {
     setAdminLoading(true);
-    setAdminMessage(`Loading ${walkthroughId}...`);
-
-    // Reset the image editor whenever a different walkthrough is selected.
-    // This prevents a previously opened image/correction state from trapping
-    // the Repair Studio on the old walkthrough.
-    setSelectedAdminWalkthrough(null);
-    setRepairCorrections({});
-    setRepairStudioVersion((version) => version + 1);
 
     try {
-      const response = await fetch(
-        `${API_URL}/admin/walkthroughs/${encodeURIComponent(walkthroughId)}?t=${Date.now()}`,
-        { cache: "no-store" }
-      );
+      const response = await fetch(`${API_URL}/admin/walkthroughs/${encodeURIComponent(walkthroughId)}`);
       const data = await response.json();
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        setRepairCorrections({});
+        setRepairStatus({});
         setAdminMessage(`Loaded ${data.walkthrough.title || walkthroughId}.`);
       } else {
         setAdminMessage("Walkthrough not found.");
@@ -786,7 +725,13 @@ function App() {
       return;
     }
 
+    const correction = (repairCorrections[stepId] || "").trim();
     setAdminLoading(true);
+    setAdminMessage(`Regenerating image for step ${stepId}. This can take a minute...`);
+    setRepairStatus((current) => ({
+      ...current,
+      [stepId]: "Generating new image..."
+    }));
 
     try {
       const response = await fetch(`${API_URL}/admin/regenerate-step-image`, {
@@ -794,23 +739,51 @@ function App() {
         headers: {
           "Content-Type": "application/json"
         },
+        cache: "no-store",
         body: JSON.stringify({
           walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
           step_id: stepId,
-          correction: repairCorrections[stepId] || ""
+          correction
         })
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        const text = await response.text();
+        throw new Error(text || `Server returned ${response.status}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || data.message || `Server returned ${response.status}`);
+      }
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
       }
 
-      setAdminMessage(data.status === "pending_review" ? "New image generated for review." : `Image regeneration: ${data.status}`);
+      if (data.status === "pending_review") {
+        setRepairStatus((current) => ({
+          ...current,
+          [stepId]: "New candidate generated. Compare it with the current image, then keep or discard."
+        }));
+        setAdminMessage("New image generated for review.");
+      } else {
+        setRepairStatus((current) => ({
+          ...current,
+          [stepId]: `Image regeneration returned: ${data.status || "unknown status"}`
+        }));
+        setAdminMessage(`Image regeneration: ${data.status || "unknown status"}`);
+      }
     } catch (error) {
       console.error(error);
-      setAdminMessage("Could not regenerate image.");
+      const message = error?.message || "Could not regenerate image.";
+      setRepairStatus((current) => ({
+        ...current,
+        [stepId]: `Error: ${message}`
+      }));
+      setAdminMessage(`Could not regenerate image: ${message}`);
     } finally {
       setAdminLoading(false);
     }
@@ -927,7 +900,7 @@ function App() {
               <h2>System Status</h2>
               <button
                 className="secondaryButton"
-                onClick={refreshAdminDashboard}
+                onClick={loadAdminStatus}
                 disabled={adminLoading}
               >
                 Refresh
@@ -977,13 +950,7 @@ function App() {
 
               <button
                 className="secondaryButton"
-                onClick={async () => {
-                  setAdminLoading(true);
-                  await loadBuildStatus();
-                  setAdminMessage(`Build activity refreshed at ${new Date().toLocaleTimeString()}.`);
-                  setAdminLoading(false);
-                }}
-                disabled={adminLoading}
+                onClick={loadBuildStatus}
               >
                 Refresh Activity
               </button>
@@ -1058,10 +1025,7 @@ function App() {
 
               <button
                 className="secondaryButton"
-                onClick={async () => {
-                  await loadBulkJobList();
-                  await loadBuildStatus();
-                }}
+                onClick={loadBulkJobList}
                 disabled={adminLoading}
               >
                 Refresh Queue
@@ -1195,12 +1159,7 @@ function App() {
 
               <button
                 className="secondaryButton"
-                onClick={async () => {
-                  setSelectedAdminWalkthrough(null);
-                  setRepairCorrections({});
-                  setRepairStudioVersion((version) => version + 1);
-                  await loadAdminWalkthroughs();
-                }}
+                onClick={loadAdminWalkthroughs}
                 disabled={adminLoading}
               >
                 Refresh Walkthroughs
@@ -1217,17 +1176,7 @@ function App() {
                   <button
                     key={item.walkthrough_id}
                     className="secondaryButton"
-                    style={{
-                      textAlign: "left",
-                      border:
-                        selectedAdminWalkthrough?.walkthrough_id === item.walkthrough_id
-                          ? "2px solid rgba(0, 120, 255, 0.65)"
-                          : undefined,
-                      background:
-                        selectedAdminWalkthrough?.walkthrough_id === item.walkthrough_id
-                          ? "rgba(0, 120, 255, 0.08)"
-                          : undefined
-                    }}
+                    style={{ textAlign: "left" }}
                     onClick={() => loadAdminWalkthrough(item.walkthrough_id)}
                     disabled={adminLoading}
                   >
@@ -1243,37 +1192,10 @@ function App() {
               <div>
                 {selectedAdminWalkthrough ? (
                   <>
-                    <div
-                      key={`repair-header-${repairStudioVersion}-${selectedAdminWalkthrough.walkthrough_id}`}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        alignItems: "flex-start"
-                      }}
-                    >
-                      <div>
-                        <h3>{selectedAdminWalkthrough.title}</h3>
-                        <p className="adminHelp">{selectedAdminWalkthrough.walkthrough_id}</p>
-                      </div>
+                    <h3>{selectedAdminWalkthrough.title}</h3>
+                    <p className="adminHelp">{selectedAdminWalkthrough.walkthrough_id}</p>
 
-                      <button
-                        className="secondaryButton"
-                        onClick={() => {
-                          setSelectedAdminWalkthrough(null);
-                          setRepairCorrections({});
-                          setRepairStudioVersion((version) => version + 1);
-                        }}
-                        disabled={adminLoading}
-                      >
-                        Close Walkthrough
-                      </button>
-                    </div>
-
-                    <div
-                      key={`repair-steps-${repairStudioVersion}-${selectedAdminWalkthrough.walkthrough_id}`}
-                      style={{ display: "grid", gap: "16px" }}
-                    >
+                    <div style={{ display: "grid", gap: "16px" }}>
                       {(selectedAdminWalkthrough.steps || []).map((step) => (
                         <div
                           key={step.id}
@@ -1325,8 +1247,15 @@ function App() {
                             placeholder="Correction prompt, example: Make the pipe copper, remove PVC, show a propane torch heating the joint."
                           />
 
+                          {repairStatus[step.id] && (
+                            <p style={{ fontSize: "13px", fontWeight: 700, marginTop: "8px" }}>
+                              {repairStatus[step.id]}
+                            </p>
+                          )}
+
                           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                             <button
+                              type="button"
                               className="startButton"
                               onClick={() => regenerateStepImage(step.id)}
                               disabled={adminLoading}
@@ -1336,6 +1265,7 @@ function App() {
 
                             {step.pendingImageUrl && (
                               <button
+                                type="button"
                                 className="doneButton"
                                 onClick={() => acceptStepImage(step.id)}
                                 disabled={adminLoading}
@@ -1441,7 +1371,8 @@ function App() {
                       `Worker Automation processed ${data.processed_count || 0} job. Remaining queued: ${data.remaining_queued || 0}.`
                     );
 
-                    await refreshAdminDashboard();
+                    loadAdminStatus();
+                    loadBuildStatus();
 
                   } catch (error) {
                     console.error(error);
@@ -1475,7 +1406,8 @@ function App() {
                       `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
                     );
 
-                    await refreshAdminDashboard();
+                    loadAdminStatus();
+                    loadBuildStatus();
 
                   } catch (error) {
                     console.error(error);
