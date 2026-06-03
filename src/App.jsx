@@ -52,13 +52,6 @@ function App() {
   const [catalogModels, setCatalogModels] = useState("");
   const [discoverTopModels, setDiscoverTopModels] = useState(true);
   const [adminLoading, setAdminLoading] = useState(false);
-  const [statusExpanded, setStatusExpanded] = useState(false);
-  const [buildActivityExpanded, setBuildActivityExpanded] = useState(false);
-  const [catalogExpanded, setCatalogExpanded] = useState(true);
-  const [queueExpanded, setQueueExpanded] = useState(true);
-  const [catalogPipelineStatus, setCatalogPipelineStatus] = useState(null);
-  const [catalogPipelineRunning, setCatalogPipelineRunning] = useState("");
-  const [catalogPipelineMessage, setCatalogPipelineMessage] = useState("");
 
   const [canonicalStatus, setCanonicalStatus] = useState(null);
   const [canonicalKey, setCanonicalKey] = useState("");
@@ -66,6 +59,8 @@ function App() {
   const [canonicalFile, setCanonicalFile] = useState(null);
 
   const [overlayData, setOverlayData] = useState(null);
+  const [specificQuery, setSpecificQuery] = useState("");
+  const [tipsExpanded, setTipsExpanded] = useState(false);
 
   const [imageRegistry, setImageRegistry] = useState(null);
   const [promoteFilename, setPromoteFilename] = useState("");
@@ -78,6 +73,14 @@ function App() {
   const [walkthroughList, setWalkthroughList] = useState([]);
   const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
   const [repairCorrections, setRepairCorrections] = useState({});
+  const [catalogPipelineStatus, setCatalogPipelineStatus] = useState(null);
+  const [catalogPipelineRunning, setCatalogPipelineRunning] = useState("");
+  const [productPackageBrand, setProductPackageBrand] = useState("Niagara");
+  const [productPackageModel, setProductPackageModel] = useState("Original Stealth");
+  const [productPackageCategory, setProductPackageCategory] = useState("toilet");
+  const [productPackageUrl, setProductPackageUrl] = useState("https://niagaracorp.com/products/original-stealth-handle-round/");
+  const [productPackageRunning, setProductPackageRunning] = useState(false);
+  const [productPackageResult, setProductPackageResult] = useState(null);
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
@@ -85,6 +88,7 @@ function App() {
     (item) => item.brand === selectedBrand
   );
   const availableModels = selectedBrandRecord?.models || [];
+  const currentModelTips = overlayData?.installation_tips || overlayData?.overlays || [];
 
   async function fetchProductOptions(finalQuery) {
     const response = await fetch(
@@ -158,6 +162,8 @@ function App() {
     } catch (error) {
       console.error(error);
       setOverlayData(null);
+    setSpecificQuery("");
+    setTipsExpanded(false);
     }
   }
 
@@ -206,10 +212,28 @@ function App() {
     fetchWalkthrough(query.trim() || "generic installation walkthrough");
   }
 
-  function continueSpecific() {
+  async function continueSpecific() {
     const finalQuery = buildSpecificQuery(query, selectedBrand, selectedModel);
     setInstallMode("specific");
-    fetchWalkthrough(finalQuery);
+    setSpecificQuery(finalQuery);
+    setTipsExpanded(false);
+    setLoading(true);
+
+    try {
+      await fetchOverlay(finalQuery);
+      setClarifying(false);
+      setStarted(false);
+      setScreen("briefing");
+    } catch (error) {
+      console.error(error);
+      alert("Could not load model-specific briefing.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function proceedSpecificInstall() {
+    fetchWalkthrough(specificQuery || buildSpecificQuery(query, selectedBrand, selectedModel));
   }
 
   function newJob() {
@@ -243,6 +267,7 @@ function App() {
     loadAdminStatus();
     loadBulkJobList();
     loadAdminWalkthroughs();
+    loadCatalogPipelineStatus();
   }
 
   function nextStep() {
@@ -297,7 +322,7 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/status`, { cache: "no-store" });
+      const response = await fetch(`${API_URL}/admin/status`);
       const data = await response.json();
 
       setAdminStatus(data);
@@ -310,44 +335,31 @@ function App() {
     }
   }
 
+
   async function loadCatalogPipelineStatus() {
-    setCatalogPipelineMessage("Loading catalog pipeline status...");
     setAdminMessage("Loading catalog pipeline status...");
 
     try {
       const response = await fetch(`${API_URL}/admin/catalog/toilet-status`, {
         cache: "no-store"
       });
-
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { raw: text };
-      }
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || data.status || data.raw || "Could not load catalog pipeline status.");
+        throw new Error(data.detail || data.status || "Could not load catalog pipeline status.");
       }
 
       setCatalogPipelineStatus(data);
-      const count = (data.items || []).length;
-      const message = `Catalog pipelines loaded: ${count} models.`;
-      setCatalogPipelineMessage(message);
-      setAdminMessage(message);
+      setAdminMessage(`Catalog pipelines loaded: ${(data.items || []).length} models.`);
     } catch (error) {
       console.error(error);
-      const message = `Catalog pipeline status failed: ${error.message}`;
-      setCatalogPipelineMessage(message);
-      setAdminMessage(message);
+      setAdminMessage(`Catalog pipeline status failed: ${error.message}`);
     }
   }
 
   async function runCatalogPipeline(item, pipeline = "all") {
     const key = `${item.brand}-${item.model}-${pipeline}`;
     setCatalogPipelineRunning(key);
-    setCatalogPipelineMessage(`Running ${pipeline} pipeline for ${item.brand} ${item.model}...`);
     setAdminMessage(`Running ${pipeline} pipeline for ${item.brand} ${item.model}...`);
 
     const endpoint = pipeline === "photo"
@@ -371,6 +383,52 @@ function App() {
         })
       });
 
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.status || "Pipeline request failed.");
+      }
+
+      setAdminMessage(`${item.brand} ${item.model}: ${pipeline} pipeline finished with status ${data.status}.`);
+      await loadCatalogPipelineStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`${item.brand} ${item.model}: ${pipeline} pipeline failed — ${error.message}`);
+    } finally {
+      setCatalogPipelineRunning("");
+    }
+  }
+
+
+  async function buildProductPagePackage() {
+    const brand = productPackageBrand.trim();
+    const model = productPackageModel.trim();
+    const url = productPackageUrl.trim();
+    const category = productPackageCategory.trim() || "toilet";
+
+    if (!brand || !model || !url) {
+      setAdminMessage("Enter brand, model, and manufacturer product page URL first.");
+      return;
+    }
+
+    setProductPackageRunning(true);
+    setProductPackageResult(null);
+    setAdminMessage(`Building product package for ${brand} ${model}...`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/catalog/build-product-page-package`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          category,
+          brand,
+          model,
+          product_page_url: url
+        })
+      });
+
       const text = await response.text();
       let data;
       try {
@@ -380,22 +438,24 @@ function App() {
       }
 
       if (!response.ok) {
-        throw new Error(data.detail || data.status || data.raw || "Pipeline request failed.");
+        throw new Error(data.detail || data.error || data.status || "Product package build failed.");
       }
 
-      const successMessage = `${item.brand} ${item.model}: ${pipeline} pipeline finished with status ${data.status}.`;
-      setCatalogPipelineMessage(successMessage);
-      setAdminMessage(successMessage);
+      setProductPackageResult(data);
+      const confidence = data.product?.confidence || "UNKNOWN";
+      const photo = data.product?.photo_url ? "photo cached" : "photo missing";
+      const manual = data.product?.manual_url ? "manual cached" : "manual missing";
+      setAdminMessage(`${brand} ${model} package built: ${photo}, ${manual}, confidence ${confidence}.`);
       await loadCatalogPipelineStatus();
     } catch (error) {
       console.error(error);
-      const failMessage = `${item.brand} ${item.model}: ${pipeline} pipeline failed — ${error.message}`;
-      setCatalogPipelineMessage(failMessage);
-      setAdminMessage(failMessage);
+      setAdminMessage(`Product package build failed: ${error.message}`);
+      setProductPackageResult({ status: "failed", error: error.message });
     } finally {
-      setCatalogPipelineRunning("");
+      setProductPackageRunning(false);
     }
   }
+
 
   async function submitBulkQueries() {
     setAdminLoading(true);
@@ -498,47 +558,31 @@ function App() {
   }
 
 
-  async function refreshWalkthroughOperations() {
-    await Promise.allSettled([
-      loadAdminStatus(),
-      loadBuildStatus(),
-      loadBulkJobList(),
-      loadAdminWalkthroughs()
-    ]);
-  }
-
-
-  async function runQueuedWalkthroughs(limit = 1) {
+  async function processQueuedWalkthroughs() {
     setAdminLoading(true);
-    setAdminMessage(`Starting ${limit} queued walkthrough job${limit === 1 ? "" : "s"} now...`);
+    setAdminMessage("");
 
     try {
       const response = await fetch(
-        `${API_URL}/admin/process-bulk-queries?limit=${encodeURIComponent(limit)}`,
+        `${API_URL}/admin/process-bulk-queries?limit=5`,
         {
-          method: "POST",
-          cache: "no-store"
+          method: "POST"
         }
       );
 
       const data = await response.json();
 
       setAdminMessage(
-        `Manual run complete. Processed ${data.processed_count || 0}; failed ${data.failed_count || 0}; remaining queued ${data.remaining_queued || 0}.`
+        `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
       );
 
-      await refreshWalkthroughOperations();
+      loadAdminStatus();
     } catch (error) {
       console.error(error);
-      setAdminMessage("Could not run queued walkthrough jobs.");
+      setAdminMessage("Could not process queued walkthroughs.");
     } finally {
       setAdminLoading(false);
     }
-  }
-
-
-  async function processQueuedWalkthroughs() {
-    return runQueuedWalkthroughs(5);
   }
 
 
@@ -724,8 +768,7 @@ function App() {
   async function loadBuildStatus() {
     try {
       const response = await fetch(
-        `${API_URL}/admin/walkthrough-build-status`,
-        { cache: "no-store" }
+        `${API_URL}/admin/walkthrough-build-status`
       );
 
       const data = await response.json();
@@ -742,7 +785,7 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/bulk-query-list`, { cache: "no-store" });
+      const response = await fetch(`${API_URL}/admin/bulk-query-list`);
       const data = await response.json();
 
       setBulkJobList(data);
@@ -761,8 +804,6 @@ function App() {
 
     const endpointMap = {
       retry: "bulk-query-retry",
-      run: "bulk-query-run",
-      retryrun: "bulk-query-retry-run",
       ignore: "bulk-query-ignore",
       delete: "bulk-query-delete"
     };
@@ -779,8 +820,9 @@ function App() {
       });
 
       const data = await response.json();
-      setAdminMessage(`Queue item ${data.status || action}. ${data.message || ""}`);
-      await refreshWalkthroughOperations();
+      setAdminMessage(`Queue item ${data.status || action}.`);
+      loadBulkJobList();
+      loadAdminStatus();
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not update queue item.");
@@ -794,7 +836,7 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250`, { cache: "no-store" });
+      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250`);
       const data = await response.json();
 
       setWalkthroughList(data.walkthroughs || []);
@@ -972,33 +1014,17 @@ function App() {
 
           <section className="adminCard">
             <div className="adminCardHeader">
-              <h2>{statusExpanded ? "▼" : "▶"} System Status</h2>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <button
-                  className="secondaryButton"
-                  onClick={() => setStatusExpanded(!statusExpanded)}
-                >
-                  {statusExpanded ? "Collapse" : "Expand"}
-                </button>
-                <button
-                  className="secondaryButton"
-                  onClick={loadAdminStatus}
-                  disabled={adminLoading}
-                >
-                  Refresh
-                </button>
-              </div>
+              <h2>System Status</h2>
+              <button
+                className="secondaryButton"
+                onClick={loadAdminStatus}
+                disabled={adminLoading}
+              >
+                Refresh
+              </button>
             </div>
 
             {adminStatus ? (
-              <p className="adminHelp">
-                Total: <strong>{adminStatus.bulk_query_count}</strong> · Completed: <strong>{adminStatus.bulk_completed_count || 0}</strong> · Queued: <strong>{adminStatus.bulk_queued_count || 0}</strong> · Failed: <strong>{adminStatus.bulk_failed_count || 0}</strong> · Catalog requests: <strong>{adminStatus.catalog_request_count}</strong>
-              </p>
-            ) : (
-              <p className="adminHelp">Click refresh to load admin status.</p>
-            )}
-
-            {statusExpanded && adminStatus && (
               <div className="adminStats">
                 <div>
                   <strong>{adminStatus.bulk_query_count}</strong>
@@ -1030,93 +1056,78 @@ function App() {
                   <span>Catalog categories</span>
                 </div>
               </div>
+            ) : (
+              <p className="adminHelp">Click refresh to load admin status.</p>
             )}
           </section>
 
           <section className="adminCard">
             <div className="adminCardHeader">
-              <h2>{buildActivityExpanded ? "▼" : "▶"} Walkthrough Build Activity</h2>
+              <h2>Walkthrough Build Activity</h2>
 
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <button
-                  className="secondaryButton"
-                  onClick={() => setBuildActivityExpanded(!buildActivityExpanded)}
-                >
-                  {buildActivityExpanded ? "Collapse" : "Expand"}
-                </button>
-
-                <button
-                  className="secondaryButton"
-                  onClick={loadBuildStatus}
-                >
-                  Refresh Activity
-                </button>
-              </div>
+              <button
+                className="secondaryButton"
+                onClick={loadBuildStatus}
+              >
+                Refresh Activity
+              </button>
             </div>
 
             {buildStatus ? (
               <>
-                <p className="adminHelp">
-                  Activity: <strong>{buildStatus.activity_state || buildStatus.status || "unknown"}</strong> · Last activity: <strong>{typeof buildStatus.seconds_since_activity !== "undefined" ? Math.round(buildStatus.seconds_since_activity) : 0}s ago</strong> · Walkthroughs: <strong>{buildStatus.walkthrough_count || 0}</strong> · Images: <strong>{buildStatus.image_count || 0}</strong>
-                </p>
+                <div className="adminStats">
+                  <div>
+                    <strong>{buildStatus.activity_state?.toUpperCase()}</strong>
+                    <span>Activity</span>
+                  </div>
 
-                {buildActivityExpanded && (
-                  <>
-                    <div className="adminStats">
-                      <div>
-                        <strong>{buildStatus.activity_state?.toUpperCase?.() || buildStatus.status || "UNKNOWN"}</strong>
-                        <span>Activity</span>
-                      </div>
+                  <div>
+                    <strong>
+                      {buildStatus.seconds_since_activity
+                        ? Math.round(buildStatus.seconds_since_activity)
+                        : 0}
+                    </strong>
+                    <span>Seconds idle</span>
+                  </div>
 
-                      <div>
-                        <strong>
-                          {buildStatus.seconds_since_activity
-                            ? Math.round(buildStatus.seconds_since_activity)
-                            : 0}
-                        </strong>
-                        <span>Seconds idle</span>
-                      </div>
+                  <div>
+                    <strong>{buildStatus.walkthrough_count || 0}</strong>
+                    <span>Walkthroughs</span>
+                  </div>
 
-                      <div>
-                        <strong>{buildStatus.walkthrough_count || 0}</strong>
-                        <span>Walkthroughs</span>
-                      </div>
+                  <div>
+                    <strong>{buildStatus.image_count || 0}</strong>
+                    <span>Images</span>
+                  </div>
+                </div>
 
-                      <div>
-                        <strong>{buildStatus.image_count || 0}</strong>
-                        <span>Images</span>
-                      </div>
-                    </div>
+                <div className="activityColumns">
+                  <div>
+                    <h3>Recent Walkthroughs</h3>
 
-                    <div className="activityColumns">
-                      <div>
-                        <h3>Recent Walkthroughs</h3>
+                    <ul className="activityList">
+                      {(buildStatus.recent_walkthroughs || []).map((item) => (
+                        <li key={item.name}>
+                          <strong>{item.name}</strong>
+                          <small>{item.modified_at}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
 
-                        <ul className="activityList">
-                          {(buildStatus.recent_walkthroughs || []).map((item) => (
-                            <li key={item.name}>
-                              <strong>{item.name}</strong>
-                              <small>{item.modified_at}</small>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                  <div>
+                    <h3>Recent Images</h3>
 
-                      <div>
-                        <h3>Recent Images</h3>
-
-                        <ul className="activityList">
-                          {(buildStatus.recent_images || []).map((item) => (
-                            <li key={item.name}>
-                              <strong>{item.name}</strong>
-                              <small>{item.modified_at}</small>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </>
-                )}
+                    <ul className="activityList">
+                      {(buildStatus.recent_images || []).map((item) => (
+                        <li key={item.name}>
+                          <strong>{item.name}</strong>
+                          <small>{item.modified_at}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               </>
             ) : (
               <p className="adminHelp">
@@ -1125,47 +1136,114 @@ function App() {
             )}
           </section>
 
+
           <section className="adminCard">
             <div className="adminCardHeader">
-              <h2>{catalogExpanded ? "▼" : "▶"} Catalog Intelligence Pipelines</h2>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <button
-                  className="secondaryButton"
-                  onClick={() => setCatalogExpanded(!catalogExpanded)}
-                >
-                  {catalogExpanded ? "Collapse" : "Expand"}
-                </button>
-                <button
-                  className="secondaryButton"
-                  onClick={loadCatalogPipelineStatus}
-                  disabled={adminLoading || !!catalogPipelineRunning}
-                >
-                  {catalogPipelineMessage?.startsWith("Loading") ? "Loading..." : "Refresh Catalog"}
-                </button>
-              </div>
+              <h2>Catalog Intelligence Pipelines</h2>
+              <button
+                className="secondaryButton"
+                onClick={loadCatalogPipelineStatus}
+                disabled={adminLoading || !!catalogPipelineRunning}
+              >
+                Refresh Catalog
+              </button>
             </div>
 
             <p className="adminHelp">
               Three separate pipelines prepare model-specific walkthrough overlays: product photos, install manuals, and approved hotspot/tip packages.
             </p>
 
-            {catalogPipelineMessage && (
-              <p
-                className="adminHelp"
-                style={{
-                  fontWeight: 800,
-                  color: catalogPipelineMessage.includes("failed") ? "#8a1f11" : "#333"
-                }}
-              >
-                {catalogPipelineMessage}
+            <div
+              style={{
+                border: "1px solid rgba(0,0,0,0.14)",
+                borderRadius: "18px",
+                padding: "14px",
+                marginBottom: "16px",
+                background: "#f8fafc"
+              }}
+            >
+              <h3 style={{ margin: "0 0 8px" }}>Catalog Intelligence v2: Build Product Package</h3>
+              <p className="adminHelp" style={{ marginTop: 0 }}>
+                Phase 1 uses a manufacturer product page URL as the source. The backend discovers candidate product photos and installation PDFs, caches them on the Render disk, and saves product/discovery JSON for later overlay extraction.
               </p>
-            )}
 
-            {!catalogExpanded ? (
-              <p className="adminHelp">
-                Models loaded: <strong>{catalogPipelineStatus?.items?.length || 0}</strong>
-              </p>
-            ) : catalogPipelineStatus?.items?.length ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
+                <label className="fieldLabel">
+                  Category
+                  <input
+                    value={productPackageCategory}
+                    onChange={(event) => setProductPackageCategory(event.target.value)}
+                    placeholder="toilet"
+                  />
+                </label>
+
+                <label className="fieldLabel">
+                  Brand
+                  <input
+                    value={productPackageBrand}
+                    onChange={(event) => setProductPackageBrand(event.target.value)}
+                    placeholder="Niagara"
+                  />
+                </label>
+
+                <label className="fieldLabel">
+                  Model
+                  <input
+                    value={productPackageModel}
+                    onChange={(event) => setProductPackageModel(event.target.value)}
+                    placeholder="Original Stealth"
+                  />
+                </label>
+              </div>
+
+              <label className="fieldLabel" style={{ marginTop: "10px" }}>
+                Manufacturer product page URL
+                <input
+                  value={productPackageUrl}
+                  onChange={(event) => setProductPackageUrl(event.target.value)}
+                  placeholder="https://manufacturer.com/product-page"
+                />
+              </label>
+
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginTop: "12px" }}>
+                <button
+                  className="startButton"
+                  onClick={buildProductPagePackage}
+                  disabled={productPackageRunning || !productPackageBrand.trim() || !productPackageModel.trim() || !productPackageUrl.trim()}
+                >
+                  {productPackageRunning ? "Building Package..." : "Build Product Package"}
+                </button>
+
+                {productPackageResult?.product?.confidence && (
+                  <span className="adminHelp">
+                    Confidence: <strong>{productPackageResult.product.confidence}</strong>
+                  </span>
+                )}
+              </div>
+
+              {productPackageResult && (
+                <div style={{ marginTop: "12px", fontSize: "13px" }}>
+                  <strong>Status:</strong> {productPackageResult.status || "unknown"}
+                  {productPackageResult.product?.photo_url && (
+                    <> · <a href={`${API_URL}${productPackageResult.product.photo_url}`} target="_blank" rel="noreferrer">View cached photo</a></>
+                  )}
+                  {productPackageResult.product?.manual_url && (
+                    <> · <a href={`${API_URL}${productPackageResult.product.manual_url}`} target="_blank" rel="noreferrer">View cached manual</a></>
+                  )}
+                  {productPackageResult.product_json_url && (
+                    <> · <a href={`${API_URL}${productPackageResult.product_json_url}`} target="_blank" rel="noreferrer">product.json</a></>
+                  )}
+                  {productPackageResult.discovery_json_url && (
+                    <> · <a href={`${API_URL}${productPackageResult.discovery_json_url}`} target="_blank" rel="noreferrer">discovery.json</a></>
+                  )}
+                  {productPackageResult.error && (
+                    <p className="adminError">{productPackageResult.error}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {catalogPipelineStatus?.items?.length ? (
               <div style={{ display: "grid", gap: "12px" }}>
                 {catalogPipelineStatus.items.map((item) => {
                   const baseKey = `${item.brand}-${item.model}`;
@@ -1187,7 +1265,7 @@ function App() {
                         <div>
                           <h3 style={{ margin: 0 }}>{item.brand} {item.model}</h3>
                           <p className="adminHelp" style={{ margin: "6px 0 0" }}>
-                            Confidence: <strong>{item.confidence}</strong> · Photo: <strong>{photoOk ? "Cached" : "Missing"}</strong> · Manual: <strong>{manualOk ? "Cached" : item.manual?.status || "Missing"}</strong> · Overlays: <strong>{overlayOk ? `${item.overlay.hotspot_count} hotspots` : "Not built"}</strong>
+                            Confidence: <strong>{item.confidence}</strong> · Photo: {photoOk ? "Cached" : "Missing"} · Manual: {manualOk ? "Cached" : item.manual?.status || "Missing"} · Overlays: {overlayOk ? `${item.overlay.hotspot_count} hotspots` : "Not built"}
                           </p>
                         </div>
 
@@ -1240,12 +1318,6 @@ function App() {
                           <a href={item.photo.product_page_url} target="_blank" rel="noreferrer">Product page</a>
                         )}
                       </div>
-
-                      {(item.photo?.status === "missing" || item.photo?.status === "unavailable") && item.photo?.remote_url && (
-                        <p className="adminHelp" style={{ marginTop: "8px", overflowWrap: "anywhere" }}>
-                          Remote photo source: {item.photo.remote_url}
-                        </p>
-                      )}
                     </div>
                   );
                 })}
@@ -1255,76 +1327,6 @@ function App() {
             )}
           </section>
 
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Walkthrough Processing Controls</h2>
-              <button
-                className="secondaryButton"
-                onClick={refreshWalkthroughOperations}
-                disabled={adminLoading}
-              >
-                Refresh All Status
-              </button>
-            </div>
-
-            <p className="adminHelp">
-              Queued jobs are waiting. They do not build until the Render background worker is running or you manually run jobs here. These buttons run queued jobs immediately through the API.
-            </p>
-
-            <div className="adminStats">
-              <div>
-                <strong>{bulkJobList?.counts?.queued || adminStatus?.bulk_queued_count || 0}</strong>
-                <span>Waiting</span>
-              </div>
-              <div>
-                <strong>{bulkJobList?.counts?.processing || adminStatus?.bulk_processing_count || 0}</strong>
-                <span>Processing</span>
-              </div>
-              <div>
-                <strong>{bulkJobList?.counts?.completed || adminStatus?.bulk_completed_count || 0}</strong>
-                <span>Completed</span>
-              </div>
-              <div>
-                <strong>{bulkJobList?.counts?.failed || adminStatus?.bulk_failed_count || 0}</strong>
-                <span>Failed</span>
-              </div>
-            </div>
-
-            {buildStatus && (
-              <div style={{ marginTop: "12px", fontSize: "14px", lineHeight: 1.5 }}>
-                <strong>Build Activity:</strong> {buildStatus.status || "unknown"}
-                {typeof buildStatus.seconds_since_activity !== "undefined" && (
-                  <> · Last activity: {buildStatus.seconds_since_activity}s ago</>
-                )}
-                <> · Walkthroughs: {buildStatus.walkthrough_count || 0}</>
-                <> · Images: {buildStatus.image_count || 0}</>
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "16px" }}>
-              <button
-                className="doneButton"
-                onClick={() => runQueuedWalkthroughs(1)}
-                disabled={adminLoading}
-              >
-                Run 1 Queued Job Now
-              </button>
-              <button
-                className="doneButton"
-                onClick={() => runQueuedWalkthroughs(5)}
-                disabled={adminLoading}
-              >
-                Run 5 Queued Jobs Now
-              </button>
-              <button
-                className="secondaryButton"
-                onClick={() => runQueuedWalkthroughs(20)}
-                disabled={adminLoading}
-              >
-                Run 20 Queued Jobs Now
-              </button>
-            </div>
-          </section>
 
           <section className="adminCard">
             <div className="adminCardHeader">
@@ -1352,11 +1354,6 @@ function App() {
                   </div>
 
                   <div>
-                    <strong>{bulkJobList.counts?.processing || 0}</strong>
-                    <span>Processing</span>
-                  </div>
-
-                  <div>
                     <strong>{bulkJobList.counts?.failed || 0}</strong>
                     <span>Failed</span>
                   </div>
@@ -1373,7 +1370,7 @@ function App() {
                 </div>
 
                 <div style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
-                  {(["processing", "failed", "queued", "completed", "ignored"]).map((groupName) => (
+                  {(["failed", "queued", "completed", "ignored"]).map((groupName) => (
                     <div key={groupName}>
                       <h3 style={{ textTransform: "capitalize" }}>{groupName}</h3>
 
@@ -1418,32 +1415,12 @@ function App() {
                               )}
 
                               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
-                                {groupName === "queued" && (
-                                  <button
-                                    className="doneButton"
-                                    onClick={() => updateBulkJob(job.query_slug, "run")}
-                                    disabled={adminLoading}
-                                  >
-                                    Run Now
-                                  </button>
-                                )}
-
-                                {(groupName === "failed" || groupName === "ignored") && (
-                                  <button
-                                    className="doneButton"
-                                    onClick={() => updateBulkJob(job.query_slug, "retryrun")}
-                                    disabled={adminLoading}
-                                  >
-                                    Retry + Run Now
-                                  </button>
-                                )}
-
                                 <button
                                   className="secondaryButton"
                                   onClick={() => updateBulkJob(job.query_slug, "retry")}
                                   disabled={adminLoading}
                                 >
-                                  Retry Only
+                                  Retry
                                 </button>
 
                                 <button
@@ -1673,7 +1650,7 @@ function App() {
               >
                 {adminLoading
                   ? "PROCESSING..."
-                  : "RUN 5 JOBS NOW"}
+                  : "RUN 5 JOBS"}
               </button>
 
               <button
@@ -1708,7 +1685,7 @@ function App() {
                 }}
                 disabled={adminLoading}
               >
-                RUN 1 JOB NOW
+                WORKER AUTOMATION
               </button>
 
               <button
@@ -2017,6 +1994,80 @@ function App() {
             ← Back to App
           </button>
         </main>
+      ) : screen === "briefing" ? (
+        <main className="clarifyScreen modelBriefingScreen">
+          <div className="homeBadge">MODEL-SPECIFIC PREP</div>
+
+          <h1>{selectedBrand} {selectedModel}</h1>
+
+          <section className="brandModelPanel modelBriefingCard" style={{ display: "grid", gridTemplateColumns: "minmax(220px, 360px) 1fr", gap: "24px", alignItems: "start" }}>
+            <div className="modelPhotoFrame" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "220px", background: "#f6f7f8", borderRadius: "18px", overflow: "hidden" }}>
+              {overlayData?.product_image_url ? (
+                <img
+                  className="modelProductImage"
+                  style={{ maxWidth: "100%", maxHeight: "260px", objectFit: "contain" }}
+                  src={overlayData.product_image_url}
+                  alt={`${selectedBrand} ${selectedModel}`}
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+              ) : (
+                <div className="modelPhotoFallback" style={{ padding: "40px", color: "#6b7280" }}>Product photo pending</div>
+              )}
+            </div>
+
+            <div className="modelBriefingText">
+              <p className="clarifyPrompt">
+                Review the model-specific notes before opening the full walkthrough.
+              </p>
+
+              <button
+                className="secondaryButton"
+                onClick={() => setTipsExpanded(!tipsExpanded)}
+              >
+                Important Model-Specific Installation Tips {tipsExpanded ? "▴" : "▾"}
+              </button>
+
+              {tipsExpanded && (
+                <div className="overlayGrid modelTipsList">
+                  {currentModelTips.length > 0 ? currentModelTips.map((tip, index) => (
+                    <div key={`${tip.id || tip.title}-${index}`} className={`overlayCard overlay-${tip.type || "model_specific"}`}>
+                      <strong>{tip.title}</strong>
+                      <p>{tip.content}</p>
+                    </div>
+                  )) : (
+                    <p>No model-specific tips have been extracted yet.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="clarifyActions">
+                {overlayData?.manual_url && (
+                  <a
+                    className="secondaryButton"
+                    href={overlayData.manual_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download Install PDF
+                  </a>
+                )}
+
+                <button className="startButton" onClick={proceedSpecificInstall} disabled={loading}>
+                  {loading ? "BUILDING..." : "PROCEED TO INSTALL"}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div className="clarifyActions">
+            <button className="secondaryButton" onClick={() => { setScreen("home"); setClarifying(true); }}>
+              ← Change Brand / Model
+            </button>
+            <button className="secondaryButton" onClick={backToHome}>
+              Start Over
+            </button>
+          </div>
+        </main>
       ) : !started && !clarifying ? (
         <main className="homeScreen">
           <div className="homeBadge">FIELD WALKTHROUGHS</div>
@@ -2137,9 +2188,9 @@ function App() {
               <button
                 className="startButton"
                 onClick={continueSpecific}
-                disabled={loading || !selectedBrand}
+                disabled={loading || !selectedBrand || !selectedModel}
               >
-                {loading ? "BUILDING..." : "CONTINUE SPECIFIC"}
+                {loading ? "LOADING MODEL BRIEFING..." : "VIEW MODEL BRIEFING"}
               </button>
             ) : installMode === "generic" ? (
               <button
@@ -2181,34 +2232,8 @@ function App() {
 
             {walkthrough.estimated_labor_label && (
               <section className="laborEstimateCard">
-                <div className="laborEstimateIcon">🛠</div>
-                <div>
-                  <strong>{walkthrough.estimated_labor_label}</strong>
-                  <span>Generic estimate before model-specific adjustments.</span>
-                </div>
-              </section>
-            )}
-
-            {installMode === "specific" &&
-              overlayData?.overlays?.length > 0 && (
-              <section className="overlayPanel">
-                <h3>MODEL-SPECIFIC NOTES</h3>
-
-                <div className="overlayGrid">
-                  {overlayData.overlays.map((overlay, index) => (
-                    <div
-                      key={`${overlay.title}-${index}`}
-                      className={`overlayCard overlay-${overlay.type}`}
-                    >
-                      <strong>{overlay.title}</strong>
-                      <p>{overlay.content}</p>
-
-                      <small>
-                        {overlay.type.replace("_", " ").toUpperCase()}
-                      </small>
-                    </div>
-                  ))}
-                </div>
+                <strong>{walkthrough.estimated_labor_label}</strong>
+                <span> (Generic)</span>
               </section>
             )}
 
@@ -2225,16 +2250,22 @@ function App() {
                 <div className="illustrationLabel">{currentStep.imageLabel}</div>
 
                 {installMode === "specific" &&
-                  currentStep.hotspots.map((hotspot, index) => (
-                  <button
-                    key={hotspot.id}
-                    className={`hotspot hotspot${index + 1}`}
-                    onClick={() => setActiveHotspot(hotspot)}
-                    aria-label={hotspot.label}
-                  >
-                    +
-                  </button>
-                ))}
+                  (overlayData?.overlays || [])
+                    .filter((hotspot) => Number(hotspot.step_id || hotspot.stepId || 0) === Number(currentStep.id))
+                    .map((hotspot, index) => (
+                    <button
+                      key={hotspot.id || `${hotspot.title}-${index}`}
+                      className={`hotspot hotspot${index + 1}`}
+                      style={{
+                        left: `${hotspot.x || 50}%`,
+                        top: `${hotspot.y || 45}%`
+                      }}
+                      onClick={() => setActiveHotspot(hotspot)}
+                      aria-label={hotspot.label || hotspot.title}
+                    >
+                      +
+                    </button>
+                  ))}
               </div>
             </section>
 
@@ -2253,6 +2284,13 @@ function App() {
                 </button>
                 <h3>{activeHotspot.title}</h3>
                 <p>{activeHotspot.content}</p>
+                {activeHotspot.manual_url && (
+                  <p>
+                    <a href={activeHotspot.manual_url} target="_blank" rel="noreferrer">
+                      Open source installation PDF
+                    </a>
+                  </p>
+                )}
                 <small>Source type: manufacturer installation guide</small>
               </section>
             )}
