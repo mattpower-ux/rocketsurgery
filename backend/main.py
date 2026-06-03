@@ -241,6 +241,214 @@ class SaveWalkthroughRequest(BaseModel):
     walkthrough: dict
 
 
+
+
+TOILET_PRODUCT_CATALOG = {
+    "Kohler": {
+        "Highline": {
+            "manual_title": "Kohler Highline / Wellworth Installation Guide",
+            "manual_url": "https://resources.kohler.com/onlinecatalog/pdf/1004604_2.pdf",
+            "models": ["Highline", "Wellworth", "Cimarron"]
+        },
+        "Wellworth": {
+            "manual_title": "Kohler Wellworth / Highline Installation Guide",
+            "manual_url": "https://resources.kohler.com/onlinecatalog/pdf/114903_2.pdf",
+            "models": ["Highline", "Wellworth", "Cimarron"]
+        },
+        "Cimarron": {
+            "manual_title": "Kohler Toilet Installation Guide",
+            "manual_url": "https://resources.kohler.com/onlinecatalog/pdf/1004604_2.pdf",
+            "models": ["Highline", "Wellworth", "Cimarron"]
+        }
+    },
+    "Niagara": {
+        "Stealth": {
+            "manual_title": "Niagara Stealth Toilet Manual",
+            "manual_url": "https://niagaracorp.com/wp-content/uploads/2016/10/Stealth_Manual_Final.pdf",
+            "models": ["Stealth", "EcoLogic", "Liberty"]
+        },
+        "EcoLogic": {
+            "manual_title": "Niagara EcoLogic / Toilet Manual",
+            "manual_url": "https://niagaracorp.com/wp-content/uploads/2016/10/Stealth_Manual_Final.pdf",
+            "models": ["Stealth", "EcoLogic", "Liberty"]
+        },
+        "Liberty": {
+            "manual_title": "Niagara Product Resources",
+            "manual_url": "https://pro.niagaracorp.com/resources/",
+            "models": ["Stealth", "EcoLogic", "Liberty"]
+        }
+    },
+    "American Standard": {
+        "Cadet 3": {
+            "manual_title": "American Standard Cadet Installation Instructions",
+            "manual_url": "https://lixil.cdn.celum.cloud/167930_as_us_bath_install__2467__2876%20%284626%29_0_original.pdf",
+            "models": ["Cadet 3", "Champion 4", "Colony"]
+        },
+        "Champion 4": {
+            "manual_title": "American Standard Champion / Toilet Installation Instructions",
+            "manual_url": "https://s1.img-b.com/build.com/mediabase/specifications/american_standard/1237308/american-standard-2886.518-b-installation-sheet.pdf",
+            "models": ["Cadet 3", "Champion 4", "Colony"]
+        },
+        "Colony": {
+            "manual_title": "American Standard Toilet Installation Instructions",
+            "manual_url": "https://lixil.cdn.celum.cloud/167930_as_us_bath_install__2467__2876%20%284626%29_0_original.pdf",
+            "models": ["Cadet 3", "Champion 4", "Colony"]
+        }
+    }
+}
+
+
+def is_toilet_query(query: str) -> bool:
+    q = (query or "").lower()
+    return "toilet" in q or "commode" in q or "water closet" in q
+
+
+def toilet_product_options(query: str):
+    return {
+        "query": query,
+        "category": "toilet",
+        "brands": [
+            {
+                "brand": brand,
+                "models": list(next(iter(models.values())).get("models", models.keys()))
+            }
+            for brand, models in TOILET_PRODUCT_CATALOG.items()
+        ],
+        "query_has_known_brand_and_model": False
+    }
+
+
+def find_toilet_manual(brand: str, model: str):
+    brand_records = TOILET_PRODUCT_CATALOG.get((brand or "").strip())
+    if not brand_records:
+        return None
+
+    if model in brand_records:
+        return brand_records[model]
+
+    model_l = (model or "").lower()
+    for model_name, record in brand_records.items():
+        if model_l and (model_l in model_name.lower() or model_name.lower() in model_l):
+            return record
+
+    return next(iter(brand_records.values()))
+
+
+def toilet_model_overlay(request: OverlayRequest):
+    brand = (request.brand or "").strip()
+    model = (request.model or "").strip()
+    manual = find_toilet_manual(brand, model)
+
+    if not brand or not manual:
+        return {
+            "status": "no_model_overlay",
+            "category": "toilet",
+            "brand": brand,
+            "model": model,
+            "manual_url": "",
+            "overlays": []
+        }
+
+    base = {
+        "status": "loaded",
+        "category": "toilet",
+        "brand": brand,
+        "model": model,
+        "manual_title": manual.get("manual_title", "Manufacturer installation guide"),
+        "manual_url": manual.get("manual_url", ""),
+        "overlays": []
+    }
+
+    overlays = []
+
+    # Shared differences that frequently matter versus a generic toilet walkthrough.
+    overlays.append({
+        "id": "rough-in-check",
+        "step_id": 1,
+        "x": 58,
+        "y": 42,
+        "label": "Rough-in check",
+        "title": "Verify model rough-in before setting the bowl",
+        "content": "Before setting the toilet, confirm the model's rough-in and flange/bolt position against the manufacturer guide. Some models offer 10-inch or 12-inch rough-in variants, and a generic walkthrough may not flag that difference.",
+        "type": "model_specific",
+        "manual_url": manual.get("manual_url", ""),
+        "manual_title": manual.get("manual_title", "Manufacturer installation guide")
+    })
+
+    overlays.append({
+        "id": "tightening-caution",
+        "step_id": 4,
+        "x": 52,
+        "y": 50,
+        "label": "Do not overtighten",
+        "title": "Tightening sequence and china protection",
+        "content": "Use the model-specific tightening sequence and avoid overtightening tank, bowl, seat, or floor fasteners. Vitreous china can crack if hardware is tightened beyond the manufacturer's instructions.",
+        "type": "caution",
+        "manual_url": manual.get("manual_url", ""),
+        "manual_title": manual.get("manual_title", "Manufacturer installation guide")
+    })
+
+    overlays.append({
+        "id": "water-level-adjustment",
+        "step_id": 6,
+        "x": 62,
+        "y": 42,
+        "label": "Water level",
+        "title": "Adjust water level to the model marking",
+        "content": "After connecting the supply and test-flushing, adjust the tank water level to the model's marked waterline or valve instructions rather than relying only on generic fill-valve guidance.",
+        "type": "adjustment",
+        "manual_url": manual.get("manual_url", ""),
+        "manual_title": manual.get("manual_title", "Manufacturer installation guide")
+    })
+
+    brand_l = brand.lower()
+    model_l = model.lower()
+
+    if "niagara" in brand_l or "stealth" in model_l:
+        overlays.append({
+            "id": "niagara-stealth-components",
+            "step_id": 6,
+            "x": 42,
+            "y": 36,
+            "label": "Niagara tank system",
+            "title": "Niagara uses model-specific tank components",
+            "content": "Niagara Stealth-style toilets use specialized internal tank components. Do not treat internal adjustments as generic flapper-only adjustments; follow the Niagara manual before changing the flush or fill assembly.",
+            "type": "model_specific",
+            "manual_url": manual.get("manual_url", ""),
+            "manual_title": manual.get("manual_title", "Manufacturer installation guide")
+        })
+
+    if "american standard" in brand_l or "cadet" in model_l or "champion" in model_l:
+        overlays.append({
+            "id": "american-standard-ez-install",
+            "step_id": 3,
+            "x": 50,
+            "y": 58,
+            "label": "EZ-Install hardware",
+            "title": "Use the included mounting hardware sequence",
+            "content": "American Standard Cadet/Champion installations may include model-specific EZ-Install hardware. Follow the packaged bolt, gasket, washer, and knob sequence instead of substituting a generic tank-to-bowl order.",
+            "type": "model_specific",
+            "manual_url": manual.get("manual_url", ""),
+            "manual_title": manual.get("manual_title", "Manufacturer installation guide")
+        })
+
+    if "kohler" in brand_l:
+        overlays.append({
+            "id": "kohler-leak-check",
+            "step_id": 7,
+            "x": 64,
+            "y": 52,
+            "label": "Kohler leak check",
+            "title": "Check connections again after several flushes",
+            "content": "Kohler installation guides emphasize flushing several times, checking all connections for leaks, and periodically rechecking after installation. Add this follow-up to the generic completion step.",
+            "type": "check",
+            "manual_url": manual.get("manual_url", ""),
+            "manual_title": manual.get("manual_title", "Manufacturer installation guide")
+        })
+
+    base["overlays"] = overlays
+    return base
+
 DEMO_WALKTHROUGH_ID = "james-hardie-lap-siding-nailing-schedule"
 
 DEMO_WALKTHROUGH = {
@@ -314,6 +522,9 @@ def seed_demo():
 
 @app.get("/product-options")
 def product_options(query: str):
+    if is_toilet_query(query):
+        return toilet_product_options(query)
+
     options = get_product_options_for_query(query)
 
     return {
@@ -639,6 +850,9 @@ def post_save_admin_walkthrough(request: SaveWalkthroughRequest):
 
 @app.post("/walkthrough/overlay")
 def walkthrough_overlay(request: OverlayRequest):
+    if request.category == "toilet" or is_toilet_query(request.query):
+        return toilet_model_overlay(request)
+
     return build_spec_overlay(
         query=request.query,
         category=request.category,
