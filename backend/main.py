@@ -157,7 +157,11 @@ app = FastAPI(title="RocketSurgery API")
 
 Path("/data/rocketsurgery/images").mkdir(parents=True, exist_ok=True)
 CATALOG_IMAGES_DIR = Path("/data/rocketsurgery/catalog-images")
+CATALOG_MANUALS_DIR = Path("/data/rocketsurgery/catalog-manuals")
+CATALOG_PACKAGES_DIR = Path("/data/rocketsurgery/catalog-packages")
 CATALOG_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+CATALOG_MANUALS_DIR.mkdir(parents=True, exist_ok=True)
+CATALOG_PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount(
     "/static/images",
@@ -169,6 +173,18 @@ app.mount(
     "/static/catalog-images",
     StaticFiles(directory=str(CATALOG_IMAGES_DIR)),
     name="catalog-images"
+)
+
+app.mount(
+    "/static/catalog-manuals",
+    StaticFiles(directory=str(CATALOG_MANUALS_DIR)),
+    name="catalog-manuals"
+)
+
+app.mount(
+    "/static/catalog-packages",
+    StaticFiles(directory=str(CATALOG_PACKAGES_DIR)),
+    name="catalog-packages"
 )
 
 app.mount(
@@ -248,10 +264,143 @@ class RevertStepImageRequest(BaseModel):
     step_id: int
 
 
+class CatalogPipelineRequest(BaseModel):
+    brand: str
+    model: str
+    category: str = "toilet"
+
+
 def catalog_slug(value: str) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
     return cleaned or "item"
 
+
+
+
+def public_catalog_manual_url(path: Path) -> str:
+    try:
+        relative = path.relative_to(CATALOG_MANUALS_DIR)
+    except ValueError:
+        return ""
+    return "/static/catalog-manuals/" + str(relative).replace("\\", "/")
+
+
+def public_catalog_package_url(path: Path) -> str:
+    try:
+        relative = path.relative_to(CATALOG_PACKAGES_DIR)
+    except ValueError:
+        return ""
+    return "/static/catalog-packages/" + str(relative).replace("\\", "/")
+
+
+def model_asset_dir(root: Path, brand: str, model: str, category: str = "toilets") -> Path:
+    return root / category / catalog_slug(brand) / catalog_slug(model)
+
+
+def find_existing_cached_manual(brand: str, model: str) -> str:
+    candidate = model_asset_dir(CATALOG_MANUALS_DIR, brand, model) / "installation-manual.pdf"
+    if candidate.exists() and candidate.stat().st_size > 0:
+        return public_catalog_manual_url(candidate)
+    return ""
+
+
+def cache_install_manual(brand: str, model: str, remote_url: str) -> dict:
+    existing = find_existing_cached_manual(brand, model)
+    if existing:
+        return {"status": "cached", "local_url": existing, "error": ""}
+
+    if not remote_url:
+        return {"status": "missing_remote_url", "local_url": "", "error": "No manual URL is stored for this model."}
+
+    try:
+        request = urllib.request.Request(
+            remote_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 RocketSurgeryCatalogBot/1.0",
+                "Accept": "application/pdf,*/*;q=0.8",
+            }
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            content_type = response.headers.get("Content-Type", "")
+            data = response.read(20_000_000)
+
+        if not data or len(data) < 1024:
+            raise ValueError("Downloaded manual was empty or too small.")
+
+        if "pdf" not in (content_type or "").lower() and not remote_url.lower().endswith(".pdf"):
+            raise ValueError(f"Manual URL did not return a PDF. Content-Type: {content_type}")
+
+        output_dir = model_asset_dir(CATALOG_MANUALS_DIR, brand, model)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / "installation-manual.pdf"
+        output_path.write_bytes(data)
+        return {"status": "downloaded", "local_url": public_catalog_manual_url(output_path), "error": ""}
+    except Exception as exc:
+        return {"status": "unavailable", "local_url": "", "error": str(exc)}
+
+
+def overlay_package_path(brand: str, model: str) -> Path:
+    return model_asset_dir(CATALOG_PACKAGES_DIR, brand, model) / "overlays.json"
+
+
+def save_overlay_package(brand: str, model: str, overlay_payload: dict) -> dict:
+    path = overlay_package_path(brand, model)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    package = {
+        "category": "toilet",
+        "brand": brand,
+        "model": model,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "manual_url": overlay_payload.get("manual_url", ""),
+        "local_manual_url": overlay_payload.get("local_manual_url", ""),
+        "product_image_url": overlay_payload.get("product_image_url", ""),
+        "product_page_url": overlay_payload.get("product_page_url", ""),
+        "installation_tips": overlay_payload.get("installation_tips", []),
+        "overlays": overlay_payload.get("overlays", []),
+    }
+    path.write_text(json.dumps(package, indent=2), encoding="utf-8")
+    return {"status": "saved", "package_url": public_catalog_package_url(path), "package_path": str(path), "package": package}
+
+
+def load_overlay_package(brand: str, model: str) -> dict | None:
+    path = overlay_package_path(brand, model)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def get_toilet_catalog_pipeline_status(brand: str, model: str) -> dict:
+    manual = find_toilet_manual(brand, model)
+    local_image = find_existing_cached_product_image(brand, model)
+    local_manual = find_existing_cached_manual(brand, model)
+    package = load_overlay_package(brand, model)
+    return {
+        "brand": brand,
+        "model": model,
+        "category": "toilet",
+        "photo": {
+            "status": "cached" if local_image else "missing",
+            "local_url": local_image,
+            "remote_url": (manual or {}).get("product_image_url", ""),
+            "product_page_url": (manual or {}).get("product_page_url", ""),
+        },
+        "manual": {
+            "status": "cached" if local_manual else ("remote_available" if (manual or {}).get("manual_url") else "missing"),
+            "local_url": local_manual,
+            "remote_url": (manual or {}).get("manual_url", ""),
+            "title": (manual or {}).get("manual_title", ""),
+        },
+        "overlay": {
+            "status": "built" if package else "not_built",
+            "tip_count": len((package or {}).get("installation_tips", [])),
+            "hotspot_count": len((package or {}).get("overlays", [])),
+            "package_url": public_catalog_package_url(overlay_package_path(brand, model)) if package else "",
+        },
+        "confidence": "HIGH" if local_image and local_manual and package else ("MEDIUM" if local_manual and package else "LOW"),
+    }
 
 def content_type_extension(content_type: str, fallback_url: str = "") -> str:
     ct = (content_type or "").lower().split(";", 1)[0].strip()
@@ -455,6 +604,7 @@ def toilet_model_overlay(request: OverlayRequest):
         }
 
     image_cache = cache_product_image(brand, model, manual.get("product_image_url", ""))
+    local_manual_url = find_existing_cached_manual(brand, model)
 
     overlays = [
         {
@@ -536,6 +686,7 @@ def toilet_model_overlay(request: OverlayRequest):
         "model": model,
         "manual_title": manual.get("manual_title", "Manufacturer installation guide"),
         "manual_url": manual.get("manual_url", ""),
+        "local_manual_url": local_manual_url,
         "product_image_url": image_cache.get("local_url", ""),
         "local_product_image_url": image_cache.get("local_url", ""),
         "remote_product_image_url": manual.get("product_image_url", ""),
@@ -601,6 +752,67 @@ DEMO_WALKTHROUGH = {
         }
     ]
 }
+
+
+
+
+@app.get("/admin/catalog/toilet-status")
+def get_catalog_toilet_status():
+    items = []
+    for brand, models in TOILET_PRODUCT_CATALOG.items():
+        for model in models.keys():
+            items.append(get_toilet_catalog_pipeline_status(brand, model))
+    return {"status": "loaded", "items": items}
+
+
+@app.post("/admin/catalog/fetch-product-photo")
+def post_catalog_fetch_product_photo(request: CatalogPipelineRequest):
+    manual = find_toilet_manual(request.brand, request.model)
+    if not manual:
+        return {"status": "not_found", "brand": request.brand, "model": request.model}
+    result = cache_product_image(request.brand, request.model, manual.get("product_image_url", ""))
+    return {"status": result.get("status"), "brand": request.brand, "model": request.model, "photo": result, "pipeline_status": get_toilet_catalog_pipeline_status(request.brand, request.model)}
+
+
+@app.post("/admin/catalog/fetch-install-manual")
+def post_catalog_fetch_install_manual(request: CatalogPipelineRequest):
+    manual = find_toilet_manual(request.brand, request.model)
+    if not manual:
+        return {"status": "not_found", "brand": request.brand, "model": request.model}
+    result = cache_install_manual(request.brand, request.model, manual.get("manual_url", ""))
+    return {"status": result.get("status"), "brand": request.brand, "model": request.model, "manual": result, "pipeline_status": get_toilet_catalog_pipeline_status(request.brand, request.model)}
+
+
+@app.post("/admin/catalog/build-overlay-package")
+def post_catalog_build_overlay_package(request: CatalogPipelineRequest):
+    payload = toilet_model_overlay(OverlayRequest(query="install a toilet", category="toilet", brand=request.brand, model=request.model))
+    manual_cache = cache_install_manual(request.brand, request.model, payload.get("manual_url", ""))
+    if manual_cache.get("local_url"):
+        payload["local_manual_url"] = manual_cache.get("local_url")
+    saved = save_overlay_package(request.brand, request.model, payload)
+    return {"status": "built", "brand": request.brand, "model": request.model, "overlay_package": saved, "pipeline_status": get_toilet_catalog_pipeline_status(request.brand, request.model)}
+
+
+@app.post("/admin/catalog/run-model-pipelines")
+def post_catalog_run_model_pipelines(request: CatalogPipelineRequest):
+    manual = find_toilet_manual(request.brand, request.model)
+    if not manual:
+        return {"status": "not_found", "brand": request.brand, "model": request.model}
+    photo_result = cache_product_image(request.brand, request.model, manual.get("product_image_url", ""))
+    manual_result = cache_install_manual(request.brand, request.model, manual.get("manual_url", ""))
+    payload = toilet_model_overlay(OverlayRequest(query="install a toilet", category="toilet", brand=request.brand, model=request.model))
+    if manual_result.get("local_url"):
+        payload["local_manual_url"] = manual_result.get("local_url")
+    saved = save_overlay_package(request.brand, request.model, payload)
+    return {
+        "status": "complete",
+        "brand": request.brand,
+        "model": request.model,
+        "photo": photo_result,
+        "manual": manual_result,
+        "overlay_package": saved,
+        "pipeline_status": get_toilet_catalog_pipeline_status(request.brand, request.model),
+    }
 
 
 @app.get("/")
