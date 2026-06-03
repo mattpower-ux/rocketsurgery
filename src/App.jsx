@@ -1188,7 +1188,7 @@ function App() {
                             </div>
                           )}
 
-                          <label style={{ fontWeight: 800, fontSize: "12px" }}>Caption</label>
+                          <label style={{ fontWeight: 900, fontSize: "13px" }}>Step title / image caption</label>
                           <input
                             className="adminInput"
                             style={{ fontSize: "13px", padding: "8px 10px" }}
@@ -1196,31 +1196,41 @@ function App() {
                             onChange={(e) => updateEditorStep(step.id, "imageLabel", e.target.value)}
                           />
 
-                          <label style={{ fontWeight: 800, fontSize: "12px" }}>Instruction</label>
+                          <label style={{ fontWeight: 900, fontSize: "13px" }}>Instruction / step text</label>
                           <textarea
                             className="adminTextArea small"
-                            style={{ minHeight: "68px", fontSize: "13px" }}
+                            style={{ minHeight: "92px", fontSize: "13px", background: "#fffdf5", border: "2px solid rgba(0,0,0,0.12)" }}
                             value={step.instruction || ""}
                             onChange={(e) => updateEditorStep(step.id, "instruction", e.target.value)}
+                            placeholder="Rewrite the main instruction for this step. This is the text users see below the image."
                           />
 
-                          <details>
-                            <summary style={{ fontWeight: 800, fontSize: "12px" }}>Edit detail + image prompt</summary>
-                            <label style={{ fontWeight: 800, fontSize: "12px" }}>Detail</label>
-                            <textarea
-                              className="adminTextArea small"
-                              style={{ minHeight: "70px", fontSize: "13px" }}
-                              value={step.detail || ""}
-                              onChange={(e) => updateEditorStep(step.id, "detail", e.target.value)}
-                            />
+                          <label style={{ fontWeight: 900, fontSize: "13px" }}>Detail / caption support text</label>
+                          <textarea
+                            className="adminTextArea small"
+                            style={{ minHeight: "78px", fontSize: "13px" }}
+                            value={step.detail || ""}
+                            onChange={(e) => updateEditorStep(step.id, "detail", e.target.value)}
+                            placeholder="Add or revise the supporting detail for this image."
+                          />
 
-                            <label style={{ fontWeight: 800, fontSize: "12px" }}>Image correction prompt</label>
+                          <label style={{ fontWeight: 900, fontSize: "13px" }}>New image prompt / correction</label>
+                          <textarea
+                            className="adminTextArea small"
+                            style={{ minHeight: "88px", fontSize: "13px", background: "#f7fbff", border: "2px solid rgba(0,90,180,0.18)" }}
+                            value={repairCorrections[step.id] || ""}
+                            onChange={(e) => setRepairCorrections({ ...repairCorrections, [step.id]: e.target.value })}
+                            placeholder="Describe the replacement image you want. Example: remove the shovel entirely; show only the subfloor panel and screw pattern."
+                          />
+
+                          <details style={{ fontSize: "12px" }}>
+                            <summary style={{ fontWeight: 800 }}>Optional: stored original image prompt</summary>
                             <textarea
                               className="adminTextArea small"
-                              style={{ minHeight: "64px", fontSize: "13px" }}
-                              value={repairCorrections[step.id] || ""}
-                              onChange={(e) => setRepairCorrections({ ...repairCorrections, [step.id]: e.target.value })}
-                              placeholder="Example: remove the shovel; make the pipe copper; show the fastener location."
+                              style={{ minHeight: "58px", fontSize: "12px" }}
+                              value={step.imagePrompt || ""}
+                              onChange={(e) => updateEditorStep(step.id, "imagePrompt", e.target.value)}
+                              placeholder="Stored prompt used as context for future regeneration."
                             />
                           </details>
 
@@ -2167,10 +2177,9 @@ function App() {
 
             {walkthrough.estimated_labor_label && (
               <section className="laborEstimateCard">
-                <div className="laborEstimateIcon">🛠</div>
                 <div>
-                  <strong>{walkthrough.estimated_labor_label}</strong>
-                  <span>Generic estimate before model-specific adjustments.</span>
+                  <strong>{walkthrough.estimated_labor_label}</strong>{" "}
+                  <span>(Generic)</span>
                 </div>
               </section>
             )}
