@@ -83,6 +83,28 @@ function App() {
     (item) => item.brand === selectedBrand
   );
   const availableModels = selectedBrandRecord?.models || [];
+  const currentModelOverlays =
+    installMode === "specific" && currentStep
+      ? (overlayData?.overlays || []).filter(
+          (overlay) => Number(overlay.step_id) === Number(currentStep.id)
+        )
+      : [];
+  const visibleHotspots = currentStep
+    ? [
+        ...(installMode === "specific" ? currentStep.hotspots || [] : []),
+        ...currentModelOverlays.map((overlay, index) => ({
+          id: overlay.id || `model-overlay-${currentStep.id}-${index}`,
+          label: overlay.label || "Model-specific note",
+          title: overlay.title || "Model-specific note",
+          content: overlay.content || "Review the manufacturer installation guide for this step.",
+          manual_url: overlay.manual_url || overlayData?.manual_url || "",
+          manual_title: overlay.manual_title || overlayData?.manual_title || "Installation guide",
+          type: overlay.type || "model_specific",
+          x: overlay.x,
+          y: overlay.y
+        }))
+      ]
+    : [];
 
   function imageSrc(url) {
     if (!url) return "";
@@ -2184,26 +2206,40 @@ function App() {
               </section>
             )}
 
-            {installMode === "specific" &&
-              overlayData?.overlays?.length > 0 && (
+            {installMode === "specific" && overlayData?.manual_url && (
               <section className="overlayPanel">
                 <h3>MODEL-SPECIFIC NOTES</h3>
+                <p>
+                  <strong>{overlayData.brand}</strong>{" "}
+                  {overlayData.model ? `— ${overlayData.model}` : ""}
+                </p>
+                <p>
+                  <a
+                    href={overlayData.manual_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open manufacturer installation guide
+                  </a>
+                </p>
 
-                <div className="overlayGrid">
-                  {overlayData.overlays.map((overlay, index) => (
-                    <div
-                      key={`${overlay.title}-${index}`}
-                      className={`overlayCard overlay-${overlay.type}`}
-                    >
-                      <strong>{overlay.title}</strong>
-                      <p>{overlay.content}</p>
+                {overlayData?.overlays?.length > 0 && (
+                  <div className="overlayGrid">
+                    {overlayData.overlays.map((overlay, index) => (
+                      <div
+                        key={`${overlay.title}-${index}`}
+                        className={`overlayCard overlay-${overlay.type}`}
+                      >
+                        <strong>Step {overlay.step_id}: {overlay.title}</strong>
+                        <p>{overlay.content}</p>
 
-                      <small>
-                        {overlay.type.replace("_", " ").toUpperCase()}
-                      </small>
-                    </div>
-                  ))}
-                </div>
+                        <small>
+                          {String(overlay.type || "model_specific").replace("_", " ").toUpperCase()}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
             )}
 
@@ -2220,10 +2256,15 @@ function App() {
                 <div className="illustrationLabel">{currentStep.imageLabel}</div>
 
                 {installMode === "specific" &&
-                  currentStep.hotspots.map((hotspot, index) => (
+                  visibleHotspots.map((hotspot, index) => (
                   <button
                     key={hotspot.id}
                     className={`hotspot hotspot${index + 1}`}
+                    style={
+                      hotspot.x && hotspot.y
+                        ? { left: `${hotspot.x}%`, top: `${hotspot.y}%` }
+                        : undefined
+                    }
                     onClick={() => setActiveHotspot(hotspot)}
                     aria-label={hotspot.label}
                   >
@@ -2248,6 +2289,17 @@ function App() {
                 </button>
                 <h3>{activeHotspot.title}</h3>
                 <p>{activeHotspot.content}</p>
+                {activeHotspot.manual_url && (
+                  <p>
+                    <a
+                      href={activeHotspot.manual_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open source manual
+                    </a>
+                  </p>
+                )}
                 <small>Source type: manufacturer installation guide</small>
               </section>
             )}
