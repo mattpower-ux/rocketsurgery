@@ -390,6 +390,28 @@ def load_overlay_package(brand: str, model: str) -> dict | None:
         return None
 
 
+def load_product_page_product(category: str, brand: str, model: str) -> dict | None:
+    """Load a Catalog Intelligence v2 product.json package if it exists.
+
+    Product packages are stored independently from walkthroughs and can be
+    reused by any compatible walkthrough in the same category.
+    """
+    path = product_package_root(category or "toilet", brand, model) / "product.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def package_asset_or_blank(product: dict | None, key: str) -> str:
+    if not product:
+        return ""
+    value = product.get(key, "")
+    return value if isinstance(value, str) else ""
+
+
 def get_toilet_catalog_pipeline_status(brand: str, model: str) -> dict:
     manual = find_toilet_manual(brand, model)
     local_image = find_existing_cached_product_image(brand, model)
@@ -519,26 +541,33 @@ TOILET_PRODUCT_CATALOG = {
         }
     },
     "Niagara": {
+        "Original Stealth": {
+            "manual_title": "Niagara Original Stealth Installation Manual",
+            "manual_url": "",
+            "product_image_url": "",
+            "product_page_url": "https://niagaracorp.com/products/original-stealth-handle-round/",
+            "models": ["Original Stealth", "Stealth", "EcoLogic", "Liberty"]
+        },
         "Stealth": {
             "manual_title": "Niagara Stealth Toilet Manual",
             "manual_url": "https://niagaracorp.com/wp-content/uploads/2016/10/Stealth_Manual_Final.pdf",
-            "product_image_url": "https://niagaracorp.com/wp-content/uploads/2020/04/Stealth-Toilet.png",
-            "product_page_url": "https://niagaracorp.com/products/stealth-toilet/",
-            "models": ["Stealth", "EcoLogic", "Liberty"]
+            "product_image_url": "",
+            "product_page_url": "https://niagaracorp.com/products/original-stealth-handle-round/",
+            "models": ["Original Stealth", "Stealth", "EcoLogic", "Liberty"]
         },
         "EcoLogic": {
             "manual_title": "Niagara EcoLogic / Toilet Manual",
             "manual_url": "https://niagaracorp.com/wp-content/uploads/2016/10/Stealth_Manual_Final.pdf",
             "product_image_url": "https://niagaracorp.com/wp-content/uploads/2020/04/EcoLogic-Toilet.png",
             "product_page_url": "https://niagaracorp.com/products/",
-            "models": ["Stealth", "EcoLogic", "Liberty"]
+            "models": ["Original Stealth", "Stealth", "EcoLogic", "Liberty"]
         },
         "Liberty": {
             "manual_title": "Niagara Product Resources",
             "manual_url": "https://pro.niagaracorp.com/resources/",
             "product_image_url": "https://niagaracorp.com/wp-content/uploads/2020/04/Liberty-Toilet.png",
             "product_page_url": "https://niagaracorp.com/products/",
-            "models": ["Stealth", "EcoLogic", "Liberty"]
+            "models": ["Original Stealth", "Stealth", "EcoLogic", "Liberty"]
         }
     },
     "American Standard": {
@@ -621,8 +650,18 @@ def toilet_model_overlay(request: OverlayRequest):
             "overlays": []
         }
 
-    image_cache = cache_product_image(brand, model, manual.get("product_image_url", ""))
-    local_manual_url = find_existing_cached_manual(brand, model)
+    v2_product = load_product_page_product("toilet", brand, model)
+
+    if v2_product:
+        image_cache = {
+            "status": "cached" if v2_product.get("photo_url") else "missing",
+            "local_url": v2_product.get("photo_url", ""),
+            "error": "" if v2_product.get("photo_url") else "No cached photo in product package."
+        }
+        local_manual_url = v2_product.get("manual_url", "")
+    else:
+        image_cache = cache_product_image(brand, model, manual.get("product_image_url", ""))
+        local_manual_url = find_existing_cached_manual(brand, model)
 
     overlays = [
         {
@@ -703,14 +742,14 @@ def toilet_model_overlay(request: OverlayRequest):
         "brand": brand,
         "model": model,
         "manual_title": manual.get("manual_title", "Manufacturer installation guide"),
-        "manual_url": manual.get("manual_url", ""),
+        "manual_url": local_manual_url or manual.get("manual_url", ""),
         "local_manual_url": local_manual_url,
         "product_image_url": image_cache.get("local_url", ""),
         "local_product_image_url": image_cache.get("local_url", ""),
-        "remote_product_image_url": manual.get("product_image_url", ""),
+        "remote_product_image_url": (v2_product or {}).get("remote_photo_url", "") or manual.get("product_image_url", ""),
         "product_image_status": image_cache.get("status", ""),
         "product_image_error": image_cache.get("error", ""),
-        "product_page_url": manual.get("product_page_url", ""),
+        "product_page_url": (v2_product or {}).get("product_page_url", "") or manual.get("product_page_url", ""),
         "installation_tips": overlays,
         "overlays": overlays
     }
@@ -1011,12 +1050,29 @@ def build_product_page_package(category: str, brand: str, model: str, product_pa
     (root / "discovery.json").write_text(json.dumps(discovery, indent=2), encoding="utf-8")
     (root / "product.json").write_text(json.dumps(product, indent=2), encoding="utf-8")
 
+    # Phase 1 also writes a starter overlay package so the selected model can
+    # immediately drive model-specific briefing tips and hotspot popouts. Later
+    # versions will replace this with AI-assisted PDF comparison + admin approval.
+    overlay_payload = toilet_model_overlay(
+        OverlayRequest(query="install a toilet", category="toilet", brand=brand, model=model)
+    )
+    (root / "overlays.json").write_text(json.dumps({
+        "category": category,
+        "brand": brand,
+        "model": model,
+        "product_page_url": product_page_url,
+        "installation_tips": overlay_payload.get("installation_tips", []),
+        "overlays": overlay_payload.get("overlays", []),
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }, indent=2), encoding="utf-8")
+
     return {
         "status": discovery.get("status", "unknown"),
         "product": product,
         "discovery": discovery,
         "product_json_url": public_catalog_file_url(root / "product.json"),
         "discovery_json_url": public_catalog_file_url(root / "discovery.json"),
+        "overlays_json_url": public_catalog_file_url(root / "overlays.json"),
     }
 
 
@@ -1028,6 +1084,35 @@ def post_catalog_build_product_page_package(request: ProductPagePackageRequest):
         model=request.model,
         product_page_url=request.product_page_url,
     )
+
+
+@app.get("/catalog/products")
+def get_catalog_products(category: str = "toilet"):
+    """Return product packages compatible with a category/walkthrough family.
+
+    This is the bridge between generic walkthroughs and product packages.
+    The walkthrough asks for category=toilet and receives all toilet models
+    that have either starter catalog records or built v2 product packages.
+    """
+    products = []
+
+    if catalog_v2_category_slug(category) == "toilets":
+        for brand, models in TOILET_PRODUCT_CATALOG.items():
+            for model, record in models.items():
+                v2_product = load_product_page_product("toilet", brand, model)
+                products.append({
+                    "brand": brand,
+                    "model": model,
+                    "category": "toilet",
+                    "product_page_url": (v2_product or {}).get("product_page_url", "") or record.get("product_page_url", ""),
+                    "photo_url": (v2_product or {}).get("photo_url", ""),
+                    "manual_url": (v2_product or {}).get("manual_url", "") or find_existing_cached_manual(brand, model) or record.get("manual_url", ""),
+                    "confidence": (v2_product or {}).get("confidence", "STARTER"),
+                    "source": "product_package" if v2_product else "starter_catalog",
+                    "compatible_walkthroughs": ["install-toilet", "replace-toilet"]
+                })
+
+    return {"status": "loaded", "category": category, "products": products}
 
 @app.get("/admin/catalog/toilet-status")
 def get_catalog_toilet_status():
