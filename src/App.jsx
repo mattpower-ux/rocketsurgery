@@ -1909,34 +1909,8 @@ function App() {
 
             {walkthrough.estimated_labor_label && (
               <section className="laborEstimateCard">
-                <div className="laborEstimateIcon">🛠</div>
-                <div>
-                  <strong>{walkthrough.estimated_labor_label}</strong>
-                  <span>Generic estimate before model-specific adjustments.</span>
-                </div>
-              </section>
-            )}
-
-            {installMode === "specific" &&
-              overlayData?.overlays?.length > 0 && (
-              <section className="overlayPanel">
-                <h3>MODEL-SPECIFIC NOTES</h3>
-
-                <div className="overlayGrid">
-                  {overlayData.overlays.map((overlay, index) => (
-                    <div
-                      key={`${overlay.title}-${index}`}
-                      className={`overlayCard overlay-${overlay.type}`}
-                    >
-                      <strong>{overlay.title}</strong>
-                      <p>{overlay.content}</p>
-
-                      <small>
-                        {overlay.type.replace("_", " ").toUpperCase()}
-                      </small>
-                    </div>
-                  ))}
-                </div>
+                <strong>{walkthrough.estimated_labor_label}</strong>
+                <span> (Generic)</span>
               </section>
             )}
 
