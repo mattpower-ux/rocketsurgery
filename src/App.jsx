@@ -9,14 +9,6 @@ function displayText(value, max = 140) {
   return `${text.slice(0, max).trim()}…`;
 }
 
-function apiAssetUrl(value) {
-  const url = String(value || "").trim();
-  if (!url) return "";
-  if (url.startsWith("http")) return url;
-  if (url.startsWith("/")) return `${API_URL}${url}`;
-  return url;
-}
-
 function buildSpecificQuery(query, brand, model) {
   const baseQuery = query.trim() || "installation walkthrough";
 
@@ -69,7 +61,6 @@ function App() {
   const [overlayData, setOverlayData] = useState(null);
   const [specificQuery, setSpecificQuery] = useState("");
   const [tipsExpanded, setTipsExpanded] = useState(false);
-  const [modelImageFailed, setModelImageFailed] = useState(false);
 
   const [imageRegistry, setImageRegistry] = useState(null);
   const [promoteFilename, setPromoteFilename] = useState("");
@@ -82,6 +73,8 @@ function App() {
   const [walkthroughList, setWalkthroughList] = useState([]);
   const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
   const [repairCorrections, setRepairCorrections] = useState({});
+  const [catalogPipelineStatus, setCatalogPipelineStatus] = useState(null);
+  const [catalogPipelineRunning, setCatalogPipelineRunning] = useState("");
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
@@ -90,11 +83,6 @@ function App() {
   );
   const availableModels = selectedBrandRecord?.models || [];
   const currentModelTips = overlayData?.installation_tips || overlayData?.overlays || [];
-  const modelImageUrl = apiAssetUrl(overlayData?.local_product_image_url || overlayData?.product_image_url || "");
-
-  useEffect(() => {
-    setModelImageFailed(false);
-  }, [overlayData?.local_product_image_url, overlayData?.product_image_url, selectedBrand, selectedModel]);
 
   async function fetchProductOptions(finalQuery) {
     const response = await fetch(
@@ -164,12 +152,10 @@ function App() {
       const data = await response.json();
 
       setOverlayData(data);
-      setModelImageFailed(false);
 
     } catch (error) {
       console.error(error);
       setOverlayData(null);
-      setModelImageFailed(false);
     setSpecificQuery("");
     setTipsExpanded(false);
     }
@@ -225,7 +211,6 @@ function App() {
     setInstallMode("specific");
     setSpecificQuery(finalQuery);
     setTipsExpanded(false);
-    setModelImageFailed(false);
     setLoading(true);
 
     try {
@@ -264,7 +249,6 @@ function App() {
     setComplete(false);
     setStepIndex(0);
     setActiveHotspot(null);
-    setModelImageFailed(false);
   }
 
   function openAdmin() {
@@ -277,6 +261,7 @@ function App() {
     loadAdminStatus();
     loadBulkJobList();
     loadAdminWalkthroughs();
+    loadCatalogPipelineStatus();
   }
 
   function nextStep() {
@@ -343,6 +328,71 @@ function App() {
       setAdminLoading(false);
     }
   }
+
+
+  async function loadCatalogPipelineStatus() {
+    setAdminMessage("Loading catalog pipeline status...");
+
+    try {
+      const response = await fetch(`${API_URL}/admin/catalog/toilet-status`, {
+        cache: "no-store"
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.status || "Could not load catalog pipeline status.");
+      }
+
+      setCatalogPipelineStatus(data);
+      setAdminMessage(`Catalog pipelines loaded: ${(data.items || []).length} models.`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Catalog pipeline status failed: ${error.message}`);
+    }
+  }
+
+  async function runCatalogPipeline(item, pipeline = "all") {
+    const key = `${item.brand}-${item.model}-${pipeline}`;
+    setCatalogPipelineRunning(key);
+    setAdminMessage(`Running ${pipeline} pipeline for ${item.brand} ${item.model}...`);
+
+    const endpoint = pipeline === "photo"
+      ? "/admin/catalog/fetch-product-photo"
+      : pipeline === "manual"
+        ? "/admin/catalog/fetch-install-manual"
+        : pipeline === "overlay"
+          ? "/admin/catalog/build-overlay-package"
+          : "/admin/catalog/run-model-pipelines";
+
+    try {
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          category: "toilet",
+          brand: item.brand,
+          model: item.model
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.status || "Pipeline request failed.");
+      }
+
+      setAdminMessage(`${item.brand} ${item.model}: ${pipeline} pipeline finished with status ${data.status}.`);
+      await loadCatalogPipelineStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`${item.brand} ${item.model}: ${pipeline} pipeline failed — ${error.message}`);
+    } finally {
+      setCatalogPipelineRunning("");
+    }
+  }
+
 
   async function submitBulkQueries() {
     setAdminLoading(true);
@@ -1023,6 +1073,108 @@ function App() {
             )}
           </section>
 
+
+          <section className="adminCard">
+            <div className="adminCardHeader">
+              <h2>Catalog Intelligence Pipelines</h2>
+              <button
+                className="secondaryButton"
+                onClick={loadCatalogPipelineStatus}
+                disabled={adminLoading || !!catalogPipelineRunning}
+              >
+                Refresh Catalog
+              </button>
+            </div>
+
+            <p className="adminHelp">
+              Three separate pipelines prepare model-specific walkthrough overlays: product photos, install manuals, and approved hotspot/tip packages.
+            </p>
+
+            {catalogPipelineStatus?.items?.length ? (
+              <div style={{ display: "grid", gap: "12px" }}>
+                {catalogPipelineStatus.items.map((item) => {
+                  const baseKey = `${item.brand}-${item.model}`;
+                  const photoOk = item.photo?.status === "cached";
+                  const manualOk = item.manual?.status === "cached";
+                  const overlayOk = item.overlay?.status === "built";
+
+                  return (
+                    <div
+                      key={baseKey}
+                      style={{
+                        border: "1px solid rgba(0,0,0,0.14)",
+                        borderRadius: "16px",
+                        padding: "14px",
+                        background: "#fff"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                        <div>
+                          <h3 style={{ margin: 0 }}>{item.brand} {item.model}</h3>
+                          <p className="adminHelp" style={{ margin: "6px 0 0" }}>
+                            Confidence: <strong>{item.confidence}</strong> · Photo: {photoOk ? "Cached" : "Missing"} · Manual: {manualOk ? "Cached" : item.manual?.status || "Missing"} · Overlays: {overlayOk ? `${item.overlay.hotspot_count} hotspots` : "Not built"}
+                          </p>
+                        </div>
+
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                          <button
+                            className="secondaryButton"
+                            onClick={() => runCatalogPipeline(item, "photo")}
+                            disabled={!!catalogPipelineRunning}
+                          >
+                            {catalogPipelineRunning === `${baseKey}-photo` ? "Fetching..." : "Fetch Photo"}
+                          </button>
+
+                          <button
+                            className="secondaryButton"
+                            onClick={() => runCatalogPipeline(item, "manual")}
+                            disabled={!!catalogPipelineRunning}
+                          >
+                            {catalogPipelineRunning === `${baseKey}-manual` ? "Fetching..." : "Fetch Manual"}
+                          </button>
+
+                          <button
+                            className="secondaryButton"
+                            onClick={() => runCatalogPipeline(item, "overlay")}
+                            disabled={!!catalogPipelineRunning}
+                          >
+                            {catalogPipelineRunning === `${baseKey}-overlay` ? "Building..." : "Build Overlays"}
+                          </button>
+
+                          <button
+                            className="startButton"
+                            onClick={() => runCatalogPipeline(item, "all")}
+                            disabled={!!catalogPipelineRunning}
+                          >
+                            {catalogPipelineRunning === `${baseKey}-all` ? "Running..." : "Run All"}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "10px", fontSize: "13px" }}>
+                        {item.photo?.local_url && (
+                          <a href={`${API_URL}${item.photo.local_url}`} target="_blank" rel="noreferrer">View cached photo</a>
+                        )}
+                        {item.manual?.local_url && (
+                          <a href={`${API_URL}${item.manual.local_url}`} target="_blank" rel="noreferrer">View cached manual</a>
+                        )}
+                        {item.overlay?.package_url && (
+                          <a href={`${API_URL}${item.overlay.package_url}`} target="_blank" rel="noreferrer">View overlay JSON</a>
+                        )}
+                        {item.photo?.product_page_url && (
+                          <a href={item.photo.product_page_url} target="_blank" rel="noreferrer">Product page</a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="adminHelp">Click Refresh Catalog to load the starter toilet model pipeline status.</p>
+            )}
+          </section>
+
+
           <section className="adminCard">
             <div className="adminCardHeader">
               <h2>Walkthrough Queue Manager</h2>
@@ -1696,63 +1848,17 @@ function App() {
           <h1>{selectedBrand} {selectedModel}</h1>
 
           <section className="brandModelPanel modelBriefingCard" style={{ display: "grid", gridTemplateColumns: "minmax(220px, 360px) 1fr", gap: "24px", alignItems: "start" }}>
-            <div
-              className="modelPhotoFrame"
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                minHeight: "220px",
-                background: "#f6f7f8",
-                borderRadius: "18px",
-                overflow: "hidden",
-                padding: "18px"
-              }}
-            >
-              {modelImageUrl && !modelImageFailed ? (
+            <div className="modelPhotoFrame" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "220px", background: "#f6f7f8", borderRadius: "18px", overflow: "hidden" }}>
+              {overlayData?.product_image_url ? (
                 <img
                   className="modelProductImage"
                   style={{ maxWidth: "100%", maxHeight: "260px", objectFit: "contain" }}
-                  src={modelImageUrl}
+                  src={overlayData.product_image_url}
                   alt={`${selectedBrand} ${selectedModel}`}
-                  onError={() => setModelImageFailed(true)}
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
               ) : (
-                <div
-                  className="modelPhotoFallback"
-                  style={{
-                    width: "100%",
-                    minHeight: "180px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    gap: "10px",
-                    textAlign: "center",
-                    color: "#4b5563"
-                  }}
-                >
-                  <strong>Product image not cached yet</strong>
-                  <span style={{ fontSize: "14px" }}>
-                    The model-specific notes and installation PDF are still available.
-                  </span>
-                  {overlayData?.product_image_status && overlayData.product_image_status !== "missing" && (
-                    <span style={{ fontSize: "12px", color: "#6b7280" }}>
-                      Image status: {overlayData.product_image_status}
-                    </span>
-                  )}
-                  {overlayData?.product_page_url && (
-                    <a
-                      className="secondaryButton"
-                      href={overlayData.product_page_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ marginTop: "8px", padding: "10px 14px", fontSize: "14px" }}
-                    >
-                      View Product Page
-                    </a>
-                  )}
-                </div>
+                <div className="modelPhotoFallback" style={{ padding: "40px", color: "#6b7280" }}>Product photo pending</div>
               )}
             </div>
 
