@@ -466,6 +466,48 @@ function App() {
   }
 
 
+  async function testBuildNiagaraStealth() {
+    setProductPackageRunning(true);
+    setProductPackageResult(null);
+    setAdminMessage("Running verbose Niagara Original Stealth test build...");
+
+    try {
+      const response = await fetch(`${API_URL}/admin/catalog/test-build-niagara-stealth`, {
+        method: "POST",
+        cache: "no-store"
+      });
+
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { status: "non_json_response", raw: text };
+      }
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || data.status || `HTTP ${response.status}`);
+      }
+
+      setProductPackageResult(data);
+      const imageCount = Array.isArray(data.image_candidates) ? data.image_candidates.length : 0;
+      const pdfCount = Array.isArray(data.pdf_candidates) ? data.pdf_candidates.length : 0;
+      const imageFiles = Array.isArray(data.files?.images) ? data.files.images.length : 0;
+      const manualFiles = Array.isArray(data.files?.manuals) ? data.files.manuals.length : 0;
+      setAdminMessage(
+        `Niagara test build: ${data.status}. Found ${imageCount} image candidates, ${pdfCount} PDF candidates; wrote ${imageFiles} image file(s), ${manualFiles} manual file(s).`
+      );
+      await loadCatalogPipelineStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Niagara test build failed: ${error.message}`);
+      setProductPackageResult({ status: "failed", error: error.message });
+    } finally {
+      setProductPackageRunning(false);
+    }
+  }
+
+
   async function submitBulkQueries() {
     setAdminLoading(true);
     setAdminMessage("");
@@ -1223,6 +1265,14 @@ function App() {
                   {productPackageRunning ? "Building Package..." : "Build Product Package"}
                 </button>
 
+                <button
+                  className="secondaryButton"
+                  onClick={testBuildNiagaraStealth}
+                  disabled={productPackageRunning}
+                >
+                  {productPackageRunning ? "Working..." : "Test Build Niagara Stealth"}
+                </button>
+
                 {productPackageResult?.product?.confidence && (
                   <span className="adminHelp">
                     Confidence: <strong>{productPackageResult.product.confidence}</strong>
@@ -1250,6 +1300,28 @@ function App() {
                   )}
                   {productPackageResult.error && (
                     <p className="adminError">{productPackageResult.error}</p>
+                  )}
+                  {Array.isArray(productPackageResult.image_candidates) && (
+                    <p className="adminHelp">
+                      Image candidates: {productPackageResult.image_candidates.length} · PDF candidates: {productPackageResult.pdf_candidates?.length || 0}
+                    </p>
+                  )}
+                  {productPackageResult.files?.product_json?.exists && (
+                    <p className="adminHelp">
+                      Files written: product.json ✓ · discovery.json {productPackageResult.files.discovery_json?.exists ? "✓" : "✕"} · overlays.json {productPackageResult.files.overlays_json?.exists ? "✓" : "✕"}
+                    </p>
+                  )}
+                  {Array.isArray(productPackageResult.files?.images) && productPackageResult.files.images.length > 0 && (
+                    <p className="adminHelp">
+                      Cached image: <a href={`${API_URL}${productPackageResult.files.images[0].url}`} target="_blank" rel="noreferrer">view</a>
+                    </p>
+                  )}
+                  {Array.isArray(productPackageResult.errors) && productPackageResult.errors.length > 0 && (
+                    <div className="adminError">
+                      {productPackageResult.errors.map((item, index) => (
+                        <div key={index}>{item}</div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
