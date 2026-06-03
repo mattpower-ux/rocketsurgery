@@ -237,6 +237,10 @@ class RevertStepImageRequest(BaseModel):
     step_id: int
 
 
+class SaveWalkthroughRequest(BaseModel):
+    walkthrough: dict
+
+
 DEMO_WALKTHROUGH_ID = "james-hardie-lap-siding-nailing-schedule"
 
 DEMO_WALKTHROUGH = {
@@ -597,6 +601,40 @@ def post_revert_step_image(request: RevertStepImageRequest):
             return {"status": "nothing_to_revert", "step_id": request.step_id}
 
     return {"status": "step_not_found", "step_id": request.step_id}
+
+
+@app.post("/admin/save-walkthrough")
+def post_save_admin_walkthrough(request: SaveWalkthroughRequest):
+    manifest = request.walkthrough or {}
+    walkthrough_id = manifest.get("walkthrough_id") or slugify(manifest.get("title", "edited-walkthrough"))
+
+    if not walkthrough_id:
+        return {"status": "error", "error": "Missing walkthrough_id"}
+
+    manifest["walkthrough_id"] = walkthrough_id
+
+    steps = manifest.get("steps", []) or []
+    normalized_steps = []
+
+    for index, step in enumerate(steps, start=1):
+        if not isinstance(step, dict):
+            continue
+
+        step["id"] = index
+        step["imageLabel"] = step.get("imageLabel") or f"Step {index}"
+        step["instruction"] = step.get("instruction", "")
+        step["detail"] = step.get("detail", "")
+        normalized_steps.append(step)
+
+    manifest["steps"] = normalized_steps
+    save_walkthrough(walkthrough_id, manifest)
+
+    return {
+        "status": "saved",
+        "walkthrough_id": walkthrough_id,
+        "step_count": len(normalized_steps),
+        "walkthrough": manifest
+    }
 
 
 @app.post("/walkthrough/overlay")
