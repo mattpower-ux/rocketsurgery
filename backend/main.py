@@ -150,8 +150,9 @@ except ImportError:
 import time
 import re
 import urllib.request
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from fastapi import Request
+from html import unescape
 
 
 app = FastAPI(title="RocketSurgery API")
@@ -160,9 +161,11 @@ Path("/data/rocketsurgery/images").mkdir(parents=True, exist_ok=True)
 CATALOG_IMAGES_DIR = Path("/data/rocketsurgery/catalog-images")
 CATALOG_MANUALS_DIR = Path("/data/rocketsurgery/catalog-manuals")
 CATALOG_PACKAGES_DIR = Path("/data/rocketsurgery/catalog-packages")
+BASE_CATALOG_DIR = Path("/data/rocketsurgery/catalog")
 CATALOG_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 CATALOG_MANUALS_DIR.mkdir(parents=True, exist_ok=True)
 CATALOG_PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
+BASE_CATALOG_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount(
     "/static/images",
@@ -186,6 +189,12 @@ app.mount(
     "/static/catalog-packages",
     StaticFiles(directory=str(CATALOG_PACKAGES_DIR)),
     name="catalog-packages"
+)
+
+app.mount(
+    "/static/catalog",
+    StaticFiles(directory=str(BASE_CATALOG_DIR)),
+    name="catalog-root"
 )
 
 app.mount(
@@ -269,6 +278,14 @@ class CatalogPipelineRequest(BaseModel):
     brand: str
     model: str
     category: str = "toilet"
+
+
+class ProductPagePackageRequest(BaseModel):
+    brand: str
+    model: str
+    category: str = "toilet"
+    product_page_url: str
+
 
 
 def catalog_slug(value: str) -> str:
@@ -756,6 +773,261 @@ DEMO_WALKTHROUGH = {
 
 
 
+
+
+
+def catalog_v2_category_slug(category: str) -> str:
+    value = (category or "toilets").strip().lower()
+    if value in {"toilet", "toilets"}:
+        return "toilets"
+    return catalog_slug(value)
+
+
+def product_package_root(category: str, brand: str, model: str) -> Path:
+    return BASE_CATALOG_DIR / catalog_v2_category_slug(category) / catalog_slug(brand) / catalog_slug(model)
+
+
+def public_catalog_file_url(path: Path) -> str:
+    try:
+        relative = path.relative_to(BASE_CATALOG_DIR)
+    except ValueError:
+        return ""
+    return "/static/catalog/" + str(relative).replace("\\", "/")
+
+
+def fetch_text_url(url: str, timeout: int = 20) -> str:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 RocketSurgeryCatalogBot/2.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read(5_000_000)
+        charset = response.headers.get_content_charset() or "utf-8"
+    return raw.decode(charset, errors="replace")
+
+
+def discover_image_candidates(html: str, base_url: str) -> list[str]:
+    candidates = []
+
+    # Prefer OpenGraph/Twitter hero images first.
+    for pattern in [
+        r'<meta[^>]+property=["\\\']og:image["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
+        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+property=["\\\']og:image["\\\']',
+        r'<meta[^>]+name=["\\\']twitter:image["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
+        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+name=["\\\']twitter:image["\\\']',
+    ]:
+        for match in re.findall(pattern, html, flags=re.IGNORECASE):
+            candidates.append(match)
+
+    # Then scan image tags and srcsets.
+    for match in re.findall(r'<img[^>]+(?:src|data-src)=["\\\']([^"\\\']+)["\\\']', html, flags=re.IGNORECASE):
+        candidates.append(match)
+
+    for srcset in re.findall(r'(?:srcset|data-srcset)=["\\\']([^"\\\']+)["\\\']', html, flags=re.IGNORECASE):
+        for part in srcset.split(','):
+            url_part = part.strip().split(' ')[0]
+            if url_part:
+                candidates.append(url_part)
+
+    clean = []
+    seen = set()
+    for item in candidates:
+        url = unescape(item.strip())
+        if not url or url.startswith('data:'):
+            continue
+        absolute = urljoin(base_url, url)
+        lower = absolute.lower()
+        if not any(ext in lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+            continue
+        # Avoid logos/icons when possible.
+        bad_terms = ['logo', 'icon', 'favicon', 'sprite', 'placeholder']
+        if any(term in lower for term in bad_terms):
+            continue
+        if absolute not in seen:
+            seen.add(absolute)
+            clean.append(absolute)
+    return clean[:20]
+
+
+def discover_pdf_candidates(html: str, base_url: str) -> list[dict]:
+    candidates = []
+    for href, text in re.findall(r'<a[^>]+href=["\\\']([^"\\\']+)["\\\'][^>]*>(.*?)</a>', html, flags=re.IGNORECASE | re.DOTALL):
+        clean_text = re.sub(r'<[^>]+>', ' ', text)
+        clean_text = re.sub(r'\s+', ' ', unescape(clean_text)).strip()
+        absolute = urljoin(base_url, unescape(href.strip()))
+        lower_blob = f"{absolute} {clean_text}".lower()
+        if '.pdf' in absolute.lower() or any(term in lower_blob for term in ['installation manual', 'install manual', 'installation guide', 'instructions', 'downloads']):
+            candidates.append({"url": absolute, "label": clean_text or Path(urlparse(absolute).path).name or "PDF"})
+
+    # Lightweight de-dupe.
+    seen = set()
+    result = []
+    for item in candidates:
+        if item['url'] in seen:
+            continue
+        seen.add(item['url'])
+        result.append(item)
+    return result[:20]
+
+
+def score_image_candidate(url: str, brand: str, model: str, product_page_url: str) -> int:
+    score = 0
+    lower = url.lower()
+    host = urlparse(url).netloc.lower()
+    page_host = urlparse(product_page_url).netloc.lower()
+    if page_host and (host == page_host or host.endswith('.' + page_host)):
+        score += 20
+    for term in [brand, model, 'toilet', 'product']:
+        term = (term or '').lower().replace(' ', '-')
+        if term and term in lower:
+            score += 10
+    if any(ext in lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+        score += 3
+    return score
+
+
+def score_pdf_candidate(item: dict) -> int:
+    blob = f"{item.get('url','')} {item.get('label','')}".lower()
+    score = 0
+    for term, points in [
+        ('installation manual', 30),
+        ('install manual', 25),
+        ('installation guide', 25),
+        ('install', 12),
+        ('instructions', 12),
+        ('.pdf', 10),
+        ('spec', 3),
+    ]:
+        if term in blob:
+            score += points
+    return score
+
+
+def cache_product_image_to_package(category: str, brand: str, model: str, image_url: str) -> dict:
+    if not image_url:
+        return {"status": "missing", "local_url": "", "remote_url": "", "error": "No candidate image URL discovered."}
+    try:
+        request = urllib.request.Request(
+            image_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 RocketSurgeryCatalogBot/2.0",
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Referer": image_url,
+            },
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            content_type = response.headers.get("Content-Type", "")
+            data = response.read(10_000_000)
+        if not data or len(data) < 256:
+            raise ValueError("Downloaded image was empty or too small.")
+        ext = content_type_extension(content_type, image_url)
+        out_dir = product_package_root(category, brand, model) / "images"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"hero{ext}"
+        out_path.write_bytes(data)
+        return {"status": "cached", "local_url": public_catalog_file_url(out_path), "remote_url": image_url, "error": ""}
+    except Exception as exc:
+        return {"status": "unavailable", "local_url": "", "remote_url": image_url, "error": str(exc)}
+
+
+def cache_manual_to_package(category: str, brand: str, model: str, manual_url: str) -> dict:
+    if not manual_url:
+        return {"status": "missing", "local_url": "", "remote_url": "", "error": "No candidate manual URL discovered."}
+    try:
+        request = urllib.request.Request(
+            manual_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 RocketSurgeryCatalogBot/2.0",
+                "Accept": "application/pdf,*/*;q=0.8",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=25) as response:
+            content_type = response.headers.get("Content-Type", "")
+            data = response.read(30_000_000)
+        if not data or len(data) < 1024:
+            raise ValueError("Downloaded manual was empty or too small.")
+        if "pdf" not in (content_type or "").lower() and not manual_url.lower().split('?', 1)[0].endswith('.pdf'):
+            raise ValueError(f"Manual candidate did not return a PDF. Content-Type: {content_type}")
+        out_dir = product_package_root(category, brand, model) / "manuals"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / "installation-manual.pdf"
+        out_path.write_bytes(data)
+        return {"status": "cached", "local_url": public_catalog_file_url(out_path), "remote_url": manual_url, "error": ""}
+    except Exception as exc:
+        return {"status": "unavailable", "local_url": "", "remote_url": manual_url, "error": str(exc)}
+
+
+def build_product_page_package(category: str, brand: str, model: str, product_page_url: str) -> dict:
+    category = category or "toilet"
+    root = product_package_root(category, brand, model)
+    root.mkdir(parents=True, exist_ok=True)
+
+    discovery = {
+        "category": category,
+        "brand": brand,
+        "model": model,
+        "product_page_url": product_page_url,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "images": [],
+        "pdfs": [],
+        "photo": {"status": "missing", "local_url": "", "remote_url": "", "error": ""},
+        "manual": {"status": "missing", "local_url": "", "remote_url": "", "error": ""},
+    }
+
+    try:
+        html = fetch_text_url(product_page_url)
+        images = discover_image_candidates(html, product_page_url)
+        pdfs = discover_pdf_candidates(html, product_page_url)
+        images = sorted(images, key=lambda u: score_image_candidate(u, brand, model, product_page_url), reverse=True)
+        pdfs = sorted(pdfs, key=score_pdf_candidate, reverse=True)
+        discovery["images"] = images
+        discovery["pdfs"] = pdfs
+
+        photo = cache_product_image_to_package(category, brand, model, images[0] if images else "")
+        manual = cache_manual_to_package(category, brand, model, pdfs[0]["url"] if pdfs else "")
+        discovery["photo"] = photo
+        discovery["manual"] = manual
+        discovery["status"] = "complete" if photo.get("local_url") or manual.get("local_url") else "discovered_no_assets_cached"
+    except Exception as exc:
+        discovery["status"] = "failed"
+        discovery["error"] = str(exc)
+
+    product = {
+        "category": category,
+        "brand": brand,
+        "model": model,
+        "product_page_url": product_page_url,
+        "photo_url": discovery.get("photo", {}).get("local_url", ""),
+        "manual_url": discovery.get("manual", {}).get("local_url", ""),
+        "remote_photo_url": discovery.get("photo", {}).get("remote_url", ""),
+        "remote_manual_url": discovery.get("manual", {}).get("remote_url", ""),
+        "confidence": "HIGH" if discovery.get("photo", {}).get("local_url") and discovery.get("manual", {}).get("local_url") else ("MEDIUM" if discovery.get("photo", {}).get("local_url") or discovery.get("manual", {}).get("local_url") else "LOW"),
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    (root / "discovery.json").write_text(json.dumps(discovery, indent=2), encoding="utf-8")
+    (root / "product.json").write_text(json.dumps(product, indent=2), encoding="utf-8")
+
+    return {
+        "status": discovery.get("status", "unknown"),
+        "product": product,
+        "discovery": discovery,
+        "product_json_url": public_catalog_file_url(root / "product.json"),
+        "discovery_json_url": public_catalog_file_url(root / "discovery.json"),
+    }
+
+
+@app.post("/admin/catalog/build-product-page-package")
+def post_catalog_build_product_page_package(request: ProductPagePackageRequest):
+    return build_product_page_package(
+        category=request.category,
+        brand=request.brand,
+        model=request.model,
+        product_page_url=request.product_page_url,
+    )
 
 @app.get("/admin/catalog/toilet-status")
 def get_catalog_toilet_status():
