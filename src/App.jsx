@@ -73,6 +73,9 @@ function App() {
   const [walkthroughList, setWalkthroughList] = useState([]);
   const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
   const [repairCorrections, setRepairCorrections] = useState({});
+  const [editorDraft, setEditorDraft] = useState(null);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [activeEditorStepId, setActiveEditorStepId] = useState(null);
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
@@ -80,6 +83,202 @@ function App() {
     (item) => item.brand === selectedBrand
   );
   const availableModels = selectedBrandRecord?.models || [];
+
+  function imageSrc(url) {
+    if (!url) return "";
+    return url.startsWith("http") ? url : `${API_URL}${url}`;
+  }
+
+  function prepareEditorDraft(manifest) {
+    if (!manifest) return null;
+    const clone = JSON.parse(JSON.stringify(manifest));
+    clone.steps = (clone.steps || []).map((step, index) => ({
+      ...step,
+      id: index + 1,
+      imageLabel: step.imageLabel || `Step ${index + 1}`,
+      instruction: step.instruction || "",
+      detail: step.detail || ""
+    }));
+    return clone;
+  }
+
+  function updateEditorField(path, value) {
+    if (!editorDraft) return;
+    const updated = JSON.parse(JSON.stringify(editorDraft));
+
+    if (path === "title") updated.title = value;
+    if (path === "disclaimer") updated.disclaimer = value;
+
+    setEditorDraft(updated);
+    setEditorDirty(true);
+  }
+
+  function updateEditorStep(stepId, field, value) {
+    if (!editorDraft) return;
+    const updated = JSON.parse(JSON.stringify(editorDraft));
+    updated.steps = (updated.steps || []).map((step) => (
+      Number(step.id) === Number(stepId) ? { ...step, [field]: value } : step
+    ));
+    setEditorDraft(updated);
+    setEditorDirty(true);
+  }
+
+  function moveEditorStep(stepId, direction) {
+    if (!editorDraft) return;
+    const updated = JSON.parse(JSON.stringify(editorDraft));
+    const steps = [...(updated.steps || [])];
+    const index = steps.findIndex((step) => Number(step.id) === Number(stepId));
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= steps.length) return;
+
+    const [moved] = steps.splice(index, 1);
+    steps.splice(nextIndex, 0, moved);
+    updated.steps = steps.map((step, idx) => ({
+      ...step,
+      id: idx + 1,
+      imageLabel: step.imageLabel?.replace(/^Step\s+\d+\s*:/i, `Step ${idx + 1}:`) || `Step ${idx + 1}`
+    }));
+
+    setEditorDraft(updated);
+    setActiveEditorStepId(nextIndex + 1);
+    setEditorDirty(true);
+  }
+
+  function deleteEditorStep(stepId) {
+    if (!editorDraft) return;
+    const updated = JSON.parse(JSON.stringify(editorDraft));
+    updated.steps = (updated.steps || [])
+      .filter((step) => Number(step.id) !== Number(stepId))
+      .map((step, idx) => ({ ...step, id: idx + 1 }));
+    setEditorDraft(updated);
+    setEditorDirty(true);
+  }
+
+  function duplicateEditorStep(stepId) {
+    if (!editorDraft) return;
+    const updated = JSON.parse(JSON.stringify(editorDraft));
+    const steps = [...(updated.steps || [])];
+    const index = steps.findIndex((step) => Number(step.id) === Number(stepId));
+    if (index < 0) return;
+    const copy = JSON.parse(JSON.stringify(steps[index]));
+    copy.imageLabel = `${copy.imageLabel || `Step ${copy.id}`} copy`;
+    steps.splice(index + 1, 0, copy);
+    updated.steps = steps.map((step, idx) => ({ ...step, id: idx + 1 }));
+    setEditorDraft(updated);
+    setEditorDirty(true);
+  }
+
+  async function saveEditedWalkthrough() {
+    if (!editorDraft) return;
+    setAdminLoading(true);
+    setAdminMessage("Saving edited walkthrough...");
+
+    try {
+      const response = await fetch(`${API_URL}/admin/save-walkthrough`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ walkthrough: editorDraft })
+      });
+
+      const text = await response.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+      if (!response.ok || data.status !== "saved") {
+        setAdminMessage(`Save failed: ${response.status} ${data.error || data.status || data.raw || "Unknown error"}`);
+        return;
+      }
+
+      setSelectedAdminWalkthrough(data.walkthrough || editorDraft);
+      setEditorDraft(prepareEditorDraft(data.walkthrough || editorDraft));
+      setEditorDirty(false);
+      setAdminMessage("Walkthrough saved.");
+      await loadAdminWalkthroughs();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Save failed: ${error.message}`);
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+  async function fetchProductOptions(finalQuery) {
+    const response = await fetch(
+      `${API_URL}/product-options?query=${encodeURIComponent(finalQuery)}`
+    );
+
+    if (!response.ok) {
+      throw new Error("Could not load product options.");
+    }
+
+    return response.json();
+  }
+
+  async function fetchWalkthrough(finalQuery) {
+    setLoading(true);
+    setActiveHotspot(null);
+    setComplete(false);
+    setStepIndex(0);
+
+    try {
+      const response = await fetch(`${API_URL}/walkthrough`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          query: finalQuery || "James Hardie siding nailing schedule"
+        })
+      });
+
+      const data = await response.json();
+
+      setWalkthrough(data);
+
+      await fetchOverlay(finalQuery);
+
+      setStarted(true);
+      setClarifying(false);
+      setScreen("home");
+    } catch (error) {
+      alert("Could not load walkthrough from API.");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+
+  async function fetchOverlay(finalQuery) {
+    try {
+      const response = await fetch(
+        `${API_URL}/walkthrough/overlay`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            query: finalQuery,
+            category: productOptions?.category || "",
+            brand: selectedBrand,
+            model: selectedModel
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      setOverlayData(data);
+
+    } catch (error) {
+      console.error(error);
+      setOverlayData(null);
+    }
+  }
+
+
 
   async function fetchProductOptions(finalQuery) {
     const response = await fetch(
@@ -724,6 +923,10 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        setEditorDraft(prepareEditorDraft(data.walkthrough));
+        setEditorDirty(false);
+        setActiveEditorStepId(null);
+        setRepairCorrections({});
         setAdminMessage(`Loaded ${data.walkthrough.title || walkthroughId}.`);
       } else {
         setAdminMessage("Walkthrough not found.");
@@ -761,6 +964,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        setEditorDraft(prepareEditorDraft(data.walkthrough));
+        setEditorDirty(false);
       }
 
       setAdminMessage(data.status === "pending_review" ? "New image generated for review." : `Image regeneration: ${data.status}`);
@@ -796,6 +1001,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        setEditorDraft(prepareEditorDraft(data.walkthrough));
+        setEditorDirty(false);
       }
 
       setAdminMessage(`Image ${data.status}.`);
@@ -832,6 +1039,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        setEditorDraft(prepareEditorDraft(data.walkthrough));
+        setEditorDirty(false);
       }
 
       setAdminMessage(`Image ${data.status}.`);
@@ -1269,27 +1478,37 @@ function App() {
 
           <section className="adminCard">
             <div className="adminCardHeader">
-              <h2>Walkthrough Repair Studio</h2>
+              <h2>Walkthrough WYSIWYG Editor</h2>
 
-              <button
-                className="secondaryButton"
-                onClick={loadAdminWalkthroughs}
-                disabled={adminLoading}
-              >
-                Refresh Walkthroughs
-              </button>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  className="secondaryButton"
+                  onClick={loadAdminWalkthroughs}
+                  disabled={adminLoading}
+                >
+                  Refresh Walkthroughs
+                </button>
+
+                <button
+                  className="doneButton"
+                  onClick={saveEditedWalkthrough}
+                  disabled={adminLoading || !editorDraft || !editorDirty}
+                >
+                  {adminLoading ? "Saving..." : editorDirty ? "Save Edited Version" : "Saved"}
+                </button>
+              </div>
             </div>
 
             <p className="adminHelp">
-              Open a saved walkthrough, cherry-pick a weak step image, describe the correction, regenerate it, then accept or discard the replacement.
+              Select a saved walkthrough, review every image at once, move steps up or down, rewrite captions/instructions, regenerate weak images, then save the edited manifest.
             </p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 320px) 1fr", gap: "16px" }}>
-              <div style={{ display: "grid", gap: "8px", alignContent: "start", maxHeight: "680px", overflow: "auto" }}>
-                {(walkthroughList || []).slice(0, 100).map((item) => (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 300px) 1fr", gap: "16px" }}>
+              <div style={{ display: "grid", gap: "8px", alignContent: "start", maxHeight: "760px", overflow: "auto" }}>
+                {(walkthroughList || []).slice(0, 150).map((item) => (
                   <button
                     key={item.walkthrough_id}
-                    className="secondaryButton"
+                    className={selectedAdminWalkthrough?.walkthrough_id === item.walkthrough_id ? "startButton" : "secondaryButton"}
                     style={{ textAlign: "left" }}
                     onClick={() => loadAdminWalkthrough(item.walkthrough_id)}
                     disabled={adminLoading}
@@ -1304,103 +1523,132 @@ function App() {
               </div>
 
               <div>
-                {selectedAdminWalkthrough ? (
+                {editorDraft ? (
                   <>
-                    <h3>{selectedAdminWalkthrough.title}</h3>
-                    <p className="adminHelp">{selectedAdminWalkthrough.walkthrough_id}</p>
+                    <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
+                      <label style={{ fontWeight: 800 }}>Walkthrough title</label>
+                      <input
+                        className="adminInput"
+                        value={editorDraft.title || ""}
+                        onChange={(e) => updateEditorField("title", e.target.value)}
+                      />
 
-                    <div style={{ display: "grid", gap: "16px" }}>
-                      {(selectedAdminWalkthrough.steps || []).map((step) => (
+                      <label style={{ fontWeight: 800 }}>Disclaimer</label>
+                      <textarea
+                        className="adminTextArea small"
+                        value={editorDraft.disclaimer || ""}
+                        onChange={(e) => updateEditorField("disclaimer", e.target.value)}
+                      />
+
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                        <p className="adminHelp" style={{ margin: 0 }}>
+                          ID: {editorDraft.walkthrough_id} · {(editorDraft.steps || []).length} steps {editorDirty ? "· Unsaved edits" : "· Saved"}
+                        </p>
+                        <button className="doneButton" onClick={saveEditedWalkthrough} disabled={adminLoading || !editorDirty}>
+                          Save Edited Version
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "14px" }}>
+                      {(editorDraft.steps || []).map((step, index) => (
                         <div
-                          key={step.id}
+                          key={`${step.id}-${index}`}
                           style={{
-                            border: "1px solid rgba(0,0,0,0.14)",
+                            border: activeEditorStepId === step.id ? "3px solid #ef3333" : "1px solid rgba(0,0,0,0.14)",
                             borderRadius: "16px",
                             padding: "14px",
-                            background: "rgba(255,255,255,0.8)"
+                            background: "rgba(255,255,255,0.88)",
+                            display: "grid",
+                            gap: "10px"
                           }}
+                          onClick={() => setActiveEditorStepId(step.id)}
                         >
-                          <h4>{step.imageLabel || `Step ${step.id}`}</h4>
-                          <p>{step.instruction}</p>
-                          <p style={{ fontSize: "13px", opacity: 0.8 }}>{step.detail}</p>
-
-                          <div style={{ display: "grid", gridTemplateColumns: step.pendingImageUrl ? "1fr 1fr" : "1fr", gap: "12px" }}>
-                            <div>
-                              <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>Current Image</div>
-                              {step.imageUrl ? (
-                                <img
-                                  src={step.imageUrl.startsWith("http") ? step.imageUrl : `${API_URL}${step.imageUrl}`}
-                                  alt={step.imageLabel || `Step ${step.id}`}
-                                  style={{ width: "100%", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.1)" }}
-                                />
-                              ) : (
-                                <div className="missingThumb">No image</div>
-                              )}
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+                            <strong>Step {index + 1}</strong>
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              <button className="secondaryButton" type="button" onClick={(e) => { e.stopPropagation(); moveEditorStep(step.id, -1); }} disabled={index === 0 || adminLoading}>↑</button>
+                              <button className="secondaryButton" type="button" onClick={(e) => { e.stopPropagation(); moveEditorStep(step.id, 1); }} disabled={index === (editorDraft.steps || []).length - 1 || adminLoading}>↓</button>
                             </div>
+                          </div>
+
+                          <div style={{ position: "relative" }}>
+                            {step.imageUrl ? (
+                              <img
+                                src={imageSrc(step.imageUrl)}
+                                alt={step.imageLabel || `Step ${step.id}`}
+                                style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.1)" }}
+                              />
+                            ) : (
+                              <div className="missingThumb">No image</div>
+                            )}
 
                             {step.pendingImageUrl && (
-                              <div>
-                                <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>New Candidate</div>
+                              <div style={{ marginTop: "8px" }}>
+                                <div style={{ fontSize: "12px", fontWeight: 800 }}>New candidate</div>
                                 <img
-                                  src={step.pendingImageUrl.startsWith("http") ? step.pendingImageUrl : `${API_URL}${step.pendingImageUrl}`}
+                                  src={imageSrc(step.pendingImageUrl)}
                                   alt={`New candidate for step ${step.id}`}
-                                  style={{ width: "100%", borderRadius: "12px", border: "2px solid rgba(0,120,255,0.35)" }}
+                                  style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: "12px", border: "2px solid rgba(0,120,255,0.35)" }}
                                 />
                               </div>
                             )}
                           </div>
 
+                          <label style={{ fontWeight: 800 }}>Image label / caption</label>
+                          <input
+                            className="adminInput"
+                            value={step.imageLabel || ""}
+                            onChange={(e) => updateEditorStep(step.id, "imageLabel", e.target.value)}
+                          />
+
+                          <label style={{ fontWeight: 800 }}>Instruction</label>
                           <textarea
                             className="adminTextArea small"
-                            style={{ marginTop: "12px" }}
+                            value={step.instruction || ""}
+                            onChange={(e) => updateEditorStep(step.id, "instruction", e.target.value)}
+                          />
+
+                          <label style={{ fontWeight: 800 }}>Detail</label>
+                          <textarea
+                            className="adminTextArea small"
+                            value={step.detail || ""}
+                            onChange={(e) => updateEditorStep(step.id, "detail", e.target.value)}
+                          />
+
+                          <label style={{ fontWeight: 800 }}>Image correction prompt</label>
+                          <textarea
+                            className="adminTextArea small"
                             value={repairCorrections[step.id] || ""}
-                            onChange={(e) => setRepairCorrections({
-                              ...repairCorrections,
-                              [step.id]: e.target.value
-                            })}
-                            placeholder="Correction prompt, example: Make the pipe copper, remove PVC, show a propane torch heating the joint."
+                            onChange={(e) => setRepairCorrections({ ...repairCorrections, [step.id]: e.target.value })}
+                            placeholder="Example: remove the shovel; show the pipe from above; make the material copper."
                           />
 
                           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                            <button
-                              className="startButton"
-                              onClick={() => regenerateStepImage(step.id)}
-                              disabled={adminLoading}
-                            >
-                              Regenerate This Image
+                            <button className="startButton" onClick={() => regenerateStepImage(step.id)} disabled={adminLoading}>
+                              Regenerate Image
                             </button>
-
                             {step.pendingImageUrl && (
-                              <button
-                                className="doneButton"
-                                onClick={() => acceptStepImage(step.id)}
-                                disabled={adminLoading}
-                              >
-                                Keep New Image
+                              <button className="doneButton" onClick={() => acceptStepImage(step.id)} disabled={adminLoading}>
+                                Keep Candidate
                               </button>
                             )}
-
-                            <button
-                              className="secondaryButton"
-                              onClick={() => revertStepImage(step.id)}
-                              disabled={adminLoading}
-                            >
+                            <button className="secondaryButton" onClick={() => revertStepImage(step.id)} disabled={adminLoading}>
                               Revert / Discard
                             </button>
+                            <button className="secondaryButton" onClick={() => duplicateEditorStep(step.id)} disabled={adminLoading}>
+                              Duplicate
+                            </button>
+                            <button className="secondaryButton" onClick={() => deleteEditorStep(step.id)} disabled={adminLoading || (editorDraft.steps || []).length <= 1}>
+                              Delete Step
+                            </button>
                           </div>
-
-                          {step.imagePrompt && (
-                            <details style={{ marginTop: "10px", fontSize: "12px" }}>
-                              <summary>Prompt history</summary>
-                              <pre style={{ whiteSpace: "pre-wrap" }}>{step.imagePrompt}</pre>
-                            </details>
-                          )}
                         </div>
                       ))}
                     </div>
                   </>
                 ) : (
-                  <p className="adminHelp">Select a walkthrough to inspect and repair its images.</p>
+                  <p className="adminHelp">Select a walkthrough to open the visual editor.</p>
                 )}
               </div>
             </div>
