@@ -9,6 +9,15 @@ function displayText(value, max = 140) {
   return `${text.slice(0, max).trim()}…`;
 }
 
+
+function apiAssetUrl(url) {
+  const value = String(url || "").trim();
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  if (value.startsWith("/")) return `${API_URL}${value}`;
+  return value;
+}
+
 function buildSpecificQuery(query, brand, model) {
   const baseQuery = query.trim() || "installation walkthrough";
 
@@ -1164,7 +1173,7 @@ function App() {
             >
               <h3 style={{ margin: "0 0 8px" }}>Catalog Intelligence v2: Build Product Package</h3>
               <p className="adminHelp" style={{ marginTop: 0 }}>
-                Phase 1 uses a manufacturer product page URL as the source. The backend discovers candidate product photos and installation PDFs, caches them on the Render disk, and saves product/discovery JSON for later overlay extraction.
+                Phase 1 uses a manufacturer product page URL as the source. The backend discovers candidate product photos and installation PDFs, caches them on the Render disk, and saves product/discovery/overlay JSON so the model can appear in the walkthrough briefing and hotspot flow.
               </p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
@@ -1235,6 +1244,9 @@ function App() {
                   )}
                   {productPackageResult.discovery_json_url && (
                     <> · <a href={`${API_URL}${productPackageResult.discovery_json_url}`} target="_blank" rel="noreferrer">discovery.json</a></>
+                  )}
+                  {productPackageResult.overlays_json_url && (
+                    <> · <a href={`${API_URL}${productPackageResult.overlays_json_url}`} target="_blank" rel="noreferrer">overlays.json</a></>
                   )}
                   {productPackageResult.error && (
                     <p className="adminError">{productPackageResult.error}</p>
@@ -2006,12 +2018,15 @@ function App() {
                 <img
                   className="modelProductImage"
                   style={{ maxWidth: "100%", maxHeight: "260px", objectFit: "contain" }}
-                  src={overlayData.product_image_url}
+                  src={apiAssetUrl(overlayData.product_image_url)}
                   alt={`${selectedBrand} ${selectedModel}`}
                   onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
               ) : (
-                <div className="modelPhotoFallback" style={{ padding: "40px", color: "#6b7280" }}>Product photo pending</div>
+                <div className="modelPhotoFallback" style={{ padding: "40px", color: "#6b7280", textAlign: "center" }}>
+                  Product photo pending<br />
+                  <small>Build the product package in Admin to cache the manufacturer photo.</small>
+                </div>
               )}
             </div>
 
@@ -2044,7 +2059,7 @@ function App() {
                 {overlayData?.manual_url && (
                   <a
                     className="secondaryButton"
-                    href={overlayData.manual_url}
+                    href={apiAssetUrl(overlayData.manual_url)}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -2286,7 +2301,7 @@ function App() {
                 <p>{activeHotspot.content}</p>
                 {activeHotspot.manual_url && (
                   <p>
-                    <a href={activeHotspot.manual_url} target="_blank" rel="noreferrer">
+                    <a href={apiAssetUrl(activeHotspot.manual_url)} target="_blank" rel="noreferrer">
                       Open source installation PDF
                     </a>
                   </p>
