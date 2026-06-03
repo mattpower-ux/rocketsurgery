@@ -9,6 +9,14 @@ function displayText(value, max = 140) {
   return `${text.slice(0, max).trim()}…`;
 }
 
+function apiAssetUrl(value) {
+  const url = String(value || "").trim();
+  if (!url) return "";
+  if (url.startsWith("http")) return url;
+  if (url.startsWith("/")) return `${API_URL}${url}`;
+  return url;
+}
+
 function buildSpecificQuery(query, brand, model) {
   const baseQuery = query.trim() || "installation walkthrough";
 
@@ -61,6 +69,7 @@ function App() {
   const [overlayData, setOverlayData] = useState(null);
   const [specificQuery, setSpecificQuery] = useState("");
   const [tipsExpanded, setTipsExpanded] = useState(false);
+  const [modelImageFailed, setModelImageFailed] = useState(false);
 
   const [imageRegistry, setImageRegistry] = useState(null);
   const [promoteFilename, setPromoteFilename] = useState("");
@@ -81,6 +90,11 @@ function App() {
   );
   const availableModels = selectedBrandRecord?.models || [];
   const currentModelTips = overlayData?.installation_tips || overlayData?.overlays || [];
+  const modelImageUrl = apiAssetUrl(overlayData?.local_product_image_url || overlayData?.product_image_url || "");
+
+  useEffect(() => {
+    setModelImageFailed(false);
+  }, [overlayData?.local_product_image_url, overlayData?.product_image_url, selectedBrand, selectedModel]);
 
   async function fetchProductOptions(finalQuery) {
     const response = await fetch(
@@ -150,10 +164,12 @@ function App() {
       const data = await response.json();
 
       setOverlayData(data);
+      setModelImageFailed(false);
 
     } catch (error) {
       console.error(error);
       setOverlayData(null);
+      setModelImageFailed(false);
     setSpecificQuery("");
     setTipsExpanded(false);
     }
@@ -209,6 +225,7 @@ function App() {
     setInstallMode("specific");
     setSpecificQuery(finalQuery);
     setTipsExpanded(false);
+    setModelImageFailed(false);
     setLoading(true);
 
     try {
@@ -247,6 +264,7 @@ function App() {
     setComplete(false);
     setStepIndex(0);
     setActiveHotspot(null);
+    setModelImageFailed(false);
   }
 
   function openAdmin() {
@@ -1678,17 +1696,63 @@ function App() {
           <h1>{selectedBrand} {selectedModel}</h1>
 
           <section className="brandModelPanel modelBriefingCard" style={{ display: "grid", gridTemplateColumns: "minmax(220px, 360px) 1fr", gap: "24px", alignItems: "start" }}>
-            <div className="modelPhotoFrame" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "220px", background: "#f6f7f8", borderRadius: "18px", overflow: "hidden" }}>
-              {overlayData?.product_image_url ? (
+            <div
+              className="modelPhotoFrame"
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                minHeight: "220px",
+                background: "#f6f7f8",
+                borderRadius: "18px",
+                overflow: "hidden",
+                padding: "18px"
+              }}
+            >
+              {modelImageUrl && !modelImageFailed ? (
                 <img
                   className="modelProductImage"
                   style={{ maxWidth: "100%", maxHeight: "260px", objectFit: "contain" }}
-                  src={overlayData.product_image_url}
+                  src={modelImageUrl}
                   alt={`${selectedBrand} ${selectedModel}`}
-                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  onError={() => setModelImageFailed(true)}
                 />
               ) : (
-                <div className="modelPhotoFallback" style={{ padding: "40px", color: "#6b7280" }}>Product photo pending</div>
+                <div
+                  className="modelPhotoFallback"
+                  style={{
+                    width: "100%",
+                    minHeight: "180px",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: "10px",
+                    textAlign: "center",
+                    color: "#4b5563"
+                  }}
+                >
+                  <strong>Product image not cached yet</strong>
+                  <span style={{ fontSize: "14px" }}>
+                    The model-specific notes and installation PDF are still available.
+                  </span>
+                  {overlayData?.product_image_status && overlayData.product_image_status !== "missing" && (
+                    <span style={{ fontSize: "12px", color: "#6b7280" }}>
+                      Image status: {overlayData.product_image_status}
+                    </span>
+                  )}
+                  {overlayData?.product_page_url && (
+                    <a
+                      className="secondaryButton"
+                      href={overlayData.product_page_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ marginTop: "8px", padding: "10px 14px", fontSize: "14px" }}
+                    >
+                      View Product Page
+                    </a>
+                  )}
+                </div>
               )}
             </div>
 
