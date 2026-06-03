@@ -1086,6 +1086,102 @@ def post_catalog_build_product_page_package(request: ProductPagePackageRequest):
     )
 
 
+
+
+@app.post("/admin/catalog/test-build-niagara-stealth")
+def post_catalog_test_build_niagara_stealth():
+    """Verbose one-click test for the Niagara Original Stealth package.
+
+    This endpoint deliberately avoids ambiguity from the frontend. It creates
+    the expected folder, fetches the manufacturer product page, reports how
+    many candidate images/PDFs were found, runs the package builder, and then
+    reports exactly which files exist on the Render disk.
+    """
+    brand = "Niagara"
+    model = "Original Stealth"
+    category = "toilet"
+    product_page_url = "https://niagaracorp.com/products/original-stealth-handle-round/"
+    root = product_package_root(category, brand, model)
+
+    report = {
+        "status": "started",
+        "brand": brand,
+        "model": model,
+        "category": category,
+        "product_page_url": product_page_url,
+        "root": str(root),
+        "created_folder": False,
+        "page_fetch_status": "not_started",
+        "page_bytes": 0,
+        "image_candidates": [],
+        "pdf_candidates": [],
+        "build_result": None,
+        "files": {},
+        "errors": [],
+    }
+
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        report["created_folder"] = root.exists()
+    except Exception as exc:
+        report["errors"].append(f"Could not create folder: {exc}")
+        report["status"] = "failed"
+        return report
+
+    try:
+        html = fetch_text_url(product_page_url)
+        report["page_fetch_status"] = "ok"
+        report["page_bytes"] = len(html.encode("utf-8", errors="ignore"))
+        report["image_candidates"] = discover_image_candidates(html, product_page_url)
+        report["pdf_candidates"] = discover_pdf_candidates(html, product_page_url)
+    except Exception as exc:
+        report["page_fetch_status"] = "failed"
+        report["errors"].append(f"Could not fetch or parse product page: {exc}")
+
+    try:
+        report["build_result"] = build_product_page_package(
+            category=category,
+            brand=brand,
+            model=model,
+            product_page_url=product_page_url,
+        )
+    except Exception as exc:
+        report["errors"].append(f"Package builder crashed: {exc}")
+
+    expected_files = {
+        "product_json": root / "product.json",
+        "discovery_json": root / "discovery.json",
+        "overlays_json": root / "overlays.json",
+    }
+
+    for label, path in expected_files.items():
+        report["files"][label] = {
+            "path": str(path),
+            "exists": path.exists(),
+            "bytes": path.stat().st_size if path.exists() else 0,
+            "url": public_catalog_file_url(path) if path.exists() else "",
+        }
+
+    image_files = list((root / "images").glob("*")) if (root / "images").exists() else []
+    manual_files = list((root / "manuals").glob("*")) if (root / "manuals").exists() else []
+    report["files"]["images"] = [
+        {"path": str(path), "bytes": path.stat().st_size, "url": public_catalog_file_url(path)}
+        for path in image_files
+    ]
+    report["files"]["manuals"] = [
+        {"path": str(path), "bytes": path.stat().st_size, "url": public_catalog_file_url(path)}
+        for path in manual_files
+    ]
+
+    if report["errors"]:
+        report["status"] = "completed_with_errors"
+    elif report["files"]["product_json"]["exists"]:
+        report["status"] = "complete"
+    else:
+        report["status"] = "no_package_written"
+
+    return report
+
 @app.get("/catalog/products")
 def get_catalog_products(category: str = "toilet"):
     """Return product packages compatible with a category/walkthrough family.
