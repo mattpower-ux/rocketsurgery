@@ -147,17 +147,28 @@ except ImportError:
     from image_generator import generate_step_image
 
 import time
+import re
+import urllib.request
+from urllib.parse import urlparse
 from fastapi import Request
 
 
 app = FastAPI(title="RocketSurgery API")
 
 Path("/data/rocketsurgery/images").mkdir(parents=True, exist_ok=True)
+CATALOG_IMAGES_DIR = Path("/data/rocketsurgery/catalog-images")
+CATALOG_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount(
     "/static/images",
     StaticFiles(directory="/data/rocketsurgery/images"),
     name="images"
+)
+
+app.mount(
+    "/static/catalog-images",
+    StaticFiles(directory=str(CATALOG_IMAGES_DIR)),
+    name="catalog-images"
 )
 
 app.mount(
@@ -235,6 +246,85 @@ class AcceptStepImageRequest(BaseModel):
 class RevertStepImageRequest(BaseModel):
     walkthrough_id: str
     step_id: int
+
+
+def catalog_slug(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
+    return cleaned or "item"
+
+
+def content_type_extension(content_type: str, fallback_url: str = "") -> str:
+    ct = (content_type or "").lower().split(";", 1)[0].strip()
+    if ct in {"image/jpeg", "image/jpg"}:
+        return ".jpg"
+    if ct == "image/png":
+        return ".png"
+    if ct == "image/webp":
+        return ".webp"
+    suffix = Path(urlparse(fallback_url).path).suffix.lower()
+    if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
+        return ".jpg" if suffix == ".jpeg" else suffix
+    return ".jpg"
+
+
+def public_catalog_image_url(path: Path) -> str:
+    try:
+        relative = path.relative_to(CATALOG_IMAGES_DIR)
+    except ValueError:
+        return ""
+    return "/static/catalog-images/" + str(relative).replace("\\", "/")
+
+
+def find_existing_cached_product_image(brand: str, model: str) -> str:
+    base_dir = CATALOG_IMAGES_DIR / "toilets" / catalog_slug(brand)
+    stem = catalog_slug(model)
+    for ext in [".jpg", ".png", ".webp"]:
+        candidate = base_dir / f"{stem}{ext}"
+        if candidate.exists() and candidate.stat().st_size > 0:
+            return public_catalog_image_url(candidate)
+    return ""
+
+
+def cache_product_image(brand: str, model: str, remote_url: str) -> dict:
+    """Cache manufacturer product images on the Render disk.
+
+    Manufacturer image hotlinks are often blocked in the browser. This downloads
+    once from the backend and returns a local /static/catalog-images/... URL.
+    """
+    existing = find_existing_cached_product_image(brand, model)
+    if existing:
+        return {"status": "cached", "local_url": existing, "error": ""}
+
+    if not remote_url:
+        return {
+            "status": "missing_remote_url",
+            "local_url": "",
+            "error": "No remote product image URL is stored for this model."
+        }
+
+    try:
+        request = urllib.request.Request(
+            remote_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 RocketSurgeryCatalogBot/1.0",
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            }
+        )
+        with urllib.request.urlopen(request, timeout=12) as response:
+            content_type = response.headers.get("Content-Type", "")
+            data = response.read(8_000_000)
+
+        if not data or len(data) < 256:
+            raise ValueError("Downloaded image was empty or too small.")
+
+        ext = content_type_extension(content_type, remote_url)
+        output_path = CATALOG_IMAGES_DIR / "toilets" / catalog_slug(brand) / f"{catalog_slug(model)}{ext}"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(data)
+
+        return {"status": "downloaded", "local_url": public_catalog_image_url(output_path), "error": ""}
+    except Exception as exc:
+        return {"status": "unavailable", "local_url": "", "error": str(exc)}
 
 
 TOILET_PRODUCT_CATALOG = {
@@ -354,9 +444,17 @@ def toilet_model_overlay(request: OverlayRequest):
             "brand": brand,
             "model": model,
             "manual_url": "",
+            "product_image_url": "",
+            "local_product_image_url": "",
+            "remote_product_image_url": "",
+            "product_image_status": "missing",
+            "product_image_error": "",
+            "product_page_url": "",
             "installation_tips": [],
             "overlays": []
         }
+
+    image_cache = cache_product_image(brand, model, manual.get("product_image_url", ""))
 
     overlays = [
         {
@@ -438,7 +536,11 @@ def toilet_model_overlay(request: OverlayRequest):
         "model": model,
         "manual_title": manual.get("manual_title", "Manufacturer installation guide"),
         "manual_url": manual.get("manual_url", ""),
-        "product_image_url": manual.get("product_image_url", ""),
+        "product_image_url": image_cache.get("local_url", ""),
+        "local_product_image_url": image_cache.get("local_url", ""),
+        "remote_product_image_url": manual.get("product_image_url", ""),
+        "product_image_status": image_cache.get("status", ""),
+        "product_image_error": image_cache.get("error", ""),
         "product_page_url": manual.get("product_page_url", ""),
         "installation_tips": overlays,
         "overlays": overlays
