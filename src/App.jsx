@@ -59,6 +59,8 @@ function App() {
   const [canonicalFile, setCanonicalFile] = useState(null);
 
   const [overlayData, setOverlayData] = useState(null);
+  const [specificQuery, setSpecificQuery] = useState("");
+  const [tipsExpanded, setTipsExpanded] = useState(false);
 
   const [imageRegistry, setImageRegistry] = useState(null);
   const [promoteFilename, setPromoteFilename] = useState("");
@@ -71,11 +73,6 @@ function App() {
   const [walkthroughList, setWalkthroughList] = useState([]);
   const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
   const [repairCorrections, setRepairCorrections] = useState({});
-  const [editorDraft, setEditorDraft] = useState(null);
-  const [editorDirty, setEditorDirty] = useState(false);
-  const [activeEditorStepId, setActiveEditorStepId] = useState(null);
-  const [draggedEditorStepId, setDraggedEditorStepId] = useState(null);
-  const [activeAdminAction, setActiveAdminAction] = useState("");
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
@@ -83,176 +80,7 @@ function App() {
     (item) => item.brand === selectedBrand
   );
   const availableModels = selectedBrandRecord?.models || [];
-  const currentModelOverlays =
-    installMode === "specific" && currentStep
-      ? (overlayData?.overlays || []).filter(
-          (overlay) => Number(overlay.step_id) === Number(currentStep.id)
-        )
-      : [];
-  const visibleHotspots = currentStep
-    ? [
-        ...(installMode === "specific" ? currentStep.hotspots || [] : []),
-        ...currentModelOverlays.map((overlay, index) => ({
-          id: overlay.id || `model-overlay-${currentStep.id}-${index}`,
-          label: overlay.label || "Model-specific note",
-          title: overlay.title || "Model-specific note",
-          content: overlay.content || "Review the manufacturer installation guide for this step.",
-          manual_url: overlay.manual_url || overlayData?.manual_url || "",
-          manual_title: overlay.manual_title || overlayData?.manual_title || "Installation guide",
-          type: overlay.type || "model_specific",
-          x: overlay.x,
-          y: overlay.y
-        }))
-      ]
-    : [];
-
-  function imageSrc(url) {
-    if (!url) return "";
-    return url.startsWith("http") ? url : `${API_URL}${url}`;
-  }
-
-  function isAction(name) {
-    return activeAdminAction === name;
-  }
-
-  function actionStyle(name) {
-    return isAction(name)
-      ? { opacity: 0.72, transform: "scale(0.98)", transition: "all 120ms ease" }
-      : { transition: "all 120ms ease" };
-  }
-
-  function prepareEditorDraft(manifest) {
-    if (!manifest) return null;
-    const clone = JSON.parse(JSON.stringify(manifest));
-    clone.steps = (clone.steps || []).map((step, index) => ({
-      ...step,
-      id: index + 1,
-      imageLabel: step.imageLabel || `Step ${index + 1}`,
-      instruction: step.instruction || "",
-      detail: step.detail || ""
-    }));
-    return clone;
-  }
-
-  function updateEditorField(path, value) {
-    if (!editorDraft) return;
-    const updated = JSON.parse(JSON.stringify(editorDraft));
-    if (path === "title") updated.title = value;
-    if (path === "disclaimer") updated.disclaimer = value;
-    setEditorDraft(updated);
-    setSelectedAdminWalkthrough(updated);
-    setEditorDirty(true);
-  }
-
-  function updateEditorStep(stepId, field, value) {
-    if (!editorDraft) return;
-    const updated = JSON.parse(JSON.stringify(editorDraft));
-    updated.steps = (updated.steps || []).map((step) => (
-      Number(step.id) === Number(stepId) ? { ...step, [field]: value } : step
-    ));
-    setEditorDraft(updated);
-    setSelectedAdminWalkthrough(updated);
-    setEditorDirty(true);
-  }
-
-  function normalizeEditorSteps(steps) {
-    return (steps || []).map((step, index) => ({
-      ...step,
-      id: index + 1,
-      imageLabel: step.imageLabel?.replace(/^Step\s+\d+\s*:/i, `Step ${index + 1}:`) || `Step ${index + 1}`
-    }));
-  }
-
-  function applyEditorSteps(steps, activeId = null) {
-    if (!editorDraft) return;
-    const updated = {
-      ...JSON.parse(JSON.stringify(editorDraft)),
-      steps: normalizeEditorSteps(steps)
-    };
-    setEditorDraft(updated);
-    setSelectedAdminWalkthrough(updated);
-    setActiveEditorStepId(activeId || updated.steps?.[0]?.id || null);
-    setEditorDirty(true);
-  }
-
-  function moveEditorStep(stepId, direction) {
-    if (!editorDraft) return;
-    const steps = [...(editorDraft.steps || [])];
-    const index = steps.findIndex((step) => Number(step.id) === Number(stepId));
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= steps.length) return;
-    const [moved] = steps.splice(index, 1);
-    steps.splice(nextIndex, 0, moved);
-    applyEditorSteps(steps, nextIndex + 1);
-  }
-
-  function reorderEditorStep(fromStepId, toStepId) {
-    if (!editorDraft || !fromStepId || !toStepId || Number(fromStepId) === Number(toStepId)) return;
-    const steps = [...(editorDraft.steps || [])];
-    const fromIndex = steps.findIndex((step) => Number(step.id) === Number(fromStepId));
-    const toIndex = steps.findIndex((step) => Number(step.id) === Number(toStepId));
-    if (fromIndex < 0 || toIndex < 0) return;
-    const [moved] = steps.splice(fromIndex, 1);
-    steps.splice(toIndex, 0, moved);
-    applyEditorSteps(steps, toIndex + 1);
-  }
-
-  function deleteEditorStep(stepId) {
-    if (!editorDraft) return;
-    const steps = (editorDraft.steps || []).filter((step) => Number(step.id) !== Number(stepId));
-    applyEditorSteps(steps, steps[0]?.id || null);
-  }
-
-  function duplicateEditorStep(stepId) {
-    if (!editorDraft) return;
-    const steps = [...(editorDraft.steps || [])];
-    const index = steps.findIndex((step) => Number(step.id) === Number(stepId));
-    if (index < 0) return;
-    const copy = JSON.parse(JSON.stringify(steps[index]));
-    copy.imageLabel = `${copy.imageLabel || `Step ${copy.id}`} copy`;
-    steps.splice(index + 1, 0, copy);
-    applyEditorSteps(steps, index + 2);
-  }
-
-  async function saveEditedWalkthrough() {
-    if (!editorDraft) return null;
-    setAdminLoading(true);
-    setActiveAdminAction("save-walkthrough");
-    setAdminMessage("Saving edited walkthrough...");
-
-    try {
-      const response = await fetch(`${API_URL}/admin/save-walkthrough`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({ walkthrough: editorDraft })
-      });
-
-      const text = await response.text();
-      let data;
-      try { data = JSON.parse(text); } catch { data = { raw: text }; }
-
-      if (!response.ok || data.status !== "saved") {
-        setAdminMessage(`Save failed: ${response.status} ${data.error || data.status || data.raw || "Unknown error"}`);
-        return null;
-      }
-
-      const prepared = prepareEditorDraft(data.walkthrough || editorDraft);
-      setSelectedAdminWalkthrough(data.walkthrough || editorDraft);
-      setEditorDraft(prepared);
-      setEditorDirty(false);
-      setAdminMessage("Walkthrough saved.");
-      await loadAdminWalkthroughs();
-      return prepared;
-    } catch (error) {
-      console.error(error);
-      setAdminMessage(`Save failed: ${error.message}`);
-      return null;
-    } finally {
-      setActiveAdminAction("");
-      setAdminLoading(false);
-    }
-  }
+  const currentModelTips = overlayData?.installation_tips || overlayData?.overlays || [];
 
   async function fetchProductOptions(finalQuery) {
     const response = await fetch(
@@ -326,6 +154,8 @@ function App() {
     } catch (error) {
       console.error(error);
       setOverlayData(null);
+    setSpecificQuery("");
+    setTipsExpanded(false);
     }
   }
 
@@ -374,10 +204,28 @@ function App() {
     fetchWalkthrough(query.trim() || "generic installation walkthrough");
   }
 
-  function continueSpecific() {
+  async function continueSpecific() {
     const finalQuery = buildSpecificQuery(query, selectedBrand, selectedModel);
     setInstallMode("specific");
-    fetchWalkthrough(finalQuery);
+    setSpecificQuery(finalQuery);
+    setTipsExpanded(false);
+    setLoading(true);
+
+    try {
+      await fetchOverlay(finalQuery);
+      setClarifying(false);
+      setStarted(false);
+      setScreen("briefing");
+    } catch (error) {
+      console.error(error);
+      alert("Could not load model-specific briefing.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function proceedSpecificInstall() {
+    fetchWalkthrough(specificQuery || buildSpecificQuery(query, selectedBrand, selectedModel));
   }
 
   function newJob() {
@@ -465,7 +313,7 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/status`, { cache: "no-store" });
+      const response = await fetch(`${API_URL}/admin/status`);
       const data = await response.json();
 
       setAdminStatus(data);
@@ -579,47 +427,31 @@ function App() {
   }
 
 
-  async function refreshWalkthroughOperations() {
-    await Promise.allSettled([
-      loadAdminStatus(),
-      loadBuildStatus(),
-      loadBulkJobList(),
-      loadAdminWalkthroughs()
-    ]);
-  }
-
-
-  async function runQueuedWalkthroughs(limit = 1) {
+  async function processQueuedWalkthroughs() {
     setAdminLoading(true);
-    setAdminMessage(`Starting ${limit} queued walkthrough job${limit === 1 ? "" : "s"} now...`);
+    setAdminMessage("");
 
     try {
       const response = await fetch(
-        `${API_URL}/admin/process-bulk-queries?limit=${encodeURIComponent(limit)}`,
+        `${API_URL}/admin/process-bulk-queries?limit=5`,
         {
-          method: "POST",
-          cache: "no-store"
+          method: "POST"
         }
       );
 
       const data = await response.json();
 
       setAdminMessage(
-        `Manual run complete. Processed ${data.processed_count || 0}; failed ${data.failed_count || 0}; remaining queued ${data.remaining_queued || 0}.`
+        `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
       );
 
-      await refreshWalkthroughOperations();
+      loadAdminStatus();
     } catch (error) {
       console.error(error);
-      setAdminMessage("Could not run queued walkthrough jobs.");
+      setAdminMessage("Could not process queued walkthroughs.");
     } finally {
       setAdminLoading(false);
     }
-  }
-
-
-  async function processQueuedWalkthroughs() {
-    return runQueuedWalkthroughs(5);
   }
 
 
@@ -805,8 +637,7 @@ function App() {
   async function loadBuildStatus() {
     try {
       const response = await fetch(
-        `${API_URL}/admin/walkthrough-build-status`,
-        { cache: "no-store" }
+        `${API_URL}/admin/walkthrough-build-status`
       );
 
       const data = await response.json();
@@ -823,7 +654,7 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/bulk-query-list`, { cache: "no-store" });
+      const response = await fetch(`${API_URL}/admin/bulk-query-list`);
       const data = await response.json();
 
       setBulkJobList(data);
@@ -842,8 +673,6 @@ function App() {
 
     const endpointMap = {
       retry: "bulk-query-retry",
-      run: "bulk-query-run",
-      retryrun: "bulk-query-retry-run",
       ignore: "bulk-query-ignore",
       delete: "bulk-query-delete"
     };
@@ -860,8 +689,9 @@ function App() {
       });
 
       const data = await response.json();
-      setAdminMessage(`Queue item ${data.status || action}. ${data.message || ""}`);
-      await refreshWalkthroughOperations();
+      setAdminMessage(`Queue item ${data.status || action}.`);
+      loadBulkJobList();
+      loadAdminStatus();
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not update queue item.");
@@ -875,7 +705,7 @@ function App() {
     setAdminLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250`, { cache: "no-store" });
+      const response = await fetch(`${API_URL}/admin/walkthroughs?limit=250`);
       const data = await response.json();
 
       setWalkthroughList(data.walkthroughs || []);
@@ -896,12 +726,7 @@ function App() {
       const data = await response.json();
 
       if (data.walkthrough) {
-        const prepared = prepareEditorDraft(data.walkthrough);
         setSelectedAdminWalkthrough(data.walkthrough);
-        setEditorDraft(prepared);
-        setEditorDirty(false);
-        setActiveEditorStepId(prepared?.steps?.[0]?.id || null);
-        setRepairCorrections({});
         setAdminMessage(`Loaded ${data.walkthrough.title || walkthroughId}.`);
       } else {
         setAdminMessage("Walkthrough not found.");
@@ -916,13 +741,11 @@ function App() {
 
 
   async function regenerateStepImage(stepId) {
-    if (!selectedAdminWalkthrough && !editorDraft) {
+    if (!selectedAdminWalkthrough) {
       return;
     }
 
     setAdminLoading(true);
-    setActiveAdminAction(`regen-${stepId}`);
-    setAdminMessage("Regenerating image. This can take a minute...");
 
     try {
       const response = await fetch(`${API_URL}/admin/regenerate-step-image`, {
@@ -931,7 +754,7 @@ function App() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          walkthrough_id: (editorDraft || selectedAdminWalkthrough).walkthrough_id,
+          walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
           step_id: stepId,
           correction: repairCorrections[stepId] || ""
         })
@@ -940,10 +763,7 @@ function App() {
       const data = await response.json();
 
       if (data.walkthrough) {
-        const prepared = prepareEditorDraft(data.walkthrough);
         setSelectedAdminWalkthrough(data.walkthrough);
-        setEditorDraft(prepared);
-        setEditorDirty(false);
       }
 
       setAdminMessage(data.status === "pending_review" ? "New image generated for review." : `Image regeneration: ${data.status}`);
@@ -951,7 +771,6 @@ function App() {
       console.error(error);
       setAdminMessage("Could not regenerate image.");
     } finally {
-      setActiveAdminAction("");
       setAdminLoading(false);
     }
   }
@@ -963,7 +782,6 @@ function App() {
     }
 
     setAdminLoading(true);
-    setActiveAdminAction(`accept-${stepId}`);
 
     try {
       const response = await fetch(`${API_URL}/admin/accept-step-image`, {
@@ -972,7 +790,7 @@ function App() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          walkthrough_id: (editorDraft || selectedAdminWalkthrough).walkthrough_id,
+          walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
           step_id: stepId
         })
       });
@@ -980,10 +798,7 @@ function App() {
       const data = await response.json();
 
       if (data.walkthrough) {
-        const prepared = prepareEditorDraft(data.walkthrough);
         setSelectedAdminWalkthrough(data.walkthrough);
-        setEditorDraft(prepared);
-        setEditorDirty(false);
       }
 
       setAdminMessage(`Image ${data.status}.`);
@@ -992,7 +807,6 @@ function App() {
       console.error(error);
       setAdminMessage("Could not accept image.");
     } finally {
-      setActiveAdminAction("");
       setAdminLoading(false);
     }
   }
@@ -1004,7 +818,6 @@ function App() {
     }
 
     setAdminLoading(true);
-    setActiveAdminAction(`revert-${stepId}`);
 
     try {
       const response = await fetch(`${API_URL}/admin/revert-step-image`, {
@@ -1013,7 +826,7 @@ function App() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          walkthrough_id: (editorDraft || selectedAdminWalkthrough).walkthrough_id,
+          walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
           step_id: stepId
         })
       });
@@ -1021,10 +834,7 @@ function App() {
       const data = await response.json();
 
       if (data.walkthrough) {
-        const prepared = prepareEditorDraft(data.walkthrough);
         setSelectedAdminWalkthrough(data.walkthrough);
-        setEditorDraft(prepared);
-        setEditorDirty(false);
       }
 
       setAdminMessage(`Image ${data.status}.`);
@@ -1032,7 +842,6 @@ function App() {
       console.error(error);
       setAdminMessage("Could not revert image.");
     } finally {
-      setActiveAdminAction("");
       setAdminLoading(false);
     }
   }
@@ -1071,234 +880,6 @@ function App() {
           <div className="homeBadge">ADMIN</div>
 
           <h1>RocketSurgery Builder</h1>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <div>
-                <h2>Walkthrough WYSIWYG Editor</h2>
-                <p className="adminHelp" style={{ margin: "4px 0 0" }}>
-                  Pick a walkthrough, drag cards into order, rewrite captions and instructions, regenerate bad images, then save the edited manifest.
-                </p>
-              </div>
-
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                <button
-                  className="secondaryButton"
-                  onClick={loadAdminWalkthroughs}
-                  disabled={adminLoading}
-                  style={actionStyle("refresh-walkthroughs")}
-                >
-                  Refresh List
-                </button>
-
-                <button
-                  className="doneButton"
-                  onClick={saveEditedWalkthrough}
-                  disabled={adminLoading || !editorDraft || !editorDirty}
-                  style={actionStyle("save-walkthrough")}
-                >
-                  {isAction("save-walkthrough") ? "Saving..." : editorDirty ? "Save Edited Version" : "Saved"}
-                </button>
-              </div>
-            </div>
-
-            {adminMessage && (
-              <div style={{ padding: "10px 12px", borderRadius: "12px", background: "rgba(0,0,0,0.05)", fontWeight: 700, marginBottom: "12px" }}>
-                {adminMessage}
-              </div>
-            )}
-
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(190px, 260px) 1fr", gap: "14px", alignItems: "start" }}>
-              <div style={{ display: "grid", gap: "6px", alignContent: "start", maxHeight: "720px", overflow: "auto", paddingRight: "4px" }}>
-                {(walkthroughList || []).slice(0, 180).map((item) => (
-                  <button
-                    key={item.walkthrough_id}
-                    className={selectedAdminWalkthrough?.walkthrough_id === item.walkthrough_id ? "startButton" : "secondaryButton"}
-                    style={{ textAlign: "left", padding: "10px 12px", fontSize: "14px" }}
-                    onClick={() => loadAdminWalkthrough(item.walkthrough_id)}
-                    disabled={adminLoading}
-                  >
-                    <strong>{displayText(item.title, 54)}</strong>
-                    <br />
-                    <span style={{ fontSize: "11px", opacity: 0.72 }}>
-                      {item.step_count} steps · {displayText(item.walkthrough_id, 34)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div>
-                {editorDraft ? (
-                  <>
-                    <div style={{ display: "grid", gap: "8px", marginBottom: "14px" }}>
-                      <label style={{ fontWeight: 800 }}>Walkthrough title</label>
-                      <input
-                        className="adminInput"
-                        value={editorDraft.title || ""}
-                        onChange={(e) => updateEditorField("title", e.target.value)}
-                      />
-
-                      <label style={{ fontWeight: 800 }}>Disclaimer</label>
-                      <textarea
-                        className="adminTextArea small"
-                        value={editorDraft.disclaimer || ""}
-                        onChange={(e) => updateEditorField("disclaimer", e.target.value)}
-                      />
-
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-                        <p className="adminHelp" style={{ margin: 0 }}>
-                          ID: {editorDraft.walkthrough_id} · {(editorDraft.steps || []).length} steps · {editorDirty ? "Unsaved edits" : "Saved"}
-                        </p>
-                        <button
-                          className="doneButton"
-                          onClick={saveEditedWalkthrough}
-                          disabled={adminLoading || !editorDirty}
-                          style={actionStyle("save-walkthrough")}
-                        >
-                          {isAction("save-walkthrough") ? "Saving..." : "Save Edited Version"}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(185px, 1fr))", gap: "10px" }}>
-                      {(editorDraft.steps || []).map((step, index) => (
-                        <div
-                          key={`${step.id}-${index}`}
-                          draggable
-                          onDragStart={() => setDraggedEditorStepId(step.id)}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={(e) => { e.preventDefault(); reorderEditorStep(draggedEditorStepId, step.id); setDraggedEditorStepId(null); }}
-                          style={{
-                            border: activeEditorStepId === step.id ? "3px solid #ef3333" : "1px solid rgba(0,0,0,0.14)",
-                            borderRadius: "14px",
-                            padding: "10px",
-                            background: "rgba(255,255,255,0.9)",
-                            display: "grid",
-                            gap: "7px",
-                            cursor: "grab"
-                          }}
-                          onClick={() => setActiveEditorStepId(step.id)}
-                        >
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: "6px", alignItems: "center" }}>
-                            <strong style={{ fontSize: "14px" }}>Step {index + 1}</strong>
-                            <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                              <button className="secondaryButton" type="button" style={{ padding: "6px 9px" }} onClick={(e) => { e.stopPropagation(); moveEditorStep(step.id, -1); }} disabled={index === 0 || adminLoading}>↑</button>
-                              <button className="secondaryButton" type="button" style={{ padding: "6px 9px" }} onClick={(e) => { e.stopPropagation(); moveEditorStep(step.id, 1); }} disabled={index === (editorDraft.steps || []).length - 1 || adminLoading}>↓</button>
-                            </div>
-                          </div>
-
-                          <div style={{ fontSize: "11px", fontWeight: 800, opacity: 0.65 }}>Drag this card to reorder</div>
-
-                          {step.imageUrl ? (
-                            <img
-                              src={imageSrc(step.imageUrl)}
-                              alt={step.imageLabel || `Step ${step.id}`}
-                              style={{ width: "100%", height: "118px", objectFit: "cover", borderRadius: "10px", border: "1px solid rgba(0,0,0,0.1)" }}
-                            />
-                          ) : (
-                            <div className="missingThumb" style={{ height: "118px" }}>No image</div>
-                          )}
-
-                          {step.pendingImageUrl && (
-                            <div>
-                              <div style={{ fontSize: "11px", fontWeight: 800 }}>New candidate</div>
-                              <img
-                                src={imageSrc(step.pendingImageUrl)}
-                                alt={`New candidate for step ${step.id}`}
-                                style={{ width: "100%", height: "118px", objectFit: "cover", borderRadius: "10px", border: "2px solid rgba(0,120,255,0.35)" }}
-                              />
-                            </div>
-                          )}
-
-                          <label style={{ fontWeight: 900, fontSize: "13px" }}>Step title / image caption</label>
-                          <input
-                            className="adminInput"
-                            style={{ fontSize: "13px", padding: "8px 10px" }}
-                            value={step.imageLabel || ""}
-                            onChange={(e) => updateEditorStep(step.id, "imageLabel", e.target.value)}
-                          />
-
-                          <label style={{ fontWeight: 900, fontSize: "13px" }}>Instruction / step text</label>
-                          <textarea
-                            className="adminTextArea small"
-                            style={{ minHeight: "92px", fontSize: "13px", background: "#fffdf5", border: "2px solid rgba(0,0,0,0.12)" }}
-                            value={step.instruction || ""}
-                            onChange={(e) => updateEditorStep(step.id, "instruction", e.target.value)}
-                            placeholder="Rewrite the main instruction for this step. This is the text users see below the image."
-                          />
-
-                          <label style={{ fontWeight: 900, fontSize: "13px" }}>Detail / caption support text</label>
-                          <textarea
-                            className="adminTextArea small"
-                            style={{ minHeight: "78px", fontSize: "13px" }}
-                            value={step.detail || ""}
-                            onChange={(e) => updateEditorStep(step.id, "detail", e.target.value)}
-                            placeholder="Add or revise the supporting detail for this image."
-                          />
-
-                          <label style={{ fontWeight: 900, fontSize: "13px" }}>New image prompt / correction</label>
-                          <textarea
-                            className="adminTextArea small"
-                            style={{ minHeight: "88px", fontSize: "13px", background: "#f7fbff", border: "2px solid rgba(0,90,180,0.18)" }}
-                            value={repairCorrections[step.id] || ""}
-                            onChange={(e) => setRepairCorrections({ ...repairCorrections, [step.id]: e.target.value })}
-                            placeholder="Describe the replacement image you want. Example: remove the shovel entirely; show only the subfloor panel and screw pattern."
-                          />
-
-                          <details style={{ fontSize: "12px" }}>
-                            <summary style={{ fontWeight: 800 }}>Optional: stored original image prompt</summary>
-                            <textarea
-                              className="adminTextArea small"
-                              style={{ minHeight: "58px", fontSize: "12px" }}
-                              value={step.imagePrompt || ""}
-                              onChange={(e) => updateEditorStep(step.id, "imagePrompt", e.target.value)}
-                              placeholder="Stored prompt used as context for future regeneration."
-                            />
-                          </details>
-
-                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                            <button
-                              className="startButton"
-                              style={{ ...actionStyle(`regen-${step.id}`), padding: "8px 10px", fontSize: "13px" }}
-                              onClick={(e) => { e.stopPropagation(); regenerateStepImage(step.id); }}
-                              disabled={adminLoading}
-                            >
-                              {isAction(`regen-${step.id}`) ? "Generating..." : "Regenerate"}
-                            </button>
-
-                            {step.pendingImageUrl && (
-                              <button
-                                className="doneButton"
-                                style={{ ...actionStyle(`accept-${step.id}`), padding: "8px 10px", fontSize: "13px" }}
-                                onClick={(e) => { e.stopPropagation(); acceptStepImage(step.id); }}
-                                disabled={adminLoading}
-                              >
-                                {isAction(`accept-${step.id}`) ? "Keeping..." : "Keep"}
-                              </button>
-                            )}
-
-                            <button
-                              className="secondaryButton"
-                              style={{ ...actionStyle(`revert-${step.id}`), padding: "8px 10px", fontSize: "13px" }}
-                              onClick={(e) => { e.stopPropagation(); revertStepImage(step.id); }}
-                              disabled={adminLoading}
-                            >
-                              {isAction(`revert-${step.id}`) ? "Reverting..." : "Revert"}
-                            </button>
-
-                            <button className="secondaryButton" style={{ padding: "8px 10px", fontSize: "13px" }} onClick={(e) => { e.stopPropagation(); duplicateEditorStep(step.id); }} disabled={adminLoading}>Copy</button>
-                            <button className="secondaryButton" style={{ padding: "8px 10px", fontSize: "13px" }} onClick={(e) => { e.stopPropagation(); deleteEditorStep(step.id); }} disabled={adminLoading || (editorDraft.steps || []).length <= 1}>Delete</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <p className="adminHelp">Select a walkthrough to open the visual editor.</p>
-                )}
-              </div>
-            </div>
-          </section>
 
           <section className="adminCard">
             <div className="adminCardHeader">
@@ -1426,77 +1007,6 @@ function App() {
 
           <section className="adminCard">
             <div className="adminCardHeader">
-              <h2>Walkthrough Processing Controls</h2>
-              <button
-                className="secondaryButton"
-                onClick={refreshWalkthroughOperations}
-                disabled={adminLoading}
-              >
-                Refresh All Status
-              </button>
-            </div>
-
-            <p className="adminHelp">
-              Queued jobs are waiting. They do not build until the Render background worker is running or you manually run jobs here. These buttons run queued jobs immediately through the API.
-            </p>
-
-            <div className="adminStats">
-              <div>
-                <strong>{bulkJobList?.counts?.queued || adminStatus?.bulk_queued_count || 0}</strong>
-                <span>Waiting</span>
-              </div>
-              <div>
-                <strong>{bulkJobList?.counts?.processing || adminStatus?.bulk_processing_count || 0}</strong>
-                <span>Processing</span>
-              </div>
-              <div>
-                <strong>{bulkJobList?.counts?.completed || adminStatus?.bulk_completed_count || 0}</strong>
-                <span>Completed</span>
-              </div>
-              <div>
-                <strong>{bulkJobList?.counts?.failed || adminStatus?.bulk_failed_count || 0}</strong>
-                <span>Failed</span>
-              </div>
-            </div>
-
-            {buildStatus && (
-              <div style={{ marginTop: "12px", fontSize: "14px", lineHeight: 1.5 }}>
-                <strong>Build Activity:</strong> {buildStatus.status || "unknown"}
-                {typeof buildStatus.seconds_since_activity !== "undefined" && (
-                  <> · Last activity: {buildStatus.seconds_since_activity}s ago</>
-                )}
-                <> · Walkthroughs: {buildStatus.walkthrough_count || 0}</>
-                <> · Images: {buildStatus.image_count || 0}</>
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "16px" }}>
-              <button
-                className="doneButton"
-                onClick={() => runQueuedWalkthroughs(1)}
-                disabled={adminLoading}
-              >
-                Run 1 Queued Job Now
-              </button>
-              <button
-                className="doneButton"
-                onClick={() => runQueuedWalkthroughs(5)}
-                disabled={adminLoading}
-              >
-                Run 5 Queued Jobs Now
-              </button>
-              <button
-                className="secondaryButton"
-                onClick={() => runQueuedWalkthroughs(20)}
-                disabled={adminLoading}
-              >
-                Run 20 Queued Jobs Now
-              </button>
-            </div>
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
               <h2>Walkthrough Queue Manager</h2>
 
               <button
@@ -1521,11 +1031,6 @@ function App() {
                   </div>
 
                   <div>
-                    <strong>{bulkJobList.counts?.processing || 0}</strong>
-                    <span>Processing</span>
-                  </div>
-
-                  <div>
                     <strong>{bulkJobList.counts?.failed || 0}</strong>
                     <span>Failed</span>
                   </div>
@@ -1542,7 +1047,7 @@ function App() {
                 </div>
 
                 <div style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
-                  {(["processing", "failed", "queued", "completed", "ignored"]).map((groupName) => (
+                  {(["failed", "queued", "completed", "ignored"]).map((groupName) => (
                     <div key={groupName}>
                       <h3 style={{ textTransform: "capitalize" }}>{groupName}</h3>
 
@@ -1587,32 +1092,12 @@ function App() {
                               )}
 
                               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
-                                {groupName === "queued" && (
-                                  <button
-                                    className="doneButton"
-                                    onClick={() => updateBulkJob(job.query_slug, "run")}
-                                    disabled={adminLoading}
-                                  >
-                                    Run Now
-                                  </button>
-                                )}
-
-                                {(groupName === "failed" || groupName === "ignored") && (
-                                  <button
-                                    className="doneButton"
-                                    onClick={() => updateBulkJob(job.query_slug, "retryrun")}
-                                    disabled={adminLoading}
-                                  >
-                                    Retry + Run Now
-                                  </button>
-                                )}
-
                                 <button
                                   className="secondaryButton"
                                   onClick={() => updateBulkJob(job.query_slug, "retry")}
                                   disabled={adminLoading}
                                 >
-                                  Retry Only
+                                  Retry
                                 </button>
 
                                 <button
@@ -1655,6 +1140,157 @@ function App() {
           </section>
 
           <section className="adminCard">
+            <div className="adminCardHeader">
+              <h2>Walkthrough Repair Studio</h2>
+
+              <button
+                className="secondaryButton"
+                onClick={loadAdminWalkthroughs}
+                disabled={adminLoading}
+              >
+                Refresh Walkthroughs
+              </button>
+            </div>
+
+            <p className="adminHelp">
+              Open a saved walkthrough, cherry-pick a weak step image, describe the correction, regenerate it, then accept or discard the replacement.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 320px) 1fr", gap: "16px" }}>
+              <div style={{ display: "grid", gap: "8px", alignContent: "start", maxHeight: "680px", overflow: "auto" }}>
+                {(walkthroughList || []).slice(0, 100).map((item) => (
+                  <button
+                    key={item.walkthrough_id}
+                    className="secondaryButton"
+                    style={{ textAlign: "left" }}
+                    onClick={() => loadAdminWalkthrough(item.walkthrough_id)}
+                    disabled={adminLoading}
+                  >
+                    <strong>{item.title}</strong>
+                    <br />
+                    <span style={{ fontSize: "12px", opacity: 0.75 }}>
+                      {item.walkthrough_id} · {item.step_count} steps
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                {selectedAdminWalkthrough ? (
+                  <>
+                    <h3>{selectedAdminWalkthrough.title}</h3>
+                    <p className="adminHelp">{selectedAdminWalkthrough.walkthrough_id}</p>
+
+                    <div style={{ display: "grid", gap: "16px" }}>
+                      {(selectedAdminWalkthrough.steps || []).map((step) => (
+                        <div
+                          key={step.id}
+                          style={{
+                            border: "1px solid rgba(0,0,0,0.14)",
+                            borderRadius: "16px",
+                            padding: "14px",
+                            background: "rgba(255,255,255,0.8)"
+                          }}
+                        >
+                          <h4>{step.imageLabel || `Step ${step.id}`}</h4>
+                          <p>{step.instruction}</p>
+                          <p style={{ fontSize: "13px", opacity: 0.8 }}>{step.detail}</p>
+
+                          <div style={{ display: "grid", gridTemplateColumns: step.pendingImageUrl ? "1fr 1fr" : "1fr", gap: "12px" }}>
+                            <div>
+                              <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>Current Image</div>
+                              {step.imageUrl ? (
+                                <img
+                                  src={step.imageUrl.startsWith("http") ? step.imageUrl : `${API_URL}${step.imageUrl}`}
+                                  alt={step.imageLabel || `Step ${step.id}`}
+                                  style={{ width: "100%", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.1)" }}
+                                />
+                              ) : (
+                                <div className="missingThumb">No image</div>
+                              )}
+                            </div>
+
+                            {step.pendingImageUrl && (
+                              <div>
+                                <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>New Candidate</div>
+                                <img
+                                  src={step.pendingImageUrl.startsWith("http") ? step.pendingImageUrl : `${API_URL}${step.pendingImageUrl}`}
+                                  alt={`New candidate for step ${step.id}`}
+                                  style={{ width: "100%", borderRadius: "12px", border: "2px solid rgba(0,120,255,0.35)" }}
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <textarea
+                            className="adminTextArea small"
+                            style={{ marginTop: "12px" }}
+                            value={repairCorrections[step.id] || ""}
+                            onChange={(e) => setRepairCorrections({
+                              ...repairCorrections,
+                              [step.id]: e.target.value
+                            })}
+                            placeholder="Correction prompt, example: Make the pipe copper, remove PVC, show a propane torch heating the joint."
+                          />
+
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                            <button
+                              className="startButton"
+                              onClick={() => regenerateStepImage(step.id)}
+                              disabled={adminLoading}
+                            >
+                              Regenerate This Image
+                            </button>
+
+                            {step.pendingImageUrl && (
+                              <button
+                                className="doneButton"
+                                onClick={() => acceptStepImage(step.id)}
+                                disabled={adminLoading}
+                              >
+                                Keep New Image
+                              </button>
+                            )}
+
+                            <button
+                              className="secondaryButton"
+                              onClick={() => revertStepImage(step.id)}
+                              disabled={adminLoading}
+                            >
+                              Revert / Discard
+                            </button>
+
+                            <button
+                              className="secondaryButton"
+                              onClick={() => {
+                                const filename = (step.imageUrl || "").split("/").pop();
+                                setPromoteFilename(filename);
+                                setPromoteStepNumber(step.id);
+                              }}
+                              disabled={!step.imageUrl}
+                            >
+                              Stage for Canonical Promotion
+                            </button>
+                          </div>
+
+                          {step.imagePrompt && (
+                            <details style={{ marginTop: "10px", fontSize: "12px" }}>
+                              <summary>Prompt history</summary>
+                              <pre style={{ whiteSpace: "pre-wrap" }}>{step.imagePrompt}</pre>
+                            </details>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="adminHelp">Select a walkthrough to inspect and repair its images.</p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="adminCard">
             <h2>Bulk Query Seeder</h2>
             <p className="adminHelp">
               Paste one common installation or repair query per line.
@@ -1691,7 +1327,7 @@ function App() {
               >
                 {adminLoading
                   ? "PROCESSING..."
-                  : "RUN 5 JOBS NOW"}
+                  : "RUN 5 JOBS"}
               </button>
 
               <button
@@ -1726,7 +1362,7 @@ function App() {
                 }}
                 disabled={adminLoading}
               >
-                RUN 1 JOB NOW
+                WORKER AUTOMATION
               </button>
 
               <button
@@ -2035,6 +1671,80 @@ function App() {
             ← Back to App
           </button>
         </main>
+      ) : screen === "briefing" ? (
+        <main className="clarifyScreen modelBriefingScreen">
+          <div className="homeBadge">MODEL-SPECIFIC PREP</div>
+
+          <h1>{selectedBrand} {selectedModel}</h1>
+
+          <section className="brandModelPanel modelBriefingCard" style={{ display: "grid", gridTemplateColumns: "minmax(220px, 360px) 1fr", gap: "24px", alignItems: "start" }}>
+            <div className="modelPhotoFrame" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "220px", background: "#f6f7f8", borderRadius: "18px", overflow: "hidden" }}>
+              {overlayData?.product_image_url ? (
+                <img
+                  className="modelProductImage"
+                  style={{ maxWidth: "100%", maxHeight: "260px", objectFit: "contain" }}
+                  src={overlayData.product_image_url}
+                  alt={`${selectedBrand} ${selectedModel}`}
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+              ) : (
+                <div className="modelPhotoFallback" style={{ padding: "40px", color: "#6b7280" }}>Product photo pending</div>
+              )}
+            </div>
+
+            <div className="modelBriefingText">
+              <p className="clarifyPrompt">
+                Review the model-specific notes before opening the full walkthrough.
+              </p>
+
+              <button
+                className="secondaryButton"
+                onClick={() => setTipsExpanded(!tipsExpanded)}
+              >
+                Important Model-Specific Installation Tips {tipsExpanded ? "▴" : "▾"}
+              </button>
+
+              {tipsExpanded && (
+                <div className="overlayGrid modelTipsList">
+                  {currentModelTips.length > 0 ? currentModelTips.map((tip, index) => (
+                    <div key={`${tip.id || tip.title}-${index}`} className={`overlayCard overlay-${tip.type || "model_specific"}`}>
+                      <strong>{tip.title}</strong>
+                      <p>{tip.content}</p>
+                    </div>
+                  )) : (
+                    <p>No model-specific tips have been extracted yet.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="clarifyActions">
+                {overlayData?.manual_url && (
+                  <a
+                    className="secondaryButton"
+                    href={overlayData.manual_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download Install PDF
+                  </a>
+                )}
+
+                <button className="startButton" onClick={proceedSpecificInstall} disabled={loading}>
+                  {loading ? "BUILDING..." : "PROCEED TO INSTALL"}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div className="clarifyActions">
+            <button className="secondaryButton" onClick={() => { setScreen("home"); setClarifying(true); }}>
+              ← Change Brand / Model
+            </button>
+            <button className="secondaryButton" onClick={backToHome}>
+              Start Over
+            </button>
+          </div>
+        </main>
       ) : !started && !clarifying ? (
         <main className="homeScreen">
           <div className="homeBadge">FIELD WALKTHROUGHS</div>
@@ -2155,9 +1865,9 @@ function App() {
               <button
                 className="startButton"
                 onClick={continueSpecific}
-                disabled={loading || !selectedBrand}
+                disabled={loading || !selectedBrand || !selectedModel}
               >
-                {loading ? "BUILDING..." : "CONTINUE SPECIFIC"}
+                {loading ? "LOADING MODEL BRIEFING..." : "VIEW MODEL BRIEFING"}
               </button>
             ) : installMode === "generic" ? (
               <button
@@ -2199,47 +1909,34 @@ function App() {
 
             {walkthrough.estimated_labor_label && (
               <section className="laborEstimateCard">
+                <div className="laborEstimateIcon">🛠</div>
                 <div>
-                  <strong>{walkthrough.estimated_labor_label}</strong>{" "}
-                  <span>(Generic)</span>
+                  <strong>{walkthrough.estimated_labor_label}</strong>
+                  <span>Generic estimate before model-specific adjustments.</span>
                 </div>
               </section>
             )}
 
-            {installMode === "specific" && overlayData?.manual_url && (
+            {installMode === "specific" &&
+              overlayData?.overlays?.length > 0 && (
               <section className="overlayPanel">
                 <h3>MODEL-SPECIFIC NOTES</h3>
-                <p>
-                  <strong>{overlayData.brand}</strong>{" "}
-                  {overlayData.model ? `— ${overlayData.model}` : ""}
-                </p>
-                <p>
-                  <a
-                    href={overlayData.manual_url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open manufacturer installation guide
-                  </a>
-                </p>
 
-                {overlayData?.overlays?.length > 0 && (
-                  <div className="overlayGrid">
-                    {overlayData.overlays.map((overlay, index) => (
-                      <div
-                        key={`${overlay.title}-${index}`}
-                        className={`overlayCard overlay-${overlay.type}`}
-                      >
-                        <strong>Step {overlay.step_id}: {overlay.title}</strong>
-                        <p>{overlay.content}</p>
+                <div className="overlayGrid">
+                  {overlayData.overlays.map((overlay, index) => (
+                    <div
+                      key={`${overlay.title}-${index}`}
+                      className={`overlayCard overlay-${overlay.type}`}
+                    >
+                      <strong>{overlay.title}</strong>
+                      <p>{overlay.content}</p>
 
-                        <small>
-                          {String(overlay.type || "model_specific").replace("_", " ").toUpperCase()}
-                        </small>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      <small>
+                        {overlay.type.replace("_", " ").toUpperCase()}
+                      </small>
+                    </div>
+                  ))}
+                </div>
               </section>
             )}
 
@@ -2256,21 +1953,22 @@ function App() {
                 <div className="illustrationLabel">{currentStep.imageLabel}</div>
 
                 {installMode === "specific" &&
-                  visibleHotspots.map((hotspot, index) => (
-                  <button
-                    key={hotspot.id}
-                    className={`hotspot hotspot${index + 1}`}
-                    style={
-                      hotspot.x && hotspot.y
-                        ? { left: `${hotspot.x}%`, top: `${hotspot.y}%` }
-                        : undefined
-                    }
-                    onClick={() => setActiveHotspot(hotspot)}
-                    aria-label={hotspot.label}
-                  >
-                    +
-                  </button>
-                ))}
+                  (overlayData?.overlays || [])
+                    .filter((hotspot) => Number(hotspot.step_id || hotspot.stepId || 0) === Number(currentStep.id))
+                    .map((hotspot, index) => (
+                    <button
+                      key={hotspot.id || `${hotspot.title}-${index}`}
+                      className={`hotspot hotspot${index + 1}`}
+                      style={{
+                        left: `${hotspot.x || 50}%`,
+                        top: `${hotspot.y || 45}%`
+                      }}
+                      onClick={() => setActiveHotspot(hotspot)}
+                      aria-label={hotspot.label || hotspot.title}
+                    >
+                      +
+                    </button>
+                  ))}
               </div>
             </section>
 
@@ -2291,12 +1989,8 @@ function App() {
                 <p>{activeHotspot.content}</p>
                 {activeHotspot.manual_url && (
                   <p>
-                    <a
-                      href={activeHotspot.manual_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open source manual
+                    <a href={activeHotspot.manual_url} target="_blank" rel="noreferrer">
+                      Open source installation PDF
                     </a>
                   </p>
                 )}
