@@ -287,6 +287,10 @@ class ProductPagePackageRequest(BaseModel):
     product_page_url: str
 
 
+class SaveWalkthroughRequest(BaseModel):
+    walkthrough: dict
+
+
 
 def catalog_slug(value: str) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
@@ -1437,6 +1441,39 @@ def post_bulk_query_ignore(request: QuerySlugRequest):
 @app.post("/admin/bulk-query-delete")
 def post_bulk_query_delete(request: QuerySlugRequest):
     return delete_bulk_query(request.query_slug)
+
+
+@app.post("/admin/save-walkthrough")
+def post_admin_save_walkthrough(request: SaveWalkthroughRequest):
+    walkthrough = request.walkthrough or {}
+    walkthrough_id = (
+        walkthrough.get("walkthrough_id")
+        or slugify(walkthrough.get("title", "edited-walkthrough"))
+    )
+
+    if not walkthrough_id:
+        return {"status": "error", "error": "Missing walkthrough_id."}
+
+    steps = walkthrough.get("steps", []) or []
+    renumbered_steps = []
+    for index, step in enumerate(steps, start=1):
+        if isinstance(step, dict):
+            updated = dict(step)
+            updated["id"] = index
+            renumbered_steps.append(updated)
+
+    walkthrough["walkthrough_id"] = walkthrough_id
+    walkthrough["steps"] = renumbered_steps
+    walkthrough["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    save_walkthrough(walkthrough_id, walkthrough)
+
+    return {
+        "status": "saved",
+        "walkthrough_id": walkthrough_id,
+        "step_count": len(renumbered_steps),
+        "walkthrough": walkthrough
+    }
 
 
 @app.get("/admin/walkthroughs")
