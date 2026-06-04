@@ -593,6 +593,57 @@ function App() {
   }
 
 
+  async function rejectProductPhotoCandidates(item) {
+    const key = catalogItemKey(item);
+    const diagnostic = photoDiagnostics[key] || {};
+    const candidateCount = Array.isArray(diagnostic.image_candidates) ? diagnostic.image_candidates.length : 0;
+
+    const ok = window.confirm(
+      `Reject all discovered photo candidates for ${item.brand} ${item.model}?\n\nThis clears the cached photo for this product and prevents the current candidate set from being auto-selected again. You can still paste a manufacturer image URL afterward.`
+    );
+
+    if (!ok) return;
+
+    setPhotoActionKey(`${key}-reject`);
+    setAdminMessage(`Rejecting discovered photos for ${item.brand} ${item.model}...`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/catalog/reject-photo-candidates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          category: item.category || "toilet",
+          brand: item.brand,
+          model: item.model
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || data.status || "Could not reject photo candidates.");
+      }
+      setPhotoDiagnostics((current) => ({
+        ...current,
+        [key]: {
+          ...(current[key] || {}),
+          cached_photo_url: "",
+          download_status: "rejected",
+          failure_reason: `Rejected ${data.rejected_count || candidateCount || 0} image candidate(s). Paste a manufacturer image URL to override.`,
+          rejected_count: data.rejected_count || candidateCount || 0,
+          image_candidates: []
+        }
+      }));
+      setAdminMessage(`${item.brand} ${item.model}: rejected ${data.rejected_count || candidateCount || 0} discovered photo candidate(s).`);
+      await loadCatalogPipelineStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`${item.brand} ${item.model}: reject candidates failed — ${error.message}`);
+    } finally {
+      setPhotoActionKey("");
+    }
+  }
+
+
   async function buildProductPagePackage() {
     const brand = productPackageBrand.trim();
     const model = productPackageModel.trim();
@@ -1629,33 +1680,39 @@ function App() {
                         {hasPhoto && <a className="secondaryButton" href={apiAssetUrl(photoUrl)} target="_blank" rel="noreferrer">View Photo</a>}
                         {item.manual?.local_url && <a className="secondaryButton" href={apiAssetUrl(item.manual.local_url)} target="_blank" rel="noreferrer">View PDF</a>}
                         {item.photo?.product_page_url && <a className="secondaryButton" href={apiAssetUrl(item.photo.product_page_url)} target="_blank" rel="noreferrer">Product Page</a>}
-                        {!hasPhoto && (
-                          <button className="secondaryButton" onClick={() => diagnoseProductPhoto(item)} disabled={!!catalogPipelineRunning || !!photoActionKey}>
-                            {photoActionKey === `${key}-diagnose` ? "Diagnosing..." : "Diagnose Photo"}
-                          </button>
-                        )}
+                        <button className="secondaryButton" onClick={() => diagnoseProductPhoto(item)} disabled={!!catalogPipelineRunning || !!photoActionKey}>
+                          {photoActionKey === `${key}-diagnose` ? "Loading Photos..." : (hasPhoto ? "Change Photo" : "Diagnose Photo")}
+                        </button>
                       </div>
 
-                      {!hasPhoto && (
-                        <div style={{ marginTop: "10px", display: "grid", gap: "6px" }}>
-                          <label className="fieldLabel">
-                            Manufacturer image URL override
-                            <input
-                              value={photoOverrideUrls[key] || ""}
-                              onChange={(event) => setPhotoOverrideUrls((current) => ({ ...current, [key]: event.target.value }))}
-                              placeholder="Paste manufacturer-hosted image URL"
-                            />
-                          </label>
-                          <button className="secondaryButton" onClick={() => cacheProductPhotoFromUrl(item)} disabled={!!catalogPipelineRunning || !!photoActionKey || !(photoOverrideUrls[key] || "").trim()}>
-                            {photoActionKey === `${key}-cache` ? "Caching Photo..." : "Cache Photo"}
-                          </button>
-                        </div>
-                      )}
+                      <div style={{ marginTop: "10px", display: "grid", gap: "6px" }}>
+                        {hasPhoto && (
+                          <div style={{ display: "flex", gap: "10px", alignItems: "center", padding: "8px", borderRadius: "12px", background: "#f8fafc" }}>
+                            <img src={apiAssetUrl(photoUrl)} alt={`${item.brand} ${item.model}`} style={{ width: "64px", height: "64px", objectFit: "contain", background: "white", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.08)" }} />
+                            <div style={{ fontSize: "12px" }}>
+                              <strong>Current cached photo</strong>
+                              <div style={{ color: "#555" }}>Use Change Photo below to pick a better candidate or paste a manufacturer image URL.</div>
+                            </div>
+                          </div>
+                        )}
+                        <label className="fieldLabel">
+                          Manufacturer image URL override
+                          <input
+                            value={photoOverrideUrls[key] || ""}
+                            onChange={(event) => setPhotoOverrideUrls((current) => ({ ...current, [key]: event.target.value }))}
+                            placeholder="Paste manufacturer-hosted image URL"
+                          />
+                        </label>
+                        <button className="secondaryButton" onClick={() => cacheProductPhotoFromUrl(item)} disabled={!!catalogPipelineRunning || !!photoActionKey || !(photoOverrideUrls[key] || "").trim()}>
+                          {photoActionKey === `${key}-cache` ? "Caching Photo..." : (hasPhoto ? "Replace with Pasted Photo" : "Cache Photo")}
+                        </button>
+                      </div>
 
                       {diagnostic && (
                         <div style={{ marginTop: "10px", padding: "10px", borderRadius: "12px", background: "#f8fafc", fontSize: "12px" }}>
                           <strong>Photo Diagnostics</strong>
                           <div>Image candidates: {candidateCount ?? 0}</div>
+                          {diagnostic.rejected_count !== undefined && diagnostic.rejected_count > 0 && <div>Rejected candidates: {diagnostic.rejected_count}</div>}
                           <div>Download status: {diagnostic.download_status || "unknown"}</div>
                           {diagnostic.attempted_count !== undefined && <div>Download attempts: {diagnostic.attempted_count}</div>}
                           {diagnostic.selected_candidate && <div style={{ wordBreak: "break-all" }}>Cached candidate: {diagnostic.selected_candidate}</div>}
@@ -1668,6 +1725,12 @@ function App() {
                               <strong>Choose Product Photo</strong>
                               <div style={{ color: "#555", margin: "3px 0 8px" }}>
                                 Pick the clearest full-product manufacturer image. Avoid close-ups, lifestyle scenes, and similar-but-different products.
+                              </div>
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                                {hasPhoto && <a className="secondaryButton" href={apiAssetUrl(photoUrl)} target="_blank" rel="noreferrer">View Current Photo</a>}
+                                <button className="secondaryButton" onClick={() => rejectProductPhotoCandidates(item)} disabled={!!catalogPipelineRunning || !!photoActionKey}>
+                                  {photoActionKey === `${key}-reject` ? "Rejecting..." : "Reject All Found Photos"}
+                                </button>
                               </div>
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))", gap: "8px", maxHeight: "310px", overflowY: "auto", paddingRight: "4px" }}>
                                 {diagnostic.image_candidates.slice(0, 24).map((candidateUrl, candidateIndex) => (
@@ -1689,7 +1752,7 @@ function App() {
                                         onClick={() => cacheProductPhotoCandidate(item, candidateUrl)}
                                         disabled={!!catalogPipelineRunning || !!photoActionKey}
                                       >
-                                        {photoActionKey === `${key}-select` ? "Saving..." : "Use"}
+                                        {photoActionKey === `${key}-select` ? "Saving..." : (hasPhoto ? "Replace" : "Use")}
                                       </button>
                                     </div>
                                   </div>
