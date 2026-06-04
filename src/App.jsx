@@ -18,53 +18,6 @@ function apiAssetUrl(url) {
   return value;
 }
 
-
-function EditableTextField({
-  label,
-  value,
-  onCommit,
-  multiline = false,
-  placeholder = "",
-  className = "adminTextArea small",
-  rows = 3
-}) {
-  const [draft, setDraft] = useState(value || "");
-
-  useEffect(() => {
-    setDraft(value || "");
-  }, [value]);
-
-  function commit() {
-    const original = value || "";
-    if (draft !== original) {
-      onCommit(draft);
-    }
-  }
-
-  return (
-    <label className="fieldLabel">
-      {label}
-      {multiline ? (
-        <textarea
-          className={className}
-          rows={rows}
-          value={draft}
-          placeholder={placeholder}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={commit}
-        />
-      ) : (
-        <input
-          value={draft}
-          placeholder={placeholder}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={commit}
-        />
-      )}
-    </label>
-  );
-}
-
 function buildSpecificQuery(query, brand, model) {
   const baseQuery = query.trim() || "installation walkthrough";
 
@@ -149,6 +102,9 @@ function App() {
   const [productPackageUrl, setProductPackageUrl] = useState("https://niagaracorp.com/products/original-stealth-handle-round/");
   const [productPackageRunning, setProductPackageRunning] = useState(false);
   const [productPackageResult, setProductPackageResult] = useState(null);
+  const [photoDiagnostics, setPhotoDiagnostics] = useState({});
+  const [photoOverrideUrls, setPhotoOverrideUrls] = useState({});
+  const [photoActionKey, setPhotoActionKey] = useState("");
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
@@ -417,49 +373,8 @@ function App() {
         throw new Error(data.detail || data.status || "Could not load catalog pipeline status.");
       }
 
-      let products = [];
-      try {
-        const productResponse = await fetch(`${API_URL}/catalog/products?category=toilet`, {
-          cache: "no-store"
-        });
-        const productData = await productResponse.json();
-        products = productData.products || [];
-      } catch (productError) {
-        console.warn("Could not load v2 catalog products", productError);
-      }
-
-      const productMap = new Map(
-        products.map((product) => [
-          `${String(product.brand || "").toLowerCase()}::${String(product.model || "").toLowerCase()}`,
-          product
-        ])
-      );
-
-      const mergedItems = (data.items || []).map((item) => {
-        const product = productMap.get(`${String(item.brand || "").toLowerCase()}::${String(item.model || "").toLowerCase()}`);
-        const photoUrl = product?.photo_url || item.photo?.local_url || "";
-        const manualUrl = product?.manual_url || item.manual?.local_url || "";
-
-        return {
-          ...item,
-          source: product?.source || item.source || "starter_catalog",
-          product_page_url: product?.product_page_url || item.photo?.product_page_url || "",
-          photo: {
-            ...(item.photo || {}),
-            status: photoUrl ? "cached" : item.photo?.status || "missing",
-            local_url: photoUrl
-          },
-          manual: {
-            ...(item.manual || {}),
-            status: manualUrl ? "cached" : item.manual?.status || "missing",
-            local_url: manualUrl
-          },
-          confidence: product?.confidence || item.confidence || "LOW"
-        };
-      });
-
-      setCatalogPipelineStatus({ ...data, items: mergedItems, products });
-      setAdminMessage(`Catalog pipelines loaded: ${mergedItems.length} models.`);
+      setCatalogPipelineStatus(data);
+      setAdminMessage(`Catalog pipelines loaded: ${(data.items || []).length} models.`);
     } catch (error) {
       console.error(error);
       setAdminMessage(`Catalog pipeline status failed: ${error.message}`);
@@ -505,6 +420,86 @@ function App() {
       setAdminMessage(`${item.brand} ${item.model}: ${pipeline} pipeline failed — ${error.message}`);
     } finally {
       setCatalogPipelineRunning("");
+    }
+  }
+
+
+  function catalogItemKey(item) {
+    return `${item.brand}__${item.model}`.replace(/\s+/g, "_");
+  }
+
+  async function diagnoseProductPhoto(item) {
+    const key = catalogItemKey(item);
+    setPhotoActionKey(`${key}-diagnose`);
+    setAdminMessage(`Diagnosing photo discovery for ${item.brand} ${item.model}...`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/catalog/photo-diagnostics`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          category: item.category || "toilet",
+          brand: item.brand,
+          model: item.model
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || data.status || "Photo diagnostics failed.");
+      }
+      setPhotoDiagnostics((current) => ({ ...current, [key]: data }));
+      const count = Array.isArray(data.image_candidates) ? data.image_candidates.length : 0;
+      setAdminMessage(`${item.brand} ${item.model}: found ${count} image candidate(s). ${data.failure_reason || ""}`.trim());
+    } catch (error) {
+      console.error(error);
+      setPhotoDiagnostics((current) => ({
+        ...current,
+        [key]: { status: "failed", failure_reason: error.message, image_candidates: [] }
+      }));
+      setAdminMessage(`${item.brand} ${item.model}: photo diagnostics failed — ${error.message}`);
+    } finally {
+      setPhotoActionKey("");
+    }
+  }
+
+  async function cacheProductPhotoFromUrl(item) {
+    const key = catalogItemKey(item);
+    const imageUrl = (photoOverrideUrls[key] || "").trim();
+
+    if (!imageUrl) {
+      setAdminMessage("Paste a manufacturer-hosted image URL before caching the photo.");
+      return;
+    }
+
+    setPhotoActionKey(`${key}-cache`);
+    setAdminMessage(`Caching photo for ${item.brand} ${item.model}...`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/catalog/cache-photo-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          category: item.category || "toilet",
+          brand: item.brand,
+          model: item.model,
+          image_url: imageUrl
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || data.status || "Could not cache photo.");
+      }
+      setProductPackageResult(data);
+      setAdminMessage(`${item.brand} ${item.model}: photo cache status ${data.status}.`);
+      await loadCatalogPipelineStatus();
+      await diagnoseProductPhoto(item);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`${item.brand} ${item.model}: cache photo failed — ${error.message}`);
+    } finally {
+      setPhotoActionKey("");
     }
   }
 
@@ -1395,18 +1390,14 @@ function App() {
                 {editorDraft ? (
                   <>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px", marginBottom: "14px" }}>
-                      <EditableTextField
-                        label="Walkthrough title"
-                        value={editorDraft.title || ""}
-                        onCommit={(value) => updateEditorField("title", value)}
-                      />
-                      <EditableTextField
-                        label="Disclaimer"
-                        value={editorDraft.disclaimer || ""}
-                        onCommit={(value) => updateEditorField("disclaimer", value)}
-                        multiline
-                        rows={3}
-                      />
+                      <label className="fieldLabel">
+                        Walkthrough title
+                        <input value={editorDraft.title || ""} onChange={(event) => updateEditorField("title", event.target.value)} />
+                      </label>
+                      <label className="fieldLabel">
+                        Disclaimer
+                        <textarea className="adminTextArea small" value={editorDraft.disclaimer || ""} onChange={(event) => updateEditorField("disclaimer", event.target.value)} />
+                      </label>
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" }}>
@@ -1445,27 +1436,20 @@ function App() {
                             )}
                           </div>
 
-                          <EditableTextField
-                            label="Step title / caption"
-                            value={step.imageLabel || ""}
-                            onCommit={(value) => updateEditorStep(step.id, "imageLabel", value)}
-                          />
+                          <label className="fieldLabel">
+                            Step title / caption
+                            <input value={step.imageLabel || ""} onChange={(event) => updateEditorStep(step.id, "imageLabel", event.target.value)} />
+                          </label>
 
-                          <EditableTextField
-                            label="Instruction text"
-                            value={step.instruction || ""}
-                            onCommit={(value) => updateEditorStep(step.id, "instruction", value)}
-                            multiline
-                            rows={4}
-                          />
+                          <label className="fieldLabel">
+                            Instruction text
+                            <textarea className="adminTextArea small" value={step.instruction || ""} onChange={(event) => updateEditorStep(step.id, "instruction", event.target.value)} />
+                          </label>
 
-                          <EditableTextField
-                            label="Detail text"
-                            value={step.detail || ""}
-                            onCommit={(value) => updateEditorStep(step.id, "detail", value)}
-                            multiline
-                            rows={4}
-                          />
+                          <label className="fieldLabel">
+                            Detail text
+                            <textarea className="adminTextArea small" value={step.detail || ""} onChange={(event) => updateEditorStep(step.id, "detail", event.target.value)} />
+                          </label>
 
                           <textarea
                             className="adminTextArea small"
@@ -1531,36 +1515,63 @@ function App() {
 
             {catalogPipelineStatus?.items?.length ? (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px" }}>
-                {catalogPipelineStatus.items.map((item) => (
-                  <div key={`${item.brand}-${item.model}`} style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: "14px", padding: "12px", background: "white" }}>
-                    <strong>{item.brand} {item.model}</strong>
-                    <div style={{ fontSize: "12px", marginTop: "6px" }}>
-                      Photo: {item.photo?.status || "unknown"} · Manual: {item.manual?.status || "unknown"} · Overlay: {item.overlay?.status || "unknown"}
+                {catalogPipelineStatus.items.map((item) => {
+                  const key = catalogItemKey(item);
+                  const diagnostic = photoDiagnostics[key];
+                  const hasPhoto = item.photo?.status === "cached" && item.photo?.local_url;
+                  const candidateCount = Array.isArray(diagnostic?.image_candidates) ? diagnostic.image_candidates.length : null;
+
+                  return (
+                    <div key={`${item.brand}-${item.model}`} style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: "14px", padding: "12px", background: "white" }}>
+                      <strong>{item.brand} {item.model}</strong>
+                      <div style={{ fontSize: "12px", marginTop: "6px" }}>
+                        Photo: {item.photo?.status || "unknown"} · Manual: {item.manual?.status || "unknown"} · Overlay: {item.overlay?.status || "unknown"}
+                      </div>
+                      <div style={{ fontSize: "12px" }}>Confidence: <strong>{item.confidence || "UNKNOWN"}</strong></div>
+                      <div style={{ fontSize: "12px", color: "#555" }}>Source: {item.source || "starter_catalog"}</div>
+
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
+                        <button className="secondaryButton" onClick={() => runCatalogPipeline(item, "all")} disabled={!!catalogPipelineRunning || !!photoActionKey}>
+                          {catalogPipelineRunning === `${item.brand}-${item.model}-all` ? "Running..." : "Run All"}
+                        </button>
+                        {hasPhoto && <a className="secondaryButton" href={apiAssetUrl(item.photo.local_url)} target="_blank" rel="noreferrer">View Photo</a>}
+                        {item.manual?.local_url && <a className="secondaryButton" href={apiAssetUrl(item.manual.local_url)} target="_blank" rel="noreferrer">View PDF</a>}
+                        {item.photo?.product_page_url && <a className="secondaryButton" href={apiAssetUrl(item.photo.product_page_url)} target="_blank" rel="noreferrer">Product Page</a>}
+                        {!hasPhoto && (
+                          <button className="secondaryButton" onClick={() => diagnoseProductPhoto(item)} disabled={!!catalogPipelineRunning || !!photoActionKey}>
+                            {photoActionKey === `${key}-diagnose` ? "Diagnosing..." : "Diagnose Photo"}
+                          </button>
+                        )}
+                      </div>
+
+                      {!hasPhoto && (
+                        <div style={{ marginTop: "10px", display: "grid", gap: "6px" }}>
+                          <label className="fieldLabel">
+                            Manufacturer image URL override
+                            <input
+                              value={photoOverrideUrls[key] || ""}
+                              onChange={(event) => setPhotoOverrideUrls((current) => ({ ...current, [key]: event.target.value }))}
+                              placeholder="Paste manufacturer-hosted image URL"
+                            />
+                          </label>
+                          <button className="secondaryButton" onClick={() => cacheProductPhotoFromUrl(item)} disabled={!!catalogPipelineRunning || !!photoActionKey || !(photoOverrideUrls[key] || "").trim()}>
+                            {photoActionKey === `${key}-cache` ? "Caching Photo..." : "Cache Photo"}
+                          </button>
+                        </div>
+                      )}
+
+                      {diagnostic && (
+                        <div style={{ marginTop: "10px", padding: "10px", borderRadius: "12px", background: "#f8fafc", fontSize: "12px" }}>
+                          <strong>Photo Diagnostics</strong>
+                          <div>Image candidates: {candidateCount ?? 0}</div>
+                          <div>Download status: {diagnostic.download_status || "unknown"}</div>
+                          {diagnostic.best_candidate && <div style={{ wordBreak: "break-all" }}>Best candidate: {diagnostic.best_candidate}</div>}
+                          {diagnostic.failure_reason && <div style={{ color: "#9b1c1c" }}>Reason: {diagnostic.failure_reason}</div>}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize: "12px" }}>Confidence: <strong>{item.confidence || "UNKNOWN"}</strong></div>
-                    {item.source && <div style={{ fontSize: "12px", opacity: 0.7 }}>Source: {item.source}</div>}
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
-                      <button className="secondaryButton" onClick={() => runCatalogPipeline(item, "all")} disabled={!!catalogPipelineRunning}>
-                        {catalogPipelineRunning === `${item.brand}-${item.model}-all` ? "Running..." : "Run All"}
-                      </button>
-                      {item.photo?.local_url && (
-                        <a className="secondaryButton" href={apiAssetUrl(item.photo.local_url)} target="_blank" rel="noreferrer">
-                          View Photo
-                        </a>
-                      )}
-                      {item.manual?.local_url && (
-                        <a className="secondaryButton" href={apiAssetUrl(item.manual.local_url)} target="_blank" rel="noreferrer">
-                          View PDF
-                        </a>
-                      )}
-                      {item.product_page_url && (
-                        <a className="secondaryButton" href={item.product_page_url} target="_blank" rel="noreferrer">
-                          Product Page
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="adminHelp">Click Refresh Catalog to load available packages and starter models.</p>
