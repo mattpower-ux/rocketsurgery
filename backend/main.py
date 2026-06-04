@@ -872,244 +872,47 @@ def fetch_text_url(url: str, timeout: int = 20) -> str:
     return raw.decode(charset, errors="replace")
 
 
-def normalize_discovered_image_url(raw_url: str, base_url: str) -> str:
-    """Normalize image URLs found in HTML, srcset, JSON-LD, and JS data blobs."""
-    value = unescape(str(raw_url or "")).strip().strip('"\'')
-    if not value or value.startswith("data:"):
-        return ""
-
-    # srcset entries can look like: "https://...jpg 1200w"
-    value = value.split()[0].strip().strip(",")
-    value = value.replace("\\/", "/")
-
-    if value.startswith("//"):
-        parsed = urlparse(base_url)
-        value = f"{parsed.scheme or 'https'}:{value}"
-
-    absolute = urljoin(base_url, value)
-    return absolute
-
-
-def image_url_looks_usable(url: str) -> bool:
-    """Keep likely image URLs, including CDN URLs that do not end in .jpg/.png."""
-    if not url:
-        return False
-
-    lower = url.lower()
-
-    blocked_terms = [
-        "logo",
-        "icon",
-        "favicon",
-        "sprite",
-        "placeholder",
-        "blank",
-        "tracking",
-        "analytics",
-        "avatar",
-        "spinner",
-    ]
-    if any(term in lower for term in blocked_terms):
-        return False
-
-    blocked_extensions = [".pdf", ".html", ".htm", ".css", ".js", ".svg"]
-    if any(lower.split("?", 1)[0].endswith(ext) for ext in blocked_extensions):
-        return False
-
-    if re.search(r"\.(?:jpg|jpeg|png|webp)(?:\?|#|$)", lower):
-        return True
-
-    # Many manufacturer/CDN product images are served from image/media/catalog
-    # endpoints and rely on Content-Type rather than file extension.
-    likely_path_terms = [
-        "/image",
-        "/images",
-        "/media",
-        "/assets",
-        "/asset",
-        "/product",
-        "/products",
-        "/catalog",
-        "/content/dam",
-        "scene7",
-        "cloudinary",
-        "akamai",
-        "cdn",
-    ]
-    return any(term in lower for term in likely_path_terms)
-
-
-def append_image_candidate(candidates: list[str], seen: set[str], raw_url: str, base_url: str):
-    absolute = normalize_discovered_image_url(raw_url, base_url)
-    if not absolute:
-        return
-
-    if not image_url_looks_usable(absolute):
-        return
-
-    if absolute not in seen:
-        seen.add(absolute)
-        candidates.append(absolute)
-
-
-def collect_image_like_strings_from_json(value, results: list[str]):
-    """Recursively collect likely product image strings from JSON-LD/hydration data."""
-    if isinstance(value, dict):
-        for key, item in value.items():
-            key_l = str(key).lower()
-            if key_l in {
-                "image",
-                "images",
-                "thumbnail",
-                "thumbnailurl",
-                "thumbnailurl",
-                "contenturl",
-                "url",
-                "src",
-                "srcset",
-                "heroimage",
-                "hero",
-                "media",
-                "gallery",
-                "productimage",
-                "productimages",
-            }:
-                collect_image_like_strings_from_json(item, results)
-            elif isinstance(item, (dict, list)):
-                collect_image_like_strings_from_json(item, results)
-            elif isinstance(item, str) and image_url_looks_usable(item):
-                results.append(item)
-
-    elif isinstance(value, list):
-        for item in value:
-            collect_image_like_strings_from_json(item, results)
-
-    elif isinstance(value, str):
-        if image_url_looks_usable(value):
-            results.append(value)
-        # Some JSON blobs contain comma-separated srcset-like values.
-        if "," in value and ("jpg" in value.lower() or "png" in value.lower() or "webp" in value.lower()):
-            for part in value.split(","):
-                piece = part.strip().split(" ")[0]
-                if image_url_looks_usable(piece):
-                    results.append(piece)
-
-
-def parse_json_script_payloads(html: str) -> list:
-    """Extract JSON from ld+json, __NEXT_DATA__, and application/json script tags."""
-    payloads = []
-
-    for attrs, body in re.findall(
-        r"<script([^>]*)>(.*?)</script>",
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    ):
-        attrs_l = attrs.lower()
-        body = unescape(body.strip())
-        if not body:
-            continue
-
-        is_likely_json = (
-            "application/ld+json" in attrs_l
-            or "application/json" in attrs_l
-            or "__next_data__" in attrs_l
-            or "application/graphql-response+json" in attrs_l
-        )
-
-        if not is_likely_json:
-            continue
-
-        try:
-            payloads.append(json.loads(body))
-            continue
-        except Exception:
-            pass
-
-        # Some sites embed multiple JSON objects or malformed JSON. Keep a
-        # fallback text payload so URL regex extraction still benefits.
-        payloads.append(body)
-
-    return payloads
-
-
-def extract_image_urls_from_text_blob(text: str) -> list[str]:
-    """Fallback extraction from HTML/JS text blobs, including escaped JSON URLs."""
-    if not text:
-        return []
-
-    blob = unescape(str(text)).replace("\\/", "/")
-    patterns = [
-        r"https?://[^\"'<>\\\s]+?\.(?:jpg|jpeg|png|webp)(?:\?[^\"'<>\\\s]*)?",
-        r"//[^\"'<>\\\s]+?\.(?:jpg|jpeg|png|webp)(?:\?[^\"'<>\\\s]*)?",
-    ]
-
-    urls = []
-    for pattern in patterns:
-        urls.extend(re.findall(pattern, blob, flags=re.IGNORECASE))
-    return urls
-
-
 def discover_image_candidates(html: str, base_url: str) -> list[str]:
     candidates = []
-    seen = set()
 
-    # 1) JSON-LD / hydration data. Modern manufacturer sites often expose
-    # product photos here even when the visible gallery is rendered by JS.
-    for payload in parse_json_script_payloads(html):
-        found = []
-        if isinstance(payload, str):
-            found.extend(extract_image_urls_from_text_blob(payload))
-        else:
-            collect_image_like_strings_from_json(payload, found)
-
-        for item in found:
-            append_image_candidate(candidates, seen, item, base_url)
-
-    # 2) OpenGraph/Twitter hero images.
+    # Prefer OpenGraph/Twitter hero images first.
     for pattern in [
-        r'<meta[^>]+property=["\\\']og:image(?::secure_url)?["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
-        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+property=["\\\']og:image(?::secure_url)?["\\\']',
-        r'<meta[^>]+name=["\\\']twitter:image(?::src)?["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
-        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+name=["\\\']twitter:image(?::src)?["\\\']',
+        r'<meta[^>]+property=["\\\']og:image["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
+        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+property=["\\\']og:image["\\\']',
+        r'<meta[^>]+name=["\\\']twitter:image["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
+        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+name=["\\\']twitter:image["\\\']',
     ]:
         for match in re.findall(pattern, html, flags=re.IGNORECASE):
-            append_image_candidate(candidates, seen, match, base_url)
+            candidates.append(match)
 
-    # 3) Visible and lazy-loaded image attributes.
-    for attr in [
-        "src",
-        "data-src",
-        "data-original",
-        "data-lazy",
-        "data-lazy-src",
-        "data-zoom-image",
-        "data-image",
-        "data-large-image",
-        "data-main-image",
-        "content",
-    ]:
-        pattern = rf'<(?:img|source|meta)[^>]+{attr}=["\\\']([^"\\\']+)["\\\']'
-        for match in re.findall(pattern, html, flags=re.IGNORECASE):
-            append_image_candidate(candidates, seen, match, base_url)
+    # Then scan image tags and srcsets.
+    for match in re.findall(r'<img[^>]+(?:src|data-src)=["\\\']([^"\\\']+)["\\\']', html, flags=re.IGNORECASE):
+        candidates.append(match)
 
-    # 4) srcset / data-srcset / imagesrcset.
-    for srcset in re.findall(
-        r'(?:srcset|data-srcset|imagesrcset)=["\\\']([^"\\\']+)["\\\']',
-        html,
-        flags=re.IGNORECASE,
-    ):
-        for part in srcset.split(","):
-            url_part = part.strip().split(" ")[0]
-            append_image_candidate(candidates, seen, url_part, base_url)
+    for srcset in re.findall(r'(?:srcset|data-srcset)=["\\\']([^"\\\']+)["\\\']', html, flags=re.IGNORECASE):
+        for part in srcset.split(','):
+            url_part = part.strip().split(' ')[0]
+            if url_part:
+                candidates.append(url_part)
 
-    # 5) CSS/background-image URLs and any remaining image URLs in the raw page.
-    for match in re.findall(r'url\(["\\\']?([^)"\\\']+)["\\\']?\)', html, flags=re.IGNORECASE):
-        append_image_candidate(candidates, seen, match, base_url)
-
-    for match in extract_image_urls_from_text_blob(html):
-        append_image_candidate(candidates, seen, match, base_url)
-
-    return candidates[:50]
+    clean = []
+    seen = set()
+    for item in candidates:
+        url = unescape(item.strip())
+        if not url or url.startswith('data:'):
+            continue
+        absolute = urljoin(base_url, url)
+        lower = absolute.lower()
+        if not any(ext in lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+            continue
+        # Avoid logos/icons when possible.
+        bad_terms = ['logo', 'icon', 'favicon', 'sprite', 'placeholder']
+        if any(term in lower for term in bad_terms):
+            continue
+        if absolute not in seen:
+            seen.add(absolute)
+            clean.append(absolute)
+    return clean[:20]
 
 
 def discover_pdf_candidates(html: str, base_url: str) -> list[dict]:
@@ -1134,62 +937,123 @@ def discover_pdf_candidates(html: str, base_url: str) -> list[dict]:
 
 
 def score_image_candidate(url: str, brand: str, model: str, product_page_url: str) -> int:
+    """Rank likely product photos ahead of category banners and site chrome.
+
+    This intentionally favors exact model/SKU/product signals and penalizes
+    broad category/lifestyle assets. The downloader will try several ranked
+    candidates, so this score does not need to be perfect; it just needs to
+    put plausible hero/product images near the top.
+    """
     score = 0
     lower = url.lower()
+    path = urlparse(url).path.lower()
     host = urlparse(url).netloc.lower()
     page_host = urlparse(product_page_url).netloc.lower()
 
-    if page_host and (host == page_host or host.endswith("." + page_host)):
-        score += 40
+    if page_host and (host == page_host or host.endswith('.' + page_host)):
+        score += 18
 
-    brand_terms = [term for term in re.split(r"[\s\-_/]+", (brand or "").lower()) if term]
-    model_terms = [term for term in re.split(r"[\s\-_/]+", (model or "").lower()) if term]
+    brand_tokens = [t for t in re.split(r"[^a-z0-9]+", (brand or "").lower()) if len(t) > 2]
+    model_tokens = [t for t in re.split(r"[^a-z0-9]+", (model or "").lower()) if len(t) > 1]
 
-    for term in brand_terms:
-        if term in lower:
-            score += 10
+    for token in brand_tokens:
+        if token in lower:
+            score += 8
+    for token in model_tokens:
+        if token in lower:
+            score += 14
 
-    for term in model_terms:
-        if term in lower:
-            score += 12
-
-    # Product/category terms usually indicate the right image instead of a logo.
+    # Product-photo cues.
     for term, points in [
-        ("toilet", 18),
         ("product", 10),
-        ("catalog", 7),
-        ("pdp", 7),
+        ("toilet", 10),
         ("hero", 8),
-        ("gallery", 6),
-        ("primary", 6),
-        ("white", 3),
+        ("primary", 8),
+        ("main", 6),
+        ("white", 4),
+        ("sku", 4),
+        ("shop/files", 3),
+        ("products", 3),
     ]:
         if term in lower:
             score += points
 
-    # Prefer image formats and larger assets.
-    if re.search(r"\.(?:jpg|jpeg|png|webp)(?:\?|#|$)", lower):
-        score += 8
-    if re.search(r"(?:width|w|wid|size)=([8-9]\d{2}|[1-9]\d{3,})", lower):
-        score += 8
-    if re.search(r"(?:height|h|hei)=([8-9]\d{2}|[1-9]\d{3,})", lower):
+    # Useful size hints from common CDN query params.
+    for pattern in [r"width=(\d+)", r"w=(\d+)"]:
+        match = re.search(pattern, lower)
+        if match:
+            try:
+                width = int(match.group(1))
+                if width >= 500:
+                    score += 8
+                elif width >= 250:
+                    score += 3
+            except Exception:
+                pass
+
+    if any(ext in path for ext in ['.jpg', '.jpeg', '.png', '.webp']):
         score += 5
 
     # Penalize likely non-product assets.
-    for term, penalty in [
-        ("logo", 80),
-        ("icon", 60),
-        ("favicon", 90),
-        ("sprite", 80),
-        ("placeholder", 80),
-        ("swatch", 25),
-        ("badge", 25),
-        ("banner", 10),
-    ]:
+    bad_terms = [
+        'logo', 'icon', 'favicon', 'sprite', 'placeholder', 'spinner',
+        'banner', 'category', 'categories', 'lifestyle', 'room-scene',
+        'commercial-toilets', 'commercial_toilets', 'bathroom-toilets',
+        'social', 'facebook', 'instagram', 'youtube', 'twitter',
+        'payment', 'visa', 'mastercard', 'klarna', 'affirm',
+    ]
+    for term in bad_terms:
         if term in lower:
-            score -= penalty
+            score -= 18
+
+    # Very tiny thumbnails often contain size hints in filenames or params.
+    if any(term in lower for term in ['thumb', 'thumbnail', 'small', 'swatch']):
+        score -= 10
 
     return score
+
+
+def cache_best_discovered_image(category: str, brand: str, model: str, image_candidates: list[str], max_attempts: int = 15) -> dict:
+    """Try ranked image candidates until one successfully downloads.
+
+    This removes the manual extra step where Admin first discovers candidates
+    and then asks a human to paste one. The manual override remains as a
+    fallback, but normal product-page builds should cache a usable image
+    automatically whenever one of the candidates is accessible.
+    """
+    attempts = []
+    unique = []
+    seen = set()
+    for url in image_candidates or []:
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        unique.append(url)
+
+    for index, candidate in enumerate(unique[:max_attempts], start=1):
+        result = cache_product_image_to_package(category, brand, model, candidate)
+        attempts.append({
+            "rank": index,
+            "url": candidate,
+            "status": result.get("status", "unknown"),
+            "local_url": result.get("local_url", ""),
+            "error": result.get("error", ""),
+        })
+        if result.get("local_url"):
+            result["attempted_count"] = index
+            result["attempts"] = attempts
+            result["selected_candidate"] = candidate
+            return result
+
+    return {
+        "status": "unavailable",
+        "local_url": "",
+        "remote_url": unique[0] if unique else "",
+        "error": "No discovered image candidate could be downloaded.",
+        "attempted_count": len(attempts),
+        "attempts": attempts,
+        "selected_candidate": "",
+    }
 
 
 def score_pdf_candidate(item: dict) -> int:
@@ -1289,10 +1153,13 @@ def build_product_page_package(category: str, brand: str, model: str, product_pa
         discovery["images"] = images
         discovery["pdfs"] = pdfs
 
-        photo = cache_product_image_to_package(category, brand, model, images[0] if images else "")
+        photo = cache_best_discovered_image(category, brand, model, images, max_attempts=15)
         manual = cache_manual_to_package(category, brand, model, pdfs[0]["url"] if pdfs else "")
         discovery["photo"] = photo
         discovery["manual"] = manual
+        discovery["photo_attempts"] = photo.get("attempts", [])
+        discovery["photo_attempted_count"] = photo.get("attempted_count", 0)
+        discovery["selected_photo_candidate"] = photo.get("selected_candidate", "") or photo.get("remote_url", "")
         discovery["status"] = "complete" if photo.get("local_url") or manual.get("local_url") else "discovered_no_assets_cached"
     except Exception as exc:
         discovery["status"] = "failed"
@@ -1502,29 +1369,22 @@ def post_catalog_photo_diagnostics(request: CatalogPhotoRequest):
         "cached_photo_url": product.get("photo_url", ""),
         "remote_photo_url": product.get("remote_photo_url", ""),
         "image_candidates": [],
-        "image_candidate_count": 0,
         "best_candidate": "",
         "download_status": "not_attempted",
         "failure_reason": "",
-        "discovery_methods": [
-            "JSON-LD Product.image",
-            "OpenGraph/Twitter image",
-            "hydration JSON",
-            "img/data-src/srcset",
-            "CSS/background images",
-            "raw image URL scan",
-        ],
     }
 
     if discovery_path.exists():
         try:
             discovery = json.loads(discovery_path.read_text(encoding="utf-8"))
             report["image_candidates"] = discovery.get("images", []) or []
-            report["image_candidate_count"] = len(report["image_candidates"])
             report["best_candidate"] = (report["image_candidates"] or [""])[0]
             photo = discovery.get("photo", {}) or {}
             report["download_status"] = photo.get("status", "not_attempted")
             report["failure_reason"] = photo.get("error", "")
+            report["attempted_count"] = photo.get("attempted_count", discovery.get("photo_attempted_count", 0))
+            report["selected_candidate"] = photo.get("selected_candidate", discovery.get("selected_photo_candidate", ""))
+            report["attempts"] = photo.get("attempts", discovery.get("photo_attempts", []))
         except Exception as exc:
             report["failure_reason"] = f"Could not read discovery.json: {exc}"
 
@@ -1534,10 +1394,19 @@ def post_catalog_photo_diagnostics(request: CatalogPhotoRequest):
             images = discover_image_candidates(html, product_page_url)
             images = sorted(images, key=lambda u: score_image_candidate(u, brand, model, product_page_url), reverse=True)
             report["image_candidates"] = images
-            report["image_candidate_count"] = len(images)
             report["best_candidate"] = (images or [""])[0]
-            report["download_status"] = "candidate_discovery_only"
-            if not images:
+            if images:
+                photo = cache_best_discovered_image(category, brand, model, images, max_attempts=15)
+                product = update_product_json_photo(category, brand, model, photo)
+                report["download_status"] = photo.get("status", "unknown")
+                report["failure_reason"] = photo.get("error", "")
+                report["cached_photo_url"] = photo.get("local_url", "") or product.get("photo_url", "")
+                report["remote_photo_url"] = photo.get("remote_url", "") or product.get("remote_photo_url", "")
+                report["attempted_count"] = photo.get("attempted_count", 0)
+                report["selected_candidate"] = photo.get("selected_candidate", "")
+                report["attempts"] = photo.get("attempts", [])
+            else:
+                report["download_status"] = "no_candidates"
                 report["failure_reason"] = "No usable manufacturer image candidates were discovered on the product page. Try pasting a manufacturer-hosted image URL."
         except Exception as exc:
             report["download_status"] = "failed"
@@ -1644,6 +1513,31 @@ def post_catalog_run_model_pipelines(request: CatalogPipelineRequest):
     manual = find_toilet_manual(request.brand, request.model)
     if not manual:
         return {"status": "not_found", "brand": request.brand, "model": request.model}
+
+    product_page_url = get_product_page_for_package(request.category or "toilet", request.brand, request.model) or manual.get("product_page_url", "")
+
+    # Prefer the v2 product-page package builder whenever a manufacturer
+    # product page exists. It discovers many image candidates, tries them in
+    # ranked order, caches the first usable photo, caches manuals, and writes
+    # product/discovery/overlay JSON.
+    if product_page_url:
+        package_result = build_product_page_package(
+            category=request.category or "toilet",
+            brand=request.brand,
+            model=request.model,
+            product_page_url=product_page_url,
+        )
+        return {
+            "status": package_result.get("status", "complete"),
+            "brand": request.brand,
+            "model": request.model,
+            "product_package": package_result,
+            "photo": package_result.get("discovery", {}).get("photo", {}),
+            "manual": package_result.get("discovery", {}).get("manual", {}),
+            "pipeline_status": get_toilet_catalog_pipeline_status(request.brand, request.model),
+        }
+
+    # Fallback for older records with no product page.
     photo_result = cache_product_image(request.brand, request.model, manual.get("product_image_url", ""))
     manual_result = cache_install_manual(request.brand, request.model, manual.get("manual_url", ""))
     payload = toilet_model_overlay(OverlayRequest(query="install a toilet", category="toilet", brand=request.brand, model=request.model))
