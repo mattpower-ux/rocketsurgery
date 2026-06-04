@@ -1045,19 +1045,21 @@ def score_image_candidate(url: str, brand: str, model: str, product_page_url: st
     return score
 
 
-def cache_best_discovered_image(category: str, brand: str, model: str, image_candidates: list[str], max_attempts: int = 15) -> dict:
+def cache_best_discovered_image(category: str, brand: str, model: str, image_candidates: list[str], max_attempts: int = 15, rejected: set[str] | None = None) -> dict:
     """Try ranked image candidates until one successfully downloads.
 
     This removes the manual extra step where Admin first discovers candidates
     and then asks a human to paste one. The manual override remains as a
     fallback, but normal product-page builds should cache a usable image
-    automatically whenever one of the candidates is accessible.
+    automatically whenever one of the candidates is accessible. Rejected
+    candidates are skipped so bad images do not keep getting reselected.
     """
     attempts = []
     unique = []
     seen = set()
+    rejected = rejected or set()
     for url in image_candidates or []:
-        if not url or url in seen:
+        if not url or url in seen or url in rejected:
             continue
         seen.add(url)
         unique.append(url)
@@ -1182,10 +1184,15 @@ def build_product_page_package(category: str, brand: str, model: str, product_pa
         pdfs = discover_pdf_candidates(html, product_page_url)
         images = sorted(images, key=lambda u: score_image_candidate(u, brand, model, product_page_url), reverse=True)
         pdfs = sorted(pdfs, key=score_pdf_candidate, reverse=True)
-        discovery["images"] = images
+        existing_discovery = load_discovery_json(category, brand, model)
+        rejected = set(existing_discovery.get("rejected_image_candidates", []) or [])
+        usable_images = [url for url in images if url not in rejected]
+        discovery["images"] = usable_images
+        discovery["rejected_image_candidates"] = list(rejected)
+        discovery["rejected_count"] = len(rejected)
         discovery["pdfs"] = pdfs
 
-        photo = cache_best_discovered_image(category, brand, model, images, max_attempts=15)
+        photo = cache_best_discovered_image(category, brand, model, usable_images, max_attempts=15, rejected=rejected)
         manual = cache_manual_to_package(category, brand, model, pdfs[0]["url"] if pdfs else "")
         discovery["photo"] = photo
         discovery["manual"] = manual
@@ -1357,6 +1364,45 @@ def get_product_page_for_package(category: str, brand: str, model: str) -> str:
     return ""
 
 
+
+def discovery_path_for_package(category: str, brand: str, model: str) -> Path:
+    return product_package_root(category or "toilet", brand, model) / "discovery.json"
+
+
+def product_json_path_for_package(category: str, brand: str, model: str) -> Path:
+    return product_package_root(category or "toilet", brand, model) / "product.json"
+
+
+def load_discovery_json(category: str, brand: str, model: str) -> dict:
+    path = discovery_path_for_package(category, brand, model)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_discovery_json(category: str, brand: str, model: str, discovery: dict) -> dict:
+    path = discovery_path_for_package(category, brand, model)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    discovery["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    path.write_text(json.dumps(discovery, indent=2), encoding="utf-8")
+    return discovery
+
+
+def rejected_photo_candidates(category: str, brand: str, model: str) -> set[str]:
+    discovery = load_discovery_json(category, brand, model)
+    return set(discovery.get("rejected_image_candidates", []) or [])
+
+
+def recompute_product_confidence(product: dict) -> str:
+    if product.get("photo_url") and product.get("manual_url"):
+        return "HIGH"
+    if product.get("photo_url") or product.get("manual_url"):
+        return "MEDIUM"
+    return "LOW"
+
 def update_product_json_photo(category: str, brand: str, model: str, photo_result: dict) -> dict:
     root = product_package_root(category or "toilet", brand, model)
     root.mkdir(parents=True, exist_ok=True)
@@ -1404,12 +1450,17 @@ def post_catalog_photo_diagnostics(request: CatalogPhotoRequest):
         "best_candidate": "",
         "download_status": "not_attempted",
         "failure_reason": "",
+        "rejected_image_candidates": [],
+        "rejected_count": 0,
     }
 
     if discovery_path.exists():
         try:
             discovery = json.loads(discovery_path.read_text(encoding="utf-8"))
-            report["image_candidates"] = discovery.get("images", []) or []
+            rejected = set(discovery.get("rejected_image_candidates", []) or [])
+            report["rejected_image_candidates"] = list(rejected)
+            report["rejected_count"] = len(rejected)
+            report["image_candidates"] = [url for url in (discovery.get("images", []) or []) if url not in rejected]
             report["best_candidate"] = (report["image_candidates"] or [""])[0]
             photo = discovery.get("photo", {}) or {}
             report["download_status"] = photo.get("status", "not_attempted")
@@ -1428,7 +1479,7 @@ def post_catalog_photo_diagnostics(request: CatalogPhotoRequest):
                     key=lambda u: score_image_candidate(u, brand, model, product_page_url),
                     reverse=True,
                 )
-                photo = cache_best_discovered_image(category, brand, model, sorted_images, max_attempts=15)
+                photo = cache_best_discovered_image(category, brand, model, sorted_images, max_attempts=15, rejected=rejected)
                 product = update_product_json_photo(category, brand, model, photo)
                 discovery["images"] = sorted_images
                 discovery["photo"] = photo
@@ -1451,9 +1502,13 @@ def post_catalog_photo_diagnostics(request: CatalogPhotoRequest):
 
     if not report["image_candidates"] and product_page_url:
         try:
+            rejected = rejected_photo_candidates(category, brand, model)
+            report["rejected_image_candidates"] = list(rejected)
+            report["rejected_count"] = len(rejected)
             html = fetch_text_url(product_page_url)
             images = discover_image_candidates(html, product_page_url)
             images = sorted(images, key=lambda u: score_image_candidate(u, brand, model, product_page_url), reverse=True)
+            images = [url for url in images if url not in rejected]
             report["image_candidates"] = images
             report["best_candidate"] = (images or [""])[0]
             if images:
@@ -1491,8 +1546,13 @@ def post_catalog_cache_photo_url(request: CatalogPhotoRequest):
     except Exception:
         discovery = {}
     discovery.setdefault("images", [])
+    rejected = set(discovery.get("rejected_image_candidates", []) or [])
+    rejected.discard(request.image_url.strip())
+    discovery["rejected_image_candidates"] = list(rejected)
+    discovery["rejected_count"] = len(rejected)
     if request.image_url.strip() not in discovery["images"]:
         discovery["images"].insert(0, request.image_url.strip())
+    discovery["manual_photo_override"] = request.image_url.strip()
     discovery["photo"] = result
     discovery["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     discovery_path.write_text(json.dumps(discovery, indent=2), encoding="utf-8")
@@ -1502,6 +1562,69 @@ def post_catalog_cache_photo_url(request: CatalogPhotoRequest):
         "photo": result,
         "product": product,
         "pipeline_status": get_toilet_catalog_pipeline_status(request.brand, request.model) if catalog_v2_category_slug(request.category) == "toilets" else {},
+    }
+
+
+@app.post("/admin/catalog/reject-photo-candidates")
+def post_catalog_reject_photo_candidates(request: CatalogPhotoRequest):
+    """Reject all currently discovered photo candidates for a product.
+
+    This is an editorial override: the current discovered set is marked as
+    unusable, product.json is cleared of the cached photo, and future automatic
+    selection skips those URLs. A manual image URL can still be pasted and
+    cached afterward.
+    """
+    category = request.category or "toilet"
+    brand = request.brand
+    model = request.model
+    root = product_package_root(category, brand, model)
+    root.mkdir(parents=True, exist_ok=True)
+    discovery = load_discovery_json(category, brand, model)
+    product = load_product_page_product(category, brand, model) or {}
+
+    current_images = set(discovery.get("images", []) or [])
+    current_remote = product.get("remote_photo_url") or discovery.get("selected_photo_candidate") or (discovery.get("photo", {}) or {}).get("remote_url", "")
+    if current_remote:
+        current_images.add(current_remote)
+
+    rejected = set(discovery.get("rejected_image_candidates", []) or [])
+    rejected.update(url for url in current_images if url)
+
+    discovery["rejected_image_candidates"] = list(rejected)
+    discovery["rejected_count"] = len(rejected)
+    discovery["photo"] = {
+        "status": "rejected",
+        "local_url": "",
+        "remote_url": current_remote or "",
+        "error": "All discovered image candidates were rejected by an editor.",
+    }
+    discovery["selected_photo_candidate"] = ""
+    discovery["photo_attempts"] = []
+    save_discovery_json(category, brand, model, discovery)
+
+    product_path = product_json_path_for_package(category, brand, model)
+    product.update({
+        "category": category,
+        "brand": brand,
+        "model": model,
+        "product_page_url": product.get("product_page_url") or get_product_page_for_package(category, brand, model),
+        "photo_url": "",
+        "remote_photo_url": "",
+        "photo_rejected": True,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    })
+    product["confidence"] = recompute_product_confidence(product)
+    product_path.parent.mkdir(parents=True, exist_ok=True)
+    product_path.write_text(json.dumps(product, indent=2), encoding="utf-8")
+
+    return {
+        "status": "rejected",
+        "brand": brand,
+        "model": model,
+        "category": category,
+        "rejected_count": len(rejected),
+        "product": product,
+        "pipeline_status": get_toilet_catalog_pipeline_status(brand, model) if catalog_v2_category_slug(category) == "toilets" else {},
     }
 
 @app.get("/catalog/products")
