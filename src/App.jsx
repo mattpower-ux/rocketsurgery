@@ -1565,7 +1565,10 @@ function App() {
                           <strong>Photo Diagnostics</strong>
                           <div>Image candidates: {candidateCount ?? 0}</div>
                           <div>Download status: {diagnostic.download_status || "unknown"}</div>
-                          {diagnostic.best_candidate && <div style={{ wordBreak: "break-all" }}>Best candidate: {diagnostic.best_candidate}</div>}
+                          {diagnostic.attempted_count !== undefined && <div>Download attempts: {diagnostic.attempted_count}</div>}
+                          {diagnostic.selected_candidate && <div style={{ wordBreak: "break-all" }}>Cached candidate: {diagnostic.selected_candidate}</div>}
+                          {!diagnostic.selected_candidate && diagnostic.best_candidate && <div style={{ wordBreak: "break-all" }}>Best candidate: {diagnostic.best_candidate}</div>}
+                          {diagnostic.cached_photo_url && <div><a href={apiAssetUrl(diagnostic.cached_photo_url)} target="_blank" rel="noreferrer">View cached photo</a></div>}
                           {diagnostic.failure_reason && <div style={{ color: "#9b1c1c" }}>Reason: {diagnostic.failure_reason}</div>}
                         </div>
                       )}
