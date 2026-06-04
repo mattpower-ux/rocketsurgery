@@ -872,47 +872,244 @@ def fetch_text_url(url: str, timeout: int = 20) -> str:
     return raw.decode(charset, errors="replace")
 
 
+def normalize_discovered_image_url(raw_url: str, base_url: str) -> str:
+    """Normalize image URLs found in HTML, srcset, JSON-LD, and JS data blobs."""
+    value = unescape(str(raw_url or "")).strip().strip('"\'')
+    if not value or value.startswith("data:"):
+        return ""
+
+    # srcset entries can look like: "https://...jpg 1200w"
+    value = value.split()[0].strip().strip(",")
+    value = value.replace("\\/", "/")
+
+    if value.startswith("//"):
+        parsed = urlparse(base_url)
+        value = f"{parsed.scheme or 'https'}:{value}"
+
+    absolute = urljoin(base_url, value)
+    return absolute
+
+
+def image_url_looks_usable(url: str) -> bool:
+    """Keep likely image URLs, including CDN URLs that do not end in .jpg/.png."""
+    if not url:
+        return False
+
+    lower = url.lower()
+
+    blocked_terms = [
+        "logo",
+        "icon",
+        "favicon",
+        "sprite",
+        "placeholder",
+        "blank",
+        "tracking",
+        "analytics",
+        "avatar",
+        "spinner",
+    ]
+    if any(term in lower for term in blocked_terms):
+        return False
+
+    blocked_extensions = [".pdf", ".html", ".htm", ".css", ".js", ".svg"]
+    if any(lower.split("?", 1)[0].endswith(ext) for ext in blocked_extensions):
+        return False
+
+    if re.search(r"\.(?:jpg|jpeg|png|webp)(?:\?|#|$)", lower):
+        return True
+
+    # Many manufacturer/CDN product images are served from image/media/catalog
+    # endpoints and rely on Content-Type rather than file extension.
+    likely_path_terms = [
+        "/image",
+        "/images",
+        "/media",
+        "/assets",
+        "/asset",
+        "/product",
+        "/products",
+        "/catalog",
+        "/content/dam",
+        "scene7",
+        "cloudinary",
+        "akamai",
+        "cdn",
+    ]
+    return any(term in lower for term in likely_path_terms)
+
+
+def append_image_candidate(candidates: list[str], seen: set[str], raw_url: str, base_url: str):
+    absolute = normalize_discovered_image_url(raw_url, base_url)
+    if not absolute:
+        return
+
+    if not image_url_looks_usable(absolute):
+        return
+
+    if absolute not in seen:
+        seen.add(absolute)
+        candidates.append(absolute)
+
+
+def collect_image_like_strings_from_json(value, results: list[str]):
+    """Recursively collect likely product image strings from JSON-LD/hydration data."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_l = str(key).lower()
+            if key_l in {
+                "image",
+                "images",
+                "thumbnail",
+                "thumbnailurl",
+                "thumbnailurl",
+                "contenturl",
+                "url",
+                "src",
+                "srcset",
+                "heroimage",
+                "hero",
+                "media",
+                "gallery",
+                "productimage",
+                "productimages",
+            }:
+                collect_image_like_strings_from_json(item, results)
+            elif isinstance(item, (dict, list)):
+                collect_image_like_strings_from_json(item, results)
+            elif isinstance(item, str) and image_url_looks_usable(item):
+                results.append(item)
+
+    elif isinstance(value, list):
+        for item in value:
+            collect_image_like_strings_from_json(item, results)
+
+    elif isinstance(value, str):
+        if image_url_looks_usable(value):
+            results.append(value)
+        # Some JSON blobs contain comma-separated srcset-like values.
+        if "," in value and ("jpg" in value.lower() or "png" in value.lower() or "webp" in value.lower()):
+            for part in value.split(","):
+                piece = part.strip().split(" ")[0]
+                if image_url_looks_usable(piece):
+                    results.append(piece)
+
+
+def parse_json_script_payloads(html: str) -> list:
+    """Extract JSON from ld+json, __NEXT_DATA__, and application/json script tags."""
+    payloads = []
+
+    for attrs, body in re.findall(
+        r"<script([^>]*)>(.*?)</script>",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        attrs_l = attrs.lower()
+        body = unescape(body.strip())
+        if not body:
+            continue
+
+        is_likely_json = (
+            "application/ld+json" in attrs_l
+            or "application/json" in attrs_l
+            or "__next_data__" in attrs_l
+            or "application/graphql-response+json" in attrs_l
+        )
+
+        if not is_likely_json:
+            continue
+
+        try:
+            payloads.append(json.loads(body))
+            continue
+        except Exception:
+            pass
+
+        # Some sites embed multiple JSON objects or malformed JSON. Keep a
+        # fallback text payload so URL regex extraction still benefits.
+        payloads.append(body)
+
+    return payloads
+
+
+def extract_image_urls_from_text_blob(text: str) -> list[str]:
+    """Fallback extraction from HTML/JS text blobs, including escaped JSON URLs."""
+    if not text:
+        return []
+
+    blob = unescape(str(text)).replace("\\/", "/")
+    patterns = [
+        r"https?://[^\"'<>\\\s]+?\.(?:jpg|jpeg|png|webp)(?:\?[^\"'<>\\\s]*)?",
+        r"//[^\"'<>\\\s]+?\.(?:jpg|jpeg|png|webp)(?:\?[^\"'<>\\\s]*)?",
+    ]
+
+    urls = []
+    for pattern in patterns:
+        urls.extend(re.findall(pattern, blob, flags=re.IGNORECASE))
+    return urls
+
+
 def discover_image_candidates(html: str, base_url: str) -> list[str]:
     candidates = []
+    seen = set()
 
-    # Prefer OpenGraph/Twitter hero images first.
+    # 1) JSON-LD / hydration data. Modern manufacturer sites often expose
+    # product photos here even when the visible gallery is rendered by JS.
+    for payload in parse_json_script_payloads(html):
+        found = []
+        if isinstance(payload, str):
+            found.extend(extract_image_urls_from_text_blob(payload))
+        else:
+            collect_image_like_strings_from_json(payload, found)
+
+        for item in found:
+            append_image_candidate(candidates, seen, item, base_url)
+
+    # 2) OpenGraph/Twitter hero images.
     for pattern in [
-        r'<meta[^>]+property=["\\\']og:image["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
-        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+property=["\\\']og:image["\\\']',
-        r'<meta[^>]+name=["\\\']twitter:image["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
-        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+name=["\\\']twitter:image["\\\']',
+        r'<meta[^>]+property=["\\\']og:image(?::secure_url)?["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
+        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+property=["\\\']og:image(?::secure_url)?["\\\']',
+        r'<meta[^>]+name=["\\\']twitter:image(?::src)?["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
+        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+name=["\\\']twitter:image(?::src)?["\\\']',
     ]:
         for match in re.findall(pattern, html, flags=re.IGNORECASE):
-            candidates.append(match)
+            append_image_candidate(candidates, seen, match, base_url)
 
-    # Then scan image tags and srcsets.
-    for match in re.findall(r'<img[^>]+(?:src|data-src)=["\\\']([^"\\\']+)["\\\']', html, flags=re.IGNORECASE):
-        candidates.append(match)
+    # 3) Visible and lazy-loaded image attributes.
+    for attr in [
+        "src",
+        "data-src",
+        "data-original",
+        "data-lazy",
+        "data-lazy-src",
+        "data-zoom-image",
+        "data-image",
+        "data-large-image",
+        "data-main-image",
+        "content",
+    ]:
+        pattern = rf'<(?:img|source|meta)[^>]+{attr}=["\\\']([^"\\\']+)["\\\']'
+        for match in re.findall(pattern, html, flags=re.IGNORECASE):
+            append_image_candidate(candidates, seen, match, base_url)
 
-    for srcset in re.findall(r'(?:srcset|data-srcset)=["\\\']([^"\\\']+)["\\\']', html, flags=re.IGNORECASE):
-        for part in srcset.split(','):
-            url_part = part.strip().split(' ')[0]
-            if url_part:
-                candidates.append(url_part)
+    # 4) srcset / data-srcset / imagesrcset.
+    for srcset in re.findall(
+        r'(?:srcset|data-srcset|imagesrcset)=["\\\']([^"\\\']+)["\\\']',
+        html,
+        flags=re.IGNORECASE,
+    ):
+        for part in srcset.split(","):
+            url_part = part.strip().split(" ")[0]
+            append_image_candidate(candidates, seen, url_part, base_url)
 
-    clean = []
-    seen = set()
-    for item in candidates:
-        url = unescape(item.strip())
-        if not url or url.startswith('data:'):
-            continue
-        absolute = urljoin(base_url, url)
-        lower = absolute.lower()
-        if not any(ext in lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
-            continue
-        # Avoid logos/icons when possible.
-        bad_terms = ['logo', 'icon', 'favicon', 'sprite', 'placeholder']
-        if any(term in lower for term in bad_terms):
-            continue
-        if absolute not in seen:
-            seen.add(absolute)
-            clean.append(absolute)
-    return clean[:20]
+    # 5) CSS/background-image URLs and any remaining image URLs in the raw page.
+    for match in re.findall(r'url\(["\\\']?([^)"\\\']+)["\\\']?\)', html, flags=re.IGNORECASE):
+        append_image_candidate(candidates, seen, match, base_url)
+
+    for match in extract_image_urls_from_text_blob(html):
+        append_image_candidate(candidates, seen, match, base_url)
+
+    return candidates[:50]
 
 
 def discover_pdf_candidates(html: str, base_url: str) -> list[dict]:
@@ -941,14 +1138,57 @@ def score_image_candidate(url: str, brand: str, model: str, product_page_url: st
     lower = url.lower()
     host = urlparse(url).netloc.lower()
     page_host = urlparse(product_page_url).netloc.lower()
-    if page_host and (host == page_host or host.endswith('.' + page_host)):
-        score += 20
-    for term in [brand, model, 'toilet', 'product']:
-        term = (term or '').lower().replace(' ', '-')
-        if term and term in lower:
+
+    if page_host and (host == page_host or host.endswith("." + page_host)):
+        score += 40
+
+    brand_terms = [term for term in re.split(r"[\s\-_/]+", (brand or "").lower()) if term]
+    model_terms = [term for term in re.split(r"[\s\-_/]+", (model or "").lower()) if term]
+
+    for term in brand_terms:
+        if term in lower:
             score += 10
-    if any(ext in lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
-        score += 3
+
+    for term in model_terms:
+        if term in lower:
+            score += 12
+
+    # Product/category terms usually indicate the right image instead of a logo.
+    for term, points in [
+        ("toilet", 18),
+        ("product", 10),
+        ("catalog", 7),
+        ("pdp", 7),
+        ("hero", 8),
+        ("gallery", 6),
+        ("primary", 6),
+        ("white", 3),
+    ]:
+        if term in lower:
+            score += points
+
+    # Prefer image formats and larger assets.
+    if re.search(r"\.(?:jpg|jpeg|png|webp)(?:\?|#|$)", lower):
+        score += 8
+    if re.search(r"(?:width|w|wid|size)=([8-9]\d{2}|[1-9]\d{3,})", lower):
+        score += 8
+    if re.search(r"(?:height|h|hei)=([8-9]\d{2}|[1-9]\d{3,})", lower):
+        score += 5
+
+    # Penalize likely non-product assets.
+    for term, penalty in [
+        ("logo", 80),
+        ("icon", 60),
+        ("favicon", 90),
+        ("sprite", 80),
+        ("placeholder", 80),
+        ("swatch", 25),
+        ("badge", 25),
+        ("banner", 10),
+    ]:
+        if term in lower:
+            score -= penalty
+
     return score
 
 
@@ -1262,15 +1502,25 @@ def post_catalog_photo_diagnostics(request: CatalogPhotoRequest):
         "cached_photo_url": product.get("photo_url", ""),
         "remote_photo_url": product.get("remote_photo_url", ""),
         "image_candidates": [],
+        "image_candidate_count": 0,
         "best_candidate": "",
         "download_status": "not_attempted",
         "failure_reason": "",
+        "discovery_methods": [
+            "JSON-LD Product.image",
+            "OpenGraph/Twitter image",
+            "hydration JSON",
+            "img/data-src/srcset",
+            "CSS/background images",
+            "raw image URL scan",
+        ],
     }
 
     if discovery_path.exists():
         try:
             discovery = json.loads(discovery_path.read_text(encoding="utf-8"))
             report["image_candidates"] = discovery.get("images", []) or []
+            report["image_candidate_count"] = len(report["image_candidates"])
             report["best_candidate"] = (report["image_candidates"] or [""])[0]
             photo = discovery.get("photo", {}) or {}
             report["download_status"] = photo.get("status", "not_attempted")
@@ -1284,6 +1534,7 @@ def post_catalog_photo_diagnostics(request: CatalogPhotoRequest):
             images = discover_image_candidates(html, product_page_url)
             images = sorted(images, key=lambda u: score_image_candidate(u, brand, model, product_page_url), reverse=True)
             report["image_candidates"] = images
+            report["image_candidate_count"] = len(images)
             report["best_candidate"] = (images or [""])[0]
             report["download_status"] = "candidate_discovery_only"
             if not images:
