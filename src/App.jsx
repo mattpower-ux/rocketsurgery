@@ -18,6 +18,53 @@ function apiAssetUrl(url) {
   return value;
 }
 
+
+function EditableTextField({
+  label,
+  value,
+  onCommit,
+  multiline = false,
+  placeholder = "",
+  className = "adminTextArea small",
+  rows = 3
+}) {
+  const [draft, setDraft] = useState(value || "");
+
+  useEffect(() => {
+    setDraft(value || "");
+  }, [value]);
+
+  function commit() {
+    const original = value || "";
+    if (draft !== original) {
+      onCommit(draft);
+    }
+  }
+
+  return (
+    <label className="fieldLabel">
+      {label}
+      {multiline ? (
+        <textarea
+          className={className}
+          rows={rows}
+          value={draft}
+          placeholder={placeholder}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+        />
+      ) : (
+        <input
+          value={draft}
+          placeholder={placeholder}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+        />
+      )}
+    </label>
+  );
+}
+
 function buildSpecificQuery(query, brand, model) {
   const baseQuery = query.trim() || "installation walkthrough";
 
@@ -370,8 +417,49 @@ function App() {
         throw new Error(data.detail || data.status || "Could not load catalog pipeline status.");
       }
 
-      setCatalogPipelineStatus(data);
-      setAdminMessage(`Catalog pipelines loaded: ${(data.items || []).length} models.`);
+      let products = [];
+      try {
+        const productResponse = await fetch(`${API_URL}/catalog/products?category=toilet`, {
+          cache: "no-store"
+        });
+        const productData = await productResponse.json();
+        products = productData.products || [];
+      } catch (productError) {
+        console.warn("Could not load v2 catalog products", productError);
+      }
+
+      const productMap = new Map(
+        products.map((product) => [
+          `${String(product.brand || "").toLowerCase()}::${String(product.model || "").toLowerCase()}`,
+          product
+        ])
+      );
+
+      const mergedItems = (data.items || []).map((item) => {
+        const product = productMap.get(`${String(item.brand || "").toLowerCase()}::${String(item.model || "").toLowerCase()}`);
+        const photoUrl = product?.photo_url || item.photo?.local_url || "";
+        const manualUrl = product?.manual_url || item.manual?.local_url || "";
+
+        return {
+          ...item,
+          source: product?.source || item.source || "starter_catalog",
+          product_page_url: product?.product_page_url || item.photo?.product_page_url || "",
+          photo: {
+            ...(item.photo || {}),
+            status: photoUrl ? "cached" : item.photo?.status || "missing",
+            local_url: photoUrl
+          },
+          manual: {
+            ...(item.manual || {}),
+            status: manualUrl ? "cached" : item.manual?.status || "missing",
+            local_url: manualUrl
+          },
+          confidence: product?.confidence || item.confidence || "LOW"
+        };
+      });
+
+      setCatalogPipelineStatus({ ...data, items: mergedItems, products });
+      setAdminMessage(`Catalog pipelines loaded: ${mergedItems.length} models.`);
     } catch (error) {
       console.error(error);
       setAdminMessage(`Catalog pipeline status failed: ${error.message}`);
@@ -1307,14 +1395,18 @@ function App() {
                 {editorDraft ? (
                   <>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px", marginBottom: "14px" }}>
-                      <label className="fieldLabel">
-                        Walkthrough title
-                        <input value={editorDraft.title || ""} onChange={(event) => updateEditorField("title", event.target.value)} />
-                      </label>
-                      <label className="fieldLabel">
-                        Disclaimer
-                        <textarea className="adminTextArea small" value={editorDraft.disclaimer || ""} onChange={(event) => updateEditorField("disclaimer", event.target.value)} />
-                      </label>
+                      <EditableTextField
+                        label="Walkthrough title"
+                        value={editorDraft.title || ""}
+                        onCommit={(value) => updateEditorField("title", value)}
+                      />
+                      <EditableTextField
+                        label="Disclaimer"
+                        value={editorDraft.disclaimer || ""}
+                        onCommit={(value) => updateEditorField("disclaimer", value)}
+                        multiline
+                        rows={3}
+                      />
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" }}>
@@ -1353,20 +1445,27 @@ function App() {
                             )}
                           </div>
 
-                          <label className="fieldLabel">
-                            Step title / caption
-                            <input value={step.imageLabel || ""} onChange={(event) => updateEditorStep(step.id, "imageLabel", event.target.value)} />
-                          </label>
+                          <EditableTextField
+                            label="Step title / caption"
+                            value={step.imageLabel || ""}
+                            onCommit={(value) => updateEditorStep(step.id, "imageLabel", value)}
+                          />
 
-                          <label className="fieldLabel">
-                            Instruction text
-                            <textarea className="adminTextArea small" value={step.instruction || ""} onChange={(event) => updateEditorStep(step.id, "instruction", event.target.value)} />
-                          </label>
+                          <EditableTextField
+                            label="Instruction text"
+                            value={step.instruction || ""}
+                            onCommit={(value) => updateEditorStep(step.id, "instruction", value)}
+                            multiline
+                            rows={4}
+                          />
 
-                          <label className="fieldLabel">
-                            Detail text
-                            <textarea className="adminTextArea small" value={step.detail || ""} onChange={(event) => updateEditorStep(step.id, "detail", event.target.value)} />
-                          </label>
+                          <EditableTextField
+                            label="Detail text"
+                            value={step.detail || ""}
+                            onCommit={(value) => updateEditorStep(step.id, "detail", value)}
+                            multiline
+                            rows={4}
+                          />
 
                           <textarea
                             className="adminTextArea small"
@@ -1439,10 +1538,26 @@ function App() {
                       Photo: {item.photo?.status || "unknown"} · Manual: {item.manual?.status || "unknown"} · Overlay: {item.overlay?.status || "unknown"}
                     </div>
                     <div style={{ fontSize: "12px" }}>Confidence: <strong>{item.confidence || "UNKNOWN"}</strong></div>
+                    {item.source && <div style={{ fontSize: "12px", opacity: 0.7 }}>Source: {item.source}</div>}
                     <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
                       <button className="secondaryButton" onClick={() => runCatalogPipeline(item, "all")} disabled={!!catalogPipelineRunning}>
                         {catalogPipelineRunning === `${item.brand}-${item.model}-all` ? "Running..." : "Run All"}
                       </button>
+                      {item.photo?.local_url && (
+                        <a className="secondaryButton" href={apiAssetUrl(item.photo.local_url)} target="_blank" rel="noreferrer">
+                          View Photo
+                        </a>
+                      )}
+                      {item.manual?.local_url && (
+                        <a className="secondaryButton" href={apiAssetUrl(item.manual.local_url)} target="_blank" rel="noreferrer">
+                          View PDF
+                        </a>
+                      )}
+                      {item.product_page_url && (
+                        <a className="secondaryButton" href={item.product_page_url} target="_blank" rel="noreferrer">
+                          Product Page
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
