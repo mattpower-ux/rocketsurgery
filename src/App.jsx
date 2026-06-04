@@ -82,6 +82,18 @@ function App() {
   const [walkthroughList, setWalkthroughList] = useState([]);
   const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
   const [repairCorrections, setRepairCorrections] = useState({});
+  const [editorDraft, setEditorDraft] = useState(null);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [editorSaving, setEditorSaving] = useState(false);
+  const [adminPanels, setAdminPanels] = useState({
+    repair: true,
+    catalog: false,
+    reports: false,
+    queue: false,
+    status: false,
+    activity: false,
+    advanced: false
+  });
   const [catalogPipelineStatus, setCatalogPipelineStatus] = useState(null);
   const [catalogPipelineRunning, setCatalogPipelineRunning] = useState("");
   const [productPackageBrand, setProductPackageBrand] = useState("Niagara");
@@ -909,6 +921,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        setEditorDraft(JSON.parse(JSON.stringify(data.walkthrough)));
+        setEditorDirty(false);
         setAdminMessage(`Loaded ${data.walkthrough.title || walkthroughId}.`);
       } else {
         setAdminMessage("Walkthrough not found.");
@@ -946,6 +960,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        setEditorDraft(JSON.parse(JSON.stringify(data.walkthrough)));
+        setEditorDirty(false);
       }
 
       setAdminMessage(data.status === "pending_review" ? "New image generated for review." : `Image regeneration: ${data.status}`);
@@ -981,6 +997,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        setEditorDraft(JSON.parse(JSON.stringify(data.walkthrough)));
+        setEditorDirty(false);
       }
 
       setAdminMessage(`Image ${data.status}.`);
@@ -1017,6 +1035,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        setEditorDraft(JSON.parse(JSON.stringify(data.walkthrough)));
+        setEditorDirty(false);
       }
 
       setAdminMessage(`Image ${data.status}.`);
@@ -1027,6 +1047,178 @@ function App() {
       setAdminLoading(false);
     }
   }
+
+
+  function toggleAdminPanel(panelId) {
+    setAdminPanels((previous) => ({
+      ...previous,
+      [panelId]: !previous[panelId]
+    }));
+  }
+
+
+  function updateEditorField(field, value) {
+    if (!editorDraft) {
+      return;
+    }
+
+    setEditorDraft({
+      ...editorDraft,
+      [field]: value
+    });
+    setEditorDirty(true);
+  }
+
+
+  function updateEditorStep(stepId, field, value) {
+    if (!editorDraft) {
+      return;
+    }
+
+    setEditorDraft({
+      ...editorDraft,
+      steps: (editorDraft.steps || []).map((step) => (
+        Number(step.id) === Number(stepId)
+          ? { ...step, [field]: value }
+          : step
+      ))
+    });
+    setEditorDirty(true);
+  }
+
+
+  function moveEditorStep(stepId, direction) {
+    if (!editorDraft?.steps?.length) {
+      return;
+    }
+
+    const steps = [...editorDraft.steps];
+    const index = steps.findIndex((step) => Number(step.id) === Number(stepId));
+    const newIndex = index + direction;
+
+    if (index < 0 || newIndex < 0 || newIndex >= steps.length) {
+      return;
+    }
+
+    const [removed] = steps.splice(index, 1);
+    steps.splice(newIndex, 0, removed);
+
+    const renumbered = steps.map((step, idx) => ({
+      ...step,
+      id: idx + 1
+    }));
+
+    setEditorDraft({
+      ...editorDraft,
+      steps: renumbered
+    });
+    setEditorDirty(true);
+  }
+
+
+  async function saveEditorWalkthrough() {
+    if (!editorDraft) {
+      return;
+    }
+
+    setEditorSaving(true);
+    setAdminMessage("Saving walkthrough...");
+
+    try {
+      const response = await fetch(`${API_URL}/admin/save-walkthrough`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          walkthrough: editorDraft
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.status === "error") {
+        throw new Error(data.error || data.detail || "Save failed.");
+      }
+
+      setSelectedAdminWalkthrough(data.walkthrough || editorDraft);
+      setEditorDraft(JSON.parse(JSON.stringify(data.walkthrough || editorDraft)));
+      setEditorDirty(false);
+      setAdminMessage("✓ Walkthrough saved.");
+      loadAdminWalkthroughs();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Save failed: ${error.message}`);
+    } finally {
+      setEditorSaving(false);
+    }
+  }
+
+
+  function previewEditorWalkthrough() {
+    if (!editorDraft) {
+      return;
+    }
+
+    setWalkthrough(editorDraft);
+    setStepIndex(0);
+    setComplete(false);
+    setStarted(true);
+    setClarifying(false);
+    setScreen("walkthrough");
+  }
+
+
+  async function runQueueLimit(limit) {
+    setAdminLoading(true);
+    setAdminMessage(`Running ${limit === 999 ? "all available" : limit} queued job(s)...`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/process-bulk-queries?limit=${limit}`, {
+        method: "POST",
+        cache: "no-store"
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || "Queue run failed.");
+      }
+
+      setAdminMessage(`Run complete: processed ${data.processed_count || 0}, failed ${data.failed_count || 0}, remaining ${data.remaining_queued || 0}.`);
+      loadBulkJobList();
+      loadAdminStatus();
+      loadBuildStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Run failed: ${error.message}`);
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  function AdminSection({ panelId, title, children, actions }) {
+    const isOpen = !!adminPanels[panelId];
+
+    return (
+      <section className="adminCard">
+        <div className="adminCardHeader">
+          <button
+            className="secondaryButton"
+            style={{ padding: "8px 12px", minWidth: "42px" }}
+            onClick={() => toggleAdminPanel(panelId)}
+            aria-label={isOpen ? `Collapse ${title}` : `Expand ${title}`}
+          >
+            {isOpen ? "▾" : "▸"}
+          </button>
+          <h2 style={{ flex: 1 }}>{title}</h2>
+          {actions}
+        </div>
+        {isOpen && children}
+      </section>
+    );
+  }
+
 
 
   useEffect(() => {
@@ -1063,517 +1255,46 @@ function App() {
 
           <h1>RocketSurgery Builder</h1>
 
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>System Status</h2>
-              <button
-                className="secondaryButton"
-                onClick={loadAdminStatus}
-                disabled={adminLoading}
-              >
-                Refresh
-              </button>
-            </div>
 
-            {adminStatus ? (
-              <div className="adminStats">
-                <div>
-                  <strong>{adminStatus.bulk_query_count}</strong>
-                  <span>Total queries</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.bulk_completed_count || 0}</strong>
-                  <span>Completed</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.bulk_queued_count || 0}</strong>
-                  <span>Queued</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.bulk_failed_count || 0}</strong>
-                  <span>Failed</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.catalog_request_count}</strong>
-                  <span>Catalog requests</span>
-                </div>
-
-                <div>
-                  <strong>{adminStatus.catalog_category_count}</strong>
-                  <span>Catalog categories</span>
-                </div>
-              </div>
-            ) : (
-              <p className="adminHelp">Click refresh to load admin status.</p>
-            )}
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Walkthrough Build Activity</h2>
-
-              <button
-                className="secondaryButton"
-                onClick={loadBuildStatus}
-              >
-                Refresh Activity
-              </button>
-            </div>
-
-            {buildStatus ? (
-              <>
-                <div className="adminStats">
-                  <div>
-                    <strong>{buildStatus.activity_state?.toUpperCase()}</strong>
-                    <span>Activity</span>
-                  </div>
-
-                  <div>
-                    <strong>
-                      {buildStatus.seconds_since_activity
-                        ? Math.round(buildStatus.seconds_since_activity)
-                        : 0}
-                    </strong>
-                    <span>Seconds idle</span>
-                  </div>
-
-                  <div>
-                    <strong>{buildStatus.walkthrough_count || 0}</strong>
-                    <span>Walkthroughs</span>
-                  </div>
-
-                  <div>
-                    <strong>{buildStatus.image_count || 0}</strong>
-                    <span>Images</span>
-                  </div>
-                </div>
-
-                <div className="activityColumns">
-                  <div>
-                    <h3>Recent Walkthroughs</h3>
-
-                    <ul className="activityList">
-                      {(buildStatus.recent_walkthroughs || []).map((item) => (
-                        <li key={item.name}>
-                          <strong>{item.name}</strong>
-                          <small>{item.modified_at}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h3>Recent Images</h3>
-
-                    <ul className="activityList">
-                      {(buildStatus.recent_images || []).map((item) => (
-                        <li key={item.name}>
-                          <strong>{item.name}</strong>
-                          <small>{item.modified_at}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p className="adminHelp">
-                Loading build activity...
-              </p>
-            )}
-          </section>
-
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Catalog Intelligence Pipelines</h2>
-              <button
-                className="secondaryButton"
-                onClick={loadCatalogPipelineStatus}
-                disabled={adminLoading || !!catalogPipelineRunning}
-              >
-                Refresh Catalog
-              </button>
-            </div>
-
-            <p className="adminHelp">
-              Three separate pipelines prepare model-specific walkthrough overlays: product photos, install manuals, and approved hotspot/tip packages.
-            </p>
-
-            <div
-              style={{
-                border: "1px solid rgba(0,0,0,0.14)",
-                borderRadius: "18px",
-                padding: "14px",
-                marginBottom: "16px",
-                background: "#f8fafc"
-              }}
-            >
-              <h3 style={{ margin: "0 0 8px" }}>Catalog Intelligence v2: Build Product Package</h3>
-              <p className="adminHelp" style={{ marginTop: 0 }}>
-                Phase 1 uses a manufacturer product page URL as the source. The backend discovers candidate product photos and installation PDFs, caches them on the Render disk, and saves product/discovery/overlay JSON so the model can appear in the walkthrough briefing and hotspot flow.
-              </p>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
-                <label className="fieldLabel">
-                  Category
-                  <input
-                    value={productPackageCategory}
-                    onChange={(event) => setProductPackageCategory(event.target.value)}
-                    placeholder="toilet"
-                  />
-                </label>
-
-                <label className="fieldLabel">
-                  Brand
-                  <input
-                    value={productPackageBrand}
-                    onChange={(event) => setProductPackageBrand(event.target.value)}
-                    placeholder="Niagara"
-                  />
-                </label>
-
-                <label className="fieldLabel">
-                  Model
-                  <input
-                    value={productPackageModel}
-                    onChange={(event) => setProductPackageModel(event.target.value)}
-                    placeholder="Original Stealth"
-                  />
-                </label>
-              </div>
-
-              <label className="fieldLabel" style={{ marginTop: "10px" }}>
-                Manufacturer product page URL
-                <input
-                  value={productPackageUrl}
-                  onChange={(event) => setProductPackageUrl(event.target.value)}
-                  placeholder="https://manufacturer.com/product-page"
-                />
-              </label>
-
-              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginTop: "12px" }}>
-                <button
-                  className="startButton"
-                  onClick={buildProductPagePackage}
-                  disabled={productPackageRunning || !productPackageBrand.trim() || !productPackageModel.trim() || !productPackageUrl.trim()}
-                >
-                  {productPackageRunning ? "Building Package..." : "Build Product Package"}
+          <AdminSection
+            panelId="repair"
+            title="Walkthrough Repair Editor"
+            actions={
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                <span className="adminHelp" style={{ margin: 0 }}>
+                  {editorDirty ? "● Unsaved changes" : editorDraft ? "✓ All changes saved" : "Select a walkthrough"}
+                </span>
+                <button className="secondaryButton" onClick={loadAdminWalkthroughs} disabled={adminLoading}>
+                  Refresh Walkthroughs
                 </button>
-
-                <button
-                  className="secondaryButton"
-                  onClick={testBuildNiagaraStealth}
-                  disabled={productPackageRunning}
-                >
-                  {productPackageRunning ? "Working..." : "Test Build Niagara Stealth"}
+                <button className="startButton" onClick={saveEditorWalkthrough} disabled={!editorDraft || !editorDirty || editorSaving}>
+                  {editorSaving ? "Saving..." : "Save Walkthrough"}
                 </button>
-
-                {productPackageResult?.product?.confidence && (
-                  <span className="adminHelp">
-                    Confidence: <strong>{productPackageResult.product.confidence}</strong>
-                  </span>
-                )}
+                <button className="secondaryButton" onClick={previewEditorWalkthrough} disabled={!editorDraft}>
+                  Preview Walkthrough
+                </button>
               </div>
-
-              {productPackageResult && (
-                <div style={{ marginTop: "12px", fontSize: "13px" }}>
-                  <strong>Status:</strong> {productPackageResult.status || "unknown"}
-                  {productPackageResult.product?.photo_url && (
-                    <> · <a href={`${API_URL}${productPackageResult.product.photo_url}`} target="_blank" rel="noreferrer">View cached photo</a></>
-                  )}
-                  {productPackageResult.product?.manual_url && (
-                    <> · <a href={`${API_URL}${productPackageResult.product.manual_url}`} target="_blank" rel="noreferrer">View cached manual</a></>
-                  )}
-                  {productPackageResult.product_json_url && (
-                    <> · <a href={`${API_URL}${productPackageResult.product_json_url}`} target="_blank" rel="noreferrer">product.json</a></>
-                  )}
-                  {productPackageResult.discovery_json_url && (
-                    <> · <a href={`${API_URL}${productPackageResult.discovery_json_url}`} target="_blank" rel="noreferrer">discovery.json</a></>
-                  )}
-                  {productPackageResult.overlays_json_url && (
-                    <> · <a href={`${API_URL}${productPackageResult.overlays_json_url}`} target="_blank" rel="noreferrer">overlays.json</a></>
-                  )}
-                  {productPackageResult.error && (
-                    <p className="adminError">{productPackageResult.error}</p>
-                  )}
-                  {Array.isArray(productPackageResult.image_candidates) && (
-                    <p className="adminHelp">
-                      Image candidates: {productPackageResult.image_candidates.length} · PDF candidates: {productPackageResult.pdf_candidates?.length || 0}
-                    </p>
-                  )}
-                  {productPackageResult.files?.product_json?.exists && (
-                    <p className="adminHelp">
-                      Files written: product.json ✓ · discovery.json {productPackageResult.files.discovery_json?.exists ? "✓" : "✕"} · overlays.json {productPackageResult.files.overlays_json?.exists ? "✓" : "✕"}
-                    </p>
-                  )}
-                  {Array.isArray(productPackageResult.files?.images) && productPackageResult.files.images.length > 0 && (
-                    <p className="adminHelp">
-                      Cached image: <a href={`${API_URL}${productPackageResult.files.images[0].url}`} target="_blank" rel="noreferrer">view</a>
-                    </p>
-                  )}
-                  {Array.isArray(productPackageResult.errors) && productPackageResult.errors.length > 0 && (
-                    <div className="adminError">
-                      {productPackageResult.errors.map((item, index) => (
-                        <div key={index}>{item}</div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {catalogPipelineStatus?.items?.length ? (
-              <div style={{ display: "grid", gap: "12px" }}>
-                {catalogPipelineStatus.items.map((item) => {
-                  const baseKey = `${item.brand}-${item.model}`;
-                  const photoOk = item.photo?.status === "cached";
-                  const manualOk = item.manual?.status === "cached";
-                  const overlayOk = item.overlay?.status === "built";
-
-                  return (
-                    <div
-                      key={baseKey}
-                      style={{
-                        border: "1px solid rgba(0,0,0,0.14)",
-                        borderRadius: "16px",
-                        padding: "14px",
-                        background: "#fff"
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-                        <div>
-                          <h3 style={{ margin: 0 }}>{item.brand} {item.model}</h3>
-                          <p className="adminHelp" style={{ margin: "6px 0 0" }}>
-                            Confidence: <strong>{item.confidence}</strong> · Photo: {photoOk ? "Cached" : "Missing"} · Manual: {manualOk ? "Cached" : item.manual?.status || "Missing"} · Overlays: {overlayOk ? `${item.overlay.hotspot_count} hotspots` : "Not built"}
-                          </p>
-                        </div>
-
-                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                          <button
-                            className="secondaryButton"
-                            onClick={() => runCatalogPipeline(item, "photo")}
-                            disabled={!!catalogPipelineRunning}
-                          >
-                            {catalogPipelineRunning === `${baseKey}-photo` ? "Fetching..." : "Fetch Photo"}
-                          </button>
-
-                          <button
-                            className="secondaryButton"
-                            onClick={() => runCatalogPipeline(item, "manual")}
-                            disabled={!!catalogPipelineRunning}
-                          >
-                            {catalogPipelineRunning === `${baseKey}-manual` ? "Fetching..." : "Fetch Manual"}
-                          </button>
-
-                          <button
-                            className="secondaryButton"
-                            onClick={() => runCatalogPipeline(item, "overlay")}
-                            disabled={!!catalogPipelineRunning}
-                          >
-                            {catalogPipelineRunning === `${baseKey}-overlay` ? "Building..." : "Build Overlays"}
-                          </button>
-
-                          <button
-                            className="startButton"
-                            onClick={() => runCatalogPipeline(item, "all")}
-                            disabled={!!catalogPipelineRunning}
-                          >
-                            {catalogPipelineRunning === `${baseKey}-all` ? "Running..." : "Run All"}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "10px", fontSize: "13px" }}>
-                        {item.photo?.local_url && (
-                          <a href={`${API_URL}${item.photo.local_url}`} target="_blank" rel="noreferrer">View cached photo</a>
-                        )}
-                        {item.manual?.local_url && (
-                          <a href={`${API_URL}${item.manual.local_url}`} target="_blank" rel="noreferrer">View cached manual</a>
-                        )}
-                        {item.overlay?.package_url && (
-                          <a href={`${API_URL}${item.overlay.package_url}`} target="_blank" rel="noreferrer">View overlay JSON</a>
-                        )}
-                        {item.photo?.product_page_url && (
-                          <a href={item.photo.product_page_url} target="_blank" rel="noreferrer">Product page</a>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="adminHelp">Click Refresh Catalog to load the starter toilet model pipeline status.</p>
-            )}
-          </section>
-
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Walkthrough Queue Manager</h2>
-
-              <button
-                className="secondaryButton"
-                onClick={loadBulkJobList}
-                disabled={adminLoading}
-              >
-                Refresh Queue
-              </button>
-            </div>
-
+            }
+          >
             <p className="adminHelp">
-              Review failed, queued, and completed walkthrough jobs. Failed items can be retried, ignored, or removed.
+              Production workspace: select a walkthrough, reorder small thumbnail cards, rewrite step text, regenerate weak images, then save the edited manifest.
             </p>
 
-            {bulkJobList ? (
-              <>
-                <div className="adminStats">
-                  <div>
-                    <strong>{bulkJobList.counts?.queued || 0}</strong>
-                    <span>Queued</span>
-                  </div>
-
-                  <div>
-                    <strong>{bulkJobList.counts?.failed || 0}</strong>
-                    <span>Failed</span>
-                  </div>
-
-                  <div>
-                    <strong>{bulkJobList.counts?.completed || 0}</strong>
-                    <span>Completed</span>
-                  </div>
-
-                  <div>
-                    <strong>{bulkJobList.counts?.ignored || 0}</strong>
-                    <span>Ignored</span>
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
-                  {(["failed", "queued", "completed", "ignored"]).map((groupName) => (
-                    <div key={groupName}>
-                      <h3 style={{ textTransform: "capitalize" }}>{groupName}</h3>
-
-                      {(bulkJobList[groupName] || []).slice(0, 30).length === 0 ? (
-                        <p className="adminHelp">No {groupName} jobs.</p>
-                      ) : (
-                        <div style={{ display: "grid", gap: "8px" }}>
-                          {(bulkJobList[groupName] || []).slice(0, 30).map((job) => (
-                            <div
-                              key={`${groupName}-${job.query_slug || job.query}`}
-                              style={{
-                                border: "1px solid rgba(0,0,0,0.12)",
-                                borderRadius: "12px",
-                                padding: "12px",
-                                background: "rgba(255,255,255,0.75)"
-                              }}
-                            >
-                              <strong title={job.query}>{displayText(job.query, 120)}</strong>
-
-                              <div
-                                title={job.walkthrough_id || job.query_slug || "not built yet"}
-                                style={{
-                                  fontSize: "12px",
-                                  opacity: 0.8,
-                                  marginTop: "4px",
-                                  overflowWrap: "anywhere"
-                                }}
-                              >
-                                ID: {displayText(job.walkthrough_id || job.query_slug || "not built yet", 90)} · Attempts: {job.attempts || 0}
-                              </div>
-
-                              {job.quarantine_reason && (
-                                <div style={{ fontSize: "12px", color: "#8a5a00", marginTop: "6px", overflowWrap: "anywhere" }}>
-                                  Quarantined: {displayText(job.quarantine_reason, 180)}
-                                </div>
-                              )}
-
-                              {job.error && (
-                                <div title={job.error} style={{ fontSize: "12px", color: "#8a1f11", marginTop: "6px", overflowWrap: "anywhere" }}>
-                                  Error: {displayText(job.error, 220)}
-                                </div>
-                              )}
-
-                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "10px" }}>
-                                <button
-                                  className="secondaryButton"
-                                  onClick={() => updateBulkJob(job.query_slug, "retry")}
-                                  disabled={adminLoading}
-                                >
-                                  Retry
-                                </button>
-
-                                <button
-                                  className="secondaryButton"
-                                  onClick={() => updateBulkJob(job.query_slug, "ignore")}
-                                  disabled={adminLoading}
-                                >
-                                  Ignore
-                                </button>
-
-                                <button
-                                  className="secondaryButton"
-                                  onClick={() => updateBulkJob(job.query_slug, "delete")}
-                                  disabled={adminLoading}
-                                >
-                                  Delete
-                                </button>
-
-                                {job.walkthrough_id && (
-                                  <button
-                                    className="secondaryButton"
-                                    onClick={() => loadAdminWalkthrough(job.walkthrough_id)}
-                                    disabled={adminLoading}
-                                  >
-                                    Inspect
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="adminHelp">Click Refresh Queue to load bulk job records.</p>
-            )}
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Walkthrough Repair Studio</h2>
-
-              <button
-                className="secondaryButton"
-                onClick={loadAdminWalkthroughs}
-                disabled={adminLoading}
-              >
-                Refresh Walkthroughs
-              </button>
-            </div>
-
-            <p className="adminHelp">
-              Open a saved walkthrough, cherry-pick a weak step image, describe the correction, regenerate it, then accept or discard the replacement.
-            </p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 320px) 1fr", gap: "16px" }}>
-              <div style={{ display: "grid", gap: "8px", alignContent: "start", maxHeight: "680px", overflow: "auto" }}>
-                {(walkthroughList || []).slice(0, 100).map((item) => (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 300px) 1fr", gap: "16px" }}>
+              <div style={{ display: "grid", gap: "8px", alignContent: "start", maxHeight: "720px", overflow: "auto" }}>
+                {(walkthroughList || []).slice(0, 120).map((item) => (
                   <button
                     key={item.walkthrough_id}
                     className="secondaryButton"
-                    style={{ textAlign: "left" }}
+                    style={{
+                      textAlign: "left",
+                      borderColor: editorDraft?.walkthrough_id === item.walkthrough_id ? "#111827" : undefined,
+                      background: editorDraft?.walkthrough_id === item.walkthrough_id ? "#eef2ff" : undefined
+                    }}
                     onClick={() => loadAdminWalkthrough(item.walkthrough_id)}
                     disabled={adminLoading}
                   >
-                    <strong>{item.title}</strong>
+                    <strong>{displayText(item.title, 70)}</strong>
                     <br />
                     <span style={{ fontSize: "12px", opacity: 0.75 }}>
                       {item.walkthrough_id} · {item.step_count} steps
@@ -1583,492 +1304,275 @@ function App() {
               </div>
 
               <div>
-                {selectedAdminWalkthrough ? (
+                {editorDraft ? (
                   <>
-                    <h3>{selectedAdminWalkthrough.title}</h3>
-                    <p className="adminHelp">{selectedAdminWalkthrough.walkthrough_id}</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px", marginBottom: "14px" }}>
+                      <label className="fieldLabel">
+                        Walkthrough title
+                        <input value={editorDraft.title || ""} onChange={(event) => updateEditorField("title", event.target.value)} />
+                      </label>
+                      <label className="fieldLabel">
+                        Disclaimer
+                        <textarea className="adminTextArea small" value={editorDraft.disclaimer || ""} onChange={(event) => updateEditorField("disclaimer", event.target.value)} />
+                      </label>
+                    </div>
 
-                    <div style={{ display: "grid", gap: "16px" }}>
-                      {(selectedAdminWalkthrough.steps || []).map((step) => (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" }}>
+                      {(editorDraft.steps || []).map((step, index) => (
                         <div
-                          key={step.id}
+                          key={`${step.id}-${index}`}
                           style={{
                             border: "1px solid rgba(0,0,0,0.14)",
                             borderRadius: "16px",
-                            padding: "14px",
-                            background: "rgba(255,255,255,0.8)"
+                            padding: "12px",
+                            background: "rgba(255,255,255,0.88)",
+                            display: "grid",
+                            gap: "8px"
                           }}
                         >
-                          <h4>{step.imageLabel || `Step ${step.id}`}</h4>
-                          <p>{step.instruction}</p>
-                          <p style={{ fontSize: "13px", opacity: 0.8 }}>{step.detail}</p>
-
-                          <div style={{ display: "grid", gridTemplateColumns: step.pendingImageUrl ? "1fr 1fr" : "1fr", gap: "12px" }}>
-                            <div>
-                              <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>Current Image</div>
-                              {step.imageUrl ? (
-                                <img
-                                  src={step.imageUrl.startsWith("http") ? step.imageUrl : `${API_URL}${step.imageUrl}`}
-                                  alt={step.imageLabel || `Step ${step.id}`}
-                                  style={{ width: "100%", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.1)" }}
-                                />
-                              ) : (
-                                <div className="missingThumb">No image</div>
-                              )}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                            <strong>Step {index + 1}</strong>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <button className="secondaryButton" onClick={() => moveEditorStep(step.id, -1)} disabled={index === 0}>↑</button>
+                              <button className="secondaryButton" onClick={() => moveEditorStep(step.id, 1)} disabled={index === (editorDraft.steps || []).length - 1}>↓</button>
                             </div>
+                          </div>
 
+                          <div style={{ display: "grid", gridTemplateColumns: step.pendingImageUrl ? "1fr 1fr" : "1fr", gap: "8px" }}>
+                            <img
+                              src={apiAssetUrl(step.imageUrl)}
+                              alt={step.imageLabel || `Step ${step.id}`}
+                              style={{ width: "100%", maxHeight: "145px", objectFit: "cover", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.1)" }}
+                            />
                             {step.pendingImageUrl && (
-                              <div>
-                                <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>New Candidate</div>
-                                <img
-                                  src={step.pendingImageUrl.startsWith("http") ? step.pendingImageUrl : `${API_URL}${step.pendingImageUrl}`}
-                                  alt={`New candidate for step ${step.id}`}
-                                  style={{ width: "100%", borderRadius: "12px", border: "2px solid rgba(0,120,255,0.35)" }}
-                                />
-                              </div>
+                              <img
+                                src={apiAssetUrl(step.pendingImageUrl)}
+                                alt={`Candidate for step ${step.id}`}
+                                style={{ width: "100%", maxHeight: "145px", objectFit: "cover", borderRadius: "12px", border: "2px solid rgba(37,99,235,0.45)" }}
+                              />
                             )}
                           </div>
+
+                          <label className="fieldLabel">
+                            Step title / caption
+                            <input value={step.imageLabel || ""} onChange={(event) => updateEditorStep(step.id, "imageLabel", event.target.value)} />
+                          </label>
+
+                          <label className="fieldLabel">
+                            Instruction text
+                            <textarea className="adminTextArea small" value={step.instruction || ""} onChange={(event) => updateEditorStep(step.id, "instruction", event.target.value)} />
+                          </label>
+
+                          <label className="fieldLabel">
+                            Detail text
+                            <textarea className="adminTextArea small" value={step.detail || ""} onChange={(event) => updateEditorStep(step.id, "detail", event.target.value)} />
+                          </label>
 
                           <textarea
                             className="adminTextArea small"
-                            style={{ marginTop: "12px" }}
                             value={repairCorrections[step.id] || ""}
-                            onChange={(e) => setRepairCorrections({
-                              ...repairCorrections,
-                              [step.id]: e.target.value
-                            })}
-                            placeholder="Correction prompt, example: Make the pipe copper, remove PVC, show a propane torch heating the joint."
+                            onChange={(event) => setRepairCorrections({ ...repairCorrections, [step.id]: event.target.value })}
+                            placeholder="New image prompt or correction, e.g. show copper pipe, remove PVC, add propane torch."
                           />
 
                           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                            <button
-                              className="startButton"
-                              onClick={() => regenerateStepImage(step.id)}
-                              disabled={adminLoading}
-                            >
-                              Regenerate This Image
+                            <button className="startButton" onClick={() => regenerateStepImage(step.id)} disabled={adminLoading}>
+                              Regenerate Image
                             </button>
-
                             {step.pendingImageUrl && (
-                              <button
-                                className="doneButton"
-                                onClick={() => acceptStepImage(step.id)}
-                                disabled={adminLoading}
-                              >
-                                Keep New Image
+                              <button className="doneButton" onClick={() => acceptStepImage(step.id)} disabled={adminLoading}>
+                                Keep New
                               </button>
                             )}
-
-                            <button
-                              className="secondaryButton"
-                              onClick={() => revertStepImage(step.id)}
-                              disabled={adminLoading}
-                            >
+                            <button className="secondaryButton" onClick={() => revertStepImage(step.id)} disabled={adminLoading}>
                               Revert / Discard
                             </button>
-
-                            <button
-                              className="secondaryButton"
-                              onClick={() => {
-                                const filename = (step.imageUrl || "").split("/").pop();
-                                setPromoteFilename(filename);
-                                setPromoteStepNumber(step.id);
-                              }}
-                              disabled={!step.imageUrl}
-                            >
-                              Stage for Canonical Promotion
-                            </button>
                           </div>
-
-                          {step.imagePrompt && (
-                            <details style={{ marginTop: "10px", fontSize: "12px" }}>
-                              <summary>Prompt history</summary>
-                              <pre style={{ whiteSpace: "pre-wrap" }}>{step.imagePrompt}</pre>
-                            </details>
-                          )}
                         </div>
                       ))}
                     </div>
                   </>
                 ) : (
-                  <p className="adminHelp">Select a walkthrough to inspect and repair its images.</p>
+                  <p className="adminHelp">Select a walkthrough to start editing. Click Refresh Walkthroughs if the list is empty.</p>
                 )}
               </div>
             </div>
-          </section>
+          </AdminSection>
 
-          <section className="adminCard">
-            <h2>Bulk Query Seeder</h2>
+          <AdminSection
+            panelId="catalog"
+            title="Catalog Intelligence v2"
+            actions={
+              <button className="secondaryButton" onClick={loadCatalogPipelineStatus} disabled={adminLoading || !!catalogPipelineRunning}>
+                Refresh Catalog
+              </button>
+            }
+          >
             <p className="adminHelp">
-              Paste one common installation or repair query per line.
+              Build reusable product packages from manufacturer product pages. Product packages stay separate from walkthroughs and can be reused by compatible walkthrough families.
             </p>
 
-            <textarea
-              className="adminTextArea"
-              value={bulkQueries}
-              onChange={(e) => setBulkQueries(e.target.value)}
-              placeholder={"replace sink disposal\nreplace toilet\ninstall bathroom exhaust fan\nreplace shower cartridge"}
-            />
-
-            <button
-              className="startButton"
-              onClick={submitBulkQueries}
-              disabled={adminLoading || !bulkQueries.trim()}
-            >
-              SAVE BULK QUERIES
-            </button>
-
-
-            <div
-              style={{
-                display: "flex",
-                gap: "12px",
-                flexWrap: "wrap",
-                marginTop: "12px"
-              }}
-            >
-              <button
-                className="doneButton"
-                onClick={processQueuedWalkthroughs}
-                disabled={adminLoading}
-              >
-                {adminLoading
-                  ? "PROCESSING..."
-                  : "RUN 5 JOBS"}
-              </button>
-
-              <button
-                className="secondaryButton"
-                onClick={async () => {
-                  setAdminLoading(true);
-
-                  try {
-                    const response = await fetch(
-                      `${API_URL}/admin/process-bulk-queries?limit=1`,
-                      {
-                        method: "POST"
-                      }
-                    );
-
-                    const data = await response.json();
-
-                    setAdminMessage(
-                      `Worker Automation processed ${data.processed_count || 0} job. Remaining queued: ${data.remaining_queued || 0}.`
-                    );
-
-                    loadAdminStatus();
-                    loadBuildStatus();
-
-                  } catch (error) {
-                    console.error(error);
-                    setAdminMessage("Worker Automation failed.");
-
-                  } finally {
-                    setAdminLoading(false);
-                  }
-                }}
-                disabled={adminLoading}
-              >
-                WORKER AUTOMATION
-              </button>
-
-              <button
-                className="secondaryButton"
-                onClick={async () => {
-                  setAdminLoading(true);
-
-                  try {
-                    const response = await fetch(
-                      `${API_URL}/admin/process-bulk-queries?limit=20`,
-                      {
-                        method: "POST"
-                      }
-                    );
-
-                    const data = await response.json();
-
-                    setAdminMessage(
-                      `Processed ${data.processed_count || 0} walkthroughs. Remaining queued: ${data.remaining_queued || 0}.`
-                    );
-
-                    loadAdminStatus();
-                    loadBuildStatus();
-
-                  } catch (error) {
-                    console.error(error);
-                    setAdminMessage("Could not process walkthroughs.");
-
-                  } finally {
-                    setAdminLoading(false);
-                  }
-                }}
-                disabled={adminLoading}
-              >
-                RUN 20 JOBS
-              </button>
-            </div>
-          </section>
-
-          <section className="adminCard">
-            <h2>Bulk Brand Ingestion</h2>
-
-            <p className="adminHelp">
-              Paste one brand and category per line using:
-              Brand | Category
-            </p>
-
-            <textarea
-              className="adminTextArea"
-              value={bulkCatalog}
-              onChange={(e) => setBulkCatalog(e.target.value)}
-              placeholder={
-                "Kohler | Bidets\nDelta | Shower Valves\nMoen | Kitchen Faucets\nRheem | Heat Pumps\nLeviton | Smart Switches"
-              }
-            />
-
-            <button
-              className="startButton"
-              onClick={submitBulkCatalog}
-              disabled={adminLoading || !bulkCatalog.trim()}
-            >
-              SAVE BULK BRAND LIST
-            </button>
-
-            <button
-              className="doneButton"
-              onClick={processModelDiscovery}
-              disabled={adminLoading}
-              style={{ marginTop: "12px" }}
-            >
-              {adminLoading
-                ? "DISCOVERING..."
-                : "PROCESS MODEL DISCOVERY"}
-            </button>
-          </section>
-
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Canonical Image Manager</h2>
-
-              <button
-                className="secondaryButton"
-                onClick={loadCanonicalStatus}
-                disabled={adminLoading}
-              >
-                Refresh Images
-              </button>
+            <div style={{ border: "1px solid rgba(0,0,0,0.14)", borderRadius: "18px", padding: "14px", marginBottom: "16px", background: "#f8fafc" }}>
+              <h3 style={{ margin: "0 0 8px" }}>Build Product Package</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
+                <label className="fieldLabel">Category<input value={productPackageCategory} onChange={(event) => setProductPackageCategory(event.target.value)} placeholder="toilet" /></label>
+                <label className="fieldLabel">Brand<input value={productPackageBrand} onChange={(event) => setProductPackageBrand(event.target.value)} placeholder="Niagara" /></label>
+                <label className="fieldLabel">Model<input value={productPackageModel} onChange={(event) => setProductPackageModel(event.target.value)} placeholder="Original Stealth" /></label>
+              </div>
+              <label className="fieldLabel" style={{ marginTop: "10px" }}>Manufacturer product page URL<input value={productPackageUrl} onChange={(event) => setProductPackageUrl(event.target.value)} placeholder="https://manufacturer.com/product-page" /></label>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginTop: "12px" }}>
+                <button className="startButton" onClick={buildProductPagePackage} disabled={productPackageRunning || !productPackageBrand.trim() || !productPackageModel.trim() || !productPackageUrl.trim()}>
+                  {productPackageRunning ? "Building Package..." : "Build Product Package"}
+                </button>
+                <button className="secondaryButton" onClick={testBuildNiagaraStealth} disabled={productPackageRunning}>
+                  Test Build Niagara Stealth
+                </button>
+              </div>
             </div>
 
-            <p className="adminHelp">
-              Upload reusable canonical walkthrough images.
-            </p>
+            {catalogPipelineStatus?.items?.length ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px" }}>
+                {catalogPipelineStatus.items.map((item) => (
+                  <div key={`${item.brand}-${item.model}`} style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: "14px", padding: "12px", background: "white" }}>
+                    <strong>{item.brand} {item.model}</strong>
+                    <div style={{ fontSize: "12px", marginTop: "6px" }}>
+                      Photo: {item.photo?.status || "unknown"} · Manual: {item.manual?.status || "unknown"} · Overlay: {item.overlay?.status || "unknown"}
+                    </div>
+                    <div style={{ fontSize: "12px" }}>Confidence: <strong>{item.confidence || "UNKNOWN"}</strong></div>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
+                      <button className="secondaryButton" onClick={() => runCatalogPipeline(item, "all")} disabled={!!catalogPipelineRunning}>
+                        {catalogPipelineRunning === `${item.brand}-${item.model}-all` ? "Running..." : "Run All"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="adminHelp">Click Refresh Catalog to load available packages and starter models.</p>
+            )}
+          </AdminSection>
 
-            <input
-              className="queryBox"
-              type="text"
-              value={canonicalKey}
-              onChange={(e) => setCanonicalKey(e.target.value)}
-              placeholder="Canonical key, example: replace kitchen faucet"
-            />
+          <AdminSection panelId="reports" title="Package Report Panel">
+            {productPackageResult ? (
+              <div style={{ display: "grid", gap: "12px" }}>
+                <h3 style={{ margin: 0 }}>{productPackageResult.product?.brand || productPackageBrand} {productPackageResult.product?.model || productPackageModel}</h3>
+                <div className="adminStats">
+                  <div><strong>{productPackageResult.product?.photo_url ? "YES" : "NO"}</strong><span>Photo Found</span></div>
+                  <div><strong>{productPackageResult.product?.manual_url ? "YES" : "NO"}</strong><span>Manual Found</span></div>
+                  <div><strong>{productPackageResult.discovery?.pdfs?.length || 0}</strong><span>PDF candidates</span></div>
+                  <div><strong>{productPackageResult.overlays?.length || productPackageResult.discovery?.overlays?.length || "—"}</strong><span>Overlays</span></div>
+                  <div><strong>{productPackageResult.product?.confidence || "UNKNOWN"}</strong><span>Confidence</span></div>
+                </div>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  {productPackageResult.product?.photo_url && <a className="secondaryButton" href={apiAssetUrl(productPackageResult.product.photo_url)} target="_blank" rel="noreferrer">View Photo</a>}
+                  {productPackageResult.product?.manual_url && <a className="secondaryButton" href={apiAssetUrl(productPackageResult.product.manual_url)} target="_blank" rel="noreferrer">View Manual</a>}
+                  {productPackageResult.overlays_json_url && <a className="secondaryButton" href={apiAssetUrl(productPackageResult.overlays_json_url)} target="_blank" rel="noreferrer">View Overlays</a>}
+                  {productPackageResult.discovery_json_url && <a className="secondaryButton" href={apiAssetUrl(productPackageResult.discovery_json_url)} target="_blank" rel="noreferrer">View Discovery JSON</a>}
+                </div>
+              </div>
+            ) : (
+              <p className="adminHelp">Build or test a product package to see its quality-control report here.</p>
+            )}
+          </AdminSection>
 
-            <input
-              className="queryBox"
-              type="number"
-              min="1"
-              value={canonicalStep}
-              onChange={(e) => setCanonicalStep(e.target.value)}
-              placeholder="Step number"
-            />
-
-            <input
-              type="file"
-              onChange={(e) => setCanonicalFile(e.target.files?.[0] || null)}
-            />
-
-            <button
-              className="startButton"
-              onClick={uploadCanonicalImage}
-              disabled={adminLoading || !canonicalFile || !canonicalKey}
-            >
-              UPLOAD CANONICAL IMAGE
-            </button>
-
-            {canonicalStatus?.sets?.length > 0 && (
-              <div className="canonicalGrid">
-                {canonicalStatus.sets.map((set) => (
-                  <div className="canonicalCard" key={set.slug}>
-                    <h3>{set.canonical_key}</h3>
-
-                    <p>
-                      {set.available_count} / {set.expected_count} images
-                    </p>
-
-                    <div className="canonicalThumbs">
-                      {set.images.map((img) => (
-                        <div
-                          key={img.filename}
-                          className={`canonicalThumb ${
-                            img.exists ? "exists" : "missing"
-                          }`}
-                        >
-                          {img.exists ? (
-                            <img src={img.url} alt={img.filename} />
-                          ) : (
-                            <div className="missingThumb">
-                              Missing
-                            </div>
-                          )}
+          <AdminSection
+            panelId="queue"
+            title="Queue / Worker Controls"
+            actions={<button className="secondaryButton" onClick={loadBulkJobList} disabled={adminLoading}>Refresh Queue</button>}
+          >
+            <div className="adminStats">
+              <div><strong>{bulkJobList?.counts?.queued || 0}</strong><span>Queued</span></div>
+              <div><strong>{bulkJobList?.counts?.completed || 0}</strong><span>Completed</span></div>
+              <div><strong>{bulkJobList?.counts?.failed || 0}</strong><span>Failed</span></div>
+              <div><strong>{buildStatus?.activity_state?.toUpperCase() || "UNKNOWN"}</strong><span>Worker activity</span></div>
+            </div>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+              <button className="startButton" onClick={() => runQueueLimit(5)} disabled={adminLoading}>Run Next 5</button>
+              <button className="startButton" onClick={() => runQueueLimit(20)} disabled={adminLoading}>Run Next 20</button>
+              <button className="secondaryButton" onClick={() => runQueueLimit(999)} disabled={adminLoading}>Run All</button>
+            </div>
+            {bulkJobList ? (
+              <div style={{ display: "grid", gap: "10px" }}>
+                {["failed", "queued", "completed", "ignored"].map((group) => (
+                  <details key={group}>
+                    <summary><strong>{group.toUpperCase()}</strong> ({bulkJobList[group]?.length || 0})</summary>
+                    <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
+                      {(bulkJobList[group] || []).slice(0, 30).map((job) => (
+                        <div key={`${group}-${job.query_slug || job.query}`} style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: "12px", padding: "10px", background: "#fff" }}>
+                          <strong>{displayText(job.query, 100)}</strong>
+                          {job.error && <div style={{ fontSize: "12px", color: "#8a1f11", overflowWrap: "anywhere" }}>Error: {displayText(job.error, 180)}</div>}
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
+                            <button className="secondaryButton" onClick={() => updateBulkJob(job.query_slug, "retry")} disabled={adminLoading}>Retry</button>
+                            <button className="secondaryButton" onClick={() => updateBulkJob(job.query_slug, "ignore")} disabled={adminLoading}>Ignore</button>
+                            <button className="secondaryButton" onClick={() => updateBulkJob(job.query_slug, "delete")} disabled={adminLoading}>Delete</button>
+                            {job.walkthrough_id && <button className="secondaryButton" onClick={() => loadAdminWalkthrough(job.walkthrough_id)} disabled={adminLoading}>Edit</button>}
+                          </div>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </details>
                 ))}
               </div>
+            ) : (
+              <p className="adminHelp">Click Refresh Queue to load queue records.</p>
             )}
-          </section>
+          </AdminSection>
 
-          <section className="adminCard">
-            <div className="adminCardHeader">
-              <h2>Generated Image Registry</h2>
+          <AdminSection panelId="status" title="System Status" actions={<button className="secondaryButton" onClick={loadAdminStatus} disabled={adminLoading}>Refresh</button>}>
+            {adminStatus ? (
+              <div className="adminStats">
+                <div><strong>{adminStatus.bulk_query_count}</strong><span>Total queries</span></div>
+                <div><strong>{adminStatus.bulk_completed_count || 0}</strong><span>Completed</span></div>
+                <div><strong>{adminStatus.bulk_queued_count || 0}</strong><span>Queued</span></div>
+                <div><strong>{adminStatus.bulk_failed_count || 0}</strong><span>Failed</span></div>
+                <div><strong>{adminStatus.catalog_request_count}</strong><span>Catalog requests</span></div>
+                <div><strong>{adminStatus.catalog_category_count}</strong><span>Catalog categories</span></div>
+              </div>
+            ) : <p className="adminHelp">Click refresh to load admin status.</p>}
+          </AdminSection>
 
+          <AdminSection panelId="activity" title="Walkthrough Build Activity" actions={<button className="secondaryButton" onClick={loadBuildStatus}>Refresh Activity</button>}>
+            {buildStatus ? (
+              <>
+                <div className="adminStats">
+                  <div><strong>{buildStatus.activity_state?.toUpperCase()}</strong><span>Activity</span></div>
+                  <div><strong>{buildStatus.seconds_since_activity ? Math.round(buildStatus.seconds_since_activity) : 0}</strong><span>Seconds idle</span></div>
+                  <div><strong>{buildStatus.walkthrough_count || 0}</strong><span>Walkthroughs</span></div>
+                  <div><strong>{buildStatus.image_count || 0}</strong><span>Images</span></div>
+                </div>
+              </>
+            ) : <p className="adminHelp">Loading build activity...</p>}
+          </AdminSection>
+
+          <AdminSection panelId="advanced" title="Advanced Tools">
+            <div style={{ display: "grid", gap: "18px" }}>
               <div>
-                <button
-                  className="secondaryButton"
-                  onClick={loadImageRegistry}
-                  disabled={adminLoading}
-                >
-                  Load Registry
-                </button>
-
-                <button
-                  className="secondaryButton"
-                  onClick={rebuildImageRegistry}
-                  disabled={adminLoading}
-                  style={{ marginLeft: "8px" }}
-                >
-                  Rebuild
-                </button>
+                <h3>Bulk Query Seeder</h3>
+                <textarea className="adminTextArea" value={bulkQueries} onChange={(e) => setBulkQueries(e.target.value)} placeholder="One walkthrough query per line" />
+                <button className="startButton" onClick={submitBulkQueries} disabled={adminLoading || !bulkQueries.trim()}>SAVE BULK QUERIES</button>
+              </div>
+              <div>
+                <h3>Bulk Brand Ingestion</h3>
+                <textarea className="adminTextArea" value={bulkCatalog} onChange={(e) => setBulkCatalog(e.target.value)} placeholder="Brand | Category" />
+                <button className="startButton" onClick={submitBulkCatalog} disabled={adminLoading || !bulkCatalog.trim()}>SAVE BULK CATALOG REQUESTS</button>
+              </div>
+              <div>
+                <h3>Brand + Category Catalog Builder</h3>
+                <input className="queryBox" type="text" value={catalogBrand} onChange={(e) => setCatalogBrand(e.target.value)} placeholder="Brand, e.g. Kohler" />
+                <input className="queryBox" type="text" value={catalogCategory} onChange={(e) => setCatalogCategory(e.target.value)} placeholder="Category, e.g. Toilets" />
+                <textarea className="adminTextArea small" value={catalogModels} onChange={(e) => setCatalogModels(e.target.value)} placeholder="Optional models, one per line" />
+                <button className="startButton" onClick={submitCatalogEntry} disabled={adminLoading || !catalogBrand.trim() || !catalogCategory.trim()}>SAVE CATALOG ENTRY</button>
+              </div>
+              <div>
+                <h3>Legacy Image Tools</h3>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <button className="secondaryButton" onClick={loadCanonicalStatus} disabled={adminLoading}>Load Canonical Status</button>
+                  <button className="secondaryButton" onClick={loadImageRegistry} disabled={adminLoading}>Load Image Registry</button>
+                  <button className="secondaryButton" onClick={rebuildImageRegistry} disabled={adminLoading}>Rebuild Image Registry</button>
+                </div>
               </div>
             </div>
-
-            <p className="adminHelp">
-              Review generated images and promote useful ones into canonical image sets.
-            </p>
-
-            <input
-              className="queryBox"
-              type="text"
-              value={promoteCanonicalKey}
-              onChange={(e) => setPromoteCanonicalKey(e.target.value)}
-              placeholder="Promote to canonical key, example: replace toilet"
-            />
-
-            <input
-              className="queryBox"
-              type="number"
-              min="1"
-              value={promoteStepNumber}
-              onChange={(e) => setPromoteStepNumber(e.target.value)}
-              placeholder="Canonical step number"
-            />
-
-            <input
-              className="queryBox"
-              type="text"
-              value={promoteFilename}
-              onChange={(e) => setPromoteFilename(e.target.value)}
-              placeholder="Optional filename to promote manually"
-            />
-
-            <button
-              className="startButton"
-              onClick={() => promoteImageToCanonical()}
-              disabled={adminLoading || !promoteFilename || !promoteCanonicalKey}
-            >
-              PROMOTE MANUAL FILENAME
-            </button>
-
-            {imageRegistry?.images?.length > 0 && (
-              <div className="canonicalGrid">
-                {imageRegistry.images.slice(0, 60).map((image) => (
-                  <div className="canonicalCard" key={image.filename}>
-                    <h3>{image.filename}</h3>
-
-                    <p>
-                      {Math.round((image.size_bytes || 0) / 1024)} KB
-                    </p>
-
-                    <div className="canonicalThumbs">
-                      <div className="canonicalThumb exists">
-                        <img
-                          src={`${API_URL}/static/images/${image.filename}`}
-                          alt={image.filename}
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      className="secondaryButton"
-                      onClick={() => {
-                        setPromoteFilename(image.filename);
-                        promoteImageToCanonical(image.filename);
-                      }}
-                      disabled={adminLoading || !promoteCanonicalKey}
-                    >
-                      Promote
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="adminCard">
-            <h2>Brand + Category Catalog Builder</h2>
-            <p className="adminHelp">
-              Add product categories and known models. Leave models blank to queue top-10 model discovery.
-            </p>
-
-            <input
-              className="queryBox"
-              type="text"
-              value={catalogBrand}
-              onChange={(e) => setCatalogBrand(e.target.value)}
-              placeholder="Brand, example: Kohler"
-            />
-
-            <input
-              className="queryBox"
-              type="text"
-              value={catalogCategory}
-              onChange={(e) => setCatalogCategory(e.target.value)}
-              placeholder="Category, example: Bidets"
-            />
-
-            <textarea
-              className="adminTextArea small"
-              value={catalogModels}
-              onChange={(e) => setCatalogModels(e.target.value)}
-              placeholder={"Optional models, one per line\nK-8298\nK-4108\nK-5724"}
-            />
-
-            <label className="adminCheck">
-              <input
-                type="checkbox"
-                checked={discoverTopModels}
-                onChange={(e) => setDiscoverTopModels(e.target.checked)}
-              />
-              Auto-discover top 10 models later if no models are supplied
-            </label>
-
-            <button
-              className="startButton"
-              onClick={submitCatalogEntry}
-              disabled={adminLoading || !catalogBrand.trim() || !catalogCategory.trim()}
-            >
-              SAVE CATALOG ENTRY
-            </button>
-          </section>
+          </AdminSection>
 
           {adminMessage && (
             <p className="adminMessage">{adminMessage}</p>
