@@ -386,13 +386,31 @@ function App() {
     setCatalogPipelineRunning(key);
     setAdminMessage(`Running ${pipeline} pipeline for ${item.brand} ${item.model}...`);
 
-    const endpoint = pipeline === "photo"
-      ? "/admin/catalog/fetch-product-photo"
-      : pipeline === "manual"
-        ? "/admin/catalog/fetch-install-manual"
-        : pipeline === "overlay"
-          ? "/admin/catalog/build-overlay-package"
-          : "/admin/catalog/run-model-pipelines";
+    const productPageUrl = item.photo?.product_page_url || item.product_page_url || "";
+    const useProductPackageBuilder = pipeline === "all" && productPageUrl;
+
+    const endpoint = useProductPackageBuilder
+      ? "/admin/catalog/build-product-page-package"
+      : pipeline === "photo"
+        ? "/admin/catalog/fetch-product-photo"
+        : pipeline === "manual"
+          ? "/admin/catalog/fetch-install-manual"
+          : pipeline === "overlay"
+            ? "/admin/catalog/build-overlay-package"
+            : "/admin/catalog/run-model-pipelines";
+
+    const payload = useProductPackageBuilder
+      ? {
+          category: item.category || "toilet",
+          brand: item.brand,
+          model: item.model,
+          product_page_url: productPageUrl
+        }
+      : {
+          category: item.category || "toilet",
+          brand: item.brand,
+          model: item.model
+        };
 
     try {
       const response = await fetch(`${API_URL}${endpoint}`, {
@@ -400,17 +418,27 @@ function App() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          category: "toilet",
-          brand: item.brand,
-          model: item.model
-        })
+        cache: "no-store",
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.detail || data.status || "Pipeline request failed.");
+      }
+
+      if (data?.product?.photo_url) {
+        setPhotoDiagnostics((current) => ({
+          ...current,
+          [catalogItemKey(item)]: {
+            ...(current[catalogItemKey(item)] || {}),
+            cached_photo_url: data.product.photo_url,
+            remote_photo_url: data.product.remote_photo_url || "",
+            download_status: "cached",
+            selected_candidate: data.product.remote_photo_url || ""
+          }
+        }));
       }
 
       setAdminMessage(`${item.brand} ${item.model}: ${pipeline} pipeline finished with status ${data.status}.`);
@@ -450,7 +478,15 @@ function App() {
       }
       setPhotoDiagnostics((current) => ({ ...current, [key]: data }));
       const count = Array.isArray(data.image_candidates) ? data.image_candidates.length : 0;
-      setAdminMessage(`${item.brand} ${item.model}: found ${count} image candidate(s). ${data.failure_reason || ""}`.trim());
+      const cached = Boolean(data.cached_photo_url || data.download_status === "cached");
+      setAdminMessage(
+        cached
+          ? `${item.brand} ${item.model}: photo cached from ${count} discovered candidate(s).`
+          : `${item.brand} ${item.model}: found ${count} image candidate(s). ${data.failure_reason || ""}`.trim()
+      );
+      if (cached) {
+        await loadCatalogPipelineStatus();
+      }
     } catch (error) {
       console.error(error);
       setPhotoDiagnostics((current) => ({
@@ -498,6 +534,59 @@ function App() {
     } catch (error) {
       console.error(error);
       setAdminMessage(`${item.brand} ${item.model}: cache photo failed — ${error.message}`);
+    } finally {
+      setPhotoActionKey("");
+    }
+  }
+
+
+  async function cacheProductPhotoCandidate(item, candidateUrl) {
+    const key = catalogItemKey(item);
+    const imageUrl = (candidateUrl || "").trim();
+
+    if (!imageUrl) {
+      setAdminMessage("No image candidate was selected.");
+      return;
+    }
+
+    setPhotoActionKey(`${key}-select`);
+    setAdminMessage(`Saving selected photo for ${item.brand} ${item.model}...`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/catalog/cache-photo-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          category: item.category || "toilet",
+          brand: item.brand,
+          model: item.model,
+          image_url: imageUrl
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || data.status || "Could not cache selected photo.");
+      }
+
+      const localUrl = data?.photo?.local_url || data?.product?.photo_url || "";
+      setPhotoDiagnostics((current) => ({
+        ...current,
+        [key]: {
+          ...(current[key] || {}),
+          cached_photo_url: localUrl,
+          download_status: data.status || "cached",
+          selected_candidate: imageUrl,
+          failure_reason: data?.photo?.error || ""
+        }
+      }));
+      setPhotoOverrideUrls((current) => ({ ...current, [key]: "" }));
+      setAdminMessage(`${item.brand} ${item.model}: selected photo saved.`);
+      await loadCatalogPipelineStatus();
+      await diagnoseProductPhoto(item);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`${item.brand} ${item.model}: selected photo failed — ${error.message}`);
     } finally {
       setPhotoActionKey("");
     }
@@ -1518,14 +1607,17 @@ function App() {
                 {catalogPipelineStatus.items.map((item) => {
                   const key = catalogItemKey(item);
                   const diagnostic = photoDiagnostics[key];
-                  const hasPhoto = item.photo?.status === "cached" && item.photo?.local_url;
+                  const diagnosticPhotoUrl = diagnostic?.cached_photo_url || diagnostic?.photo?.local_url || "";
+                  const photoUrl = item.photo?.local_url || diagnosticPhotoUrl;
+                  const hasPhoto = Boolean(photoUrl);
+                  const photoStatus = hasPhoto ? "cached" : (item.photo?.status || "unknown");
                   const candidateCount = Array.isArray(diagnostic?.image_candidates) ? diagnostic.image_candidates.length : null;
 
                   return (
                     <div key={`${item.brand}-${item.model}`} style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: "14px", padding: "12px", background: "white" }}>
                       <strong>{item.brand} {item.model}</strong>
                       <div style={{ fontSize: "12px", marginTop: "6px" }}>
-                        Photo: {item.photo?.status || "unknown"} · Manual: {item.manual?.status || "unknown"} · Overlay: {item.overlay?.status || "unknown"}
+                        Photo: {photoStatus} · Manual: {item.manual?.status || "unknown"} · Overlay: {item.overlay?.status || "unknown"}
                       </div>
                       <div style={{ fontSize: "12px" }}>Confidence: <strong>{item.confidence || "UNKNOWN"}</strong></div>
                       <div style={{ fontSize: "12px", color: "#555" }}>Source: {item.source || "starter_catalog"}</div>
@@ -1534,7 +1626,7 @@ function App() {
                         <button className="secondaryButton" onClick={() => runCatalogPipeline(item, "all")} disabled={!!catalogPipelineRunning || !!photoActionKey}>
                           {catalogPipelineRunning === `${item.brand}-${item.model}-all` ? "Running..." : "Run All"}
                         </button>
-                        {hasPhoto && <a className="secondaryButton" href={apiAssetUrl(item.photo.local_url)} target="_blank" rel="noreferrer">View Photo</a>}
+                        {hasPhoto && <a className="secondaryButton" href={apiAssetUrl(photoUrl)} target="_blank" rel="noreferrer">View Photo</a>}
                         {item.manual?.local_url && <a className="secondaryButton" href={apiAssetUrl(item.manual.local_url)} target="_blank" rel="noreferrer">View PDF</a>}
                         {item.photo?.product_page_url && <a className="secondaryButton" href={apiAssetUrl(item.photo.product_page_url)} target="_blank" rel="noreferrer">Product Page</a>}
                         {!hasPhoto && (
@@ -1570,6 +1662,41 @@ function App() {
                           {!diagnostic.selected_candidate && diagnostic.best_candidate && <div style={{ wordBreak: "break-all" }}>Best candidate: {diagnostic.best_candidate}</div>}
                           {diagnostic.cached_photo_url && <div><a href={apiAssetUrl(diagnostic.cached_photo_url)} target="_blank" rel="noreferrer">View cached photo</a></div>}
                           {diagnostic.failure_reason && <div style={{ color: "#9b1c1c" }}>Reason: {diagnostic.failure_reason}</div>}
+
+                          {Array.isArray(diagnostic.image_candidates) && diagnostic.image_candidates.length > 0 && (
+                            <div style={{ marginTop: "10px" }}>
+                              <strong>Choose Product Photo</strong>
+                              <div style={{ color: "#555", margin: "3px 0 8px" }}>
+                                Pick the clearest full-product manufacturer image. Avoid close-ups, lifestyle scenes, and similar-but-different products.
+                              </div>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))", gap: "8px", maxHeight: "310px", overflowY: "auto", paddingRight: "4px" }}>
+                                {diagnostic.image_candidates.slice(0, 24).map((candidateUrl, candidateIndex) => (
+                                  <div key={`${key}-candidate-${candidateIndex}`} style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: "10px", padding: "6px", background: "white" }}>
+                                    <a href={candidateUrl} target="_blank" rel="noreferrer" title={candidateUrl}>
+                                      <img
+                                        src={candidateUrl}
+                                        alt={`Candidate ${candidateIndex + 1}`}
+                                        loading="lazy"
+                                        style={{ width: "100%", height: "78px", objectFit: "contain", background: "#f1f5f9", borderRadius: "8px" }}
+                                        onError={(event) => { event.currentTarget.style.display = "none"; }}
+                                      />
+                                    </a>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "4px", marginTop: "5px" }}>
+                                      <span style={{ fontSize: "11px", color: "#666" }}>#{candidateIndex + 1}</span>
+                                      <button
+                                        className="secondaryButton"
+                                        style={{ padding: "5px 7px", fontSize: "11px", borderRadius: "8px" }}
+                                        onClick={() => cacheProductPhotoCandidate(item, candidateUrl)}
+                                        disabled={!!catalogPipelineRunning || !!photoActionKey}
+                                      >
+                                        {photoActionKey === `${key}-select` ? "Saving..." : "Use"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
