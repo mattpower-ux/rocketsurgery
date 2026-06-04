@@ -951,7 +951,7 @@ def score_image_candidate(url: str, brand: str, model: str, product_page_url: st
     page_host = urlparse(product_page_url).netloc.lower()
 
     if page_host and (host == page_host or host.endswith('.' + page_host)):
-        score += 18
+        score += 30
 
     brand_tokens = [t for t in re.split(r"[^a-z0-9]+", (brand or "").lower()) if len(t) > 2]
     model_tokens = [t for t in re.split(r"[^a-z0-9]+", (model or "").lower()) if len(t) > 1]
@@ -961,18 +961,19 @@ def score_image_candidate(url: str, brand: str, model: str, product_page_url: st
             score += 8
     for token in model_tokens:
         if token in lower:
-            score += 14
+            score += 18
 
     # Product-photo cues.
     for term, points in [
-        ("product", 10),
+        ("product", 14),
         ("toilet", 10),
-        ("hero", 8),
-        ("primary", 8),
-        ("main", 6),
+        ("hero", 14),
+        ("primary", 10),
+        ("main", 8),
         ("white", 4),
-        ("sku", 4),
-        ("shop/files", 3),
+        ("front", 5),
+        ("sku", 6),
+        ("shop/files", 4),
         ("products", 3),
     ]:
         if term in lower:
@@ -995,20 +996,51 @@ def score_image_candidate(url: str, brand: str, model: str, product_page_url: st
         score += 5
 
     # Penalize likely non-product assets.
-    bad_terms = [
-        'logo', 'icon', 'favicon', 'sprite', 'placeholder', 'spinner',
-        'banner', 'category', 'categories', 'lifestyle', 'room-scene',
-        'commercial-toilets', 'commercial_toilets', 'bathroom-toilets',
-        'social', 'facebook', 'instagram', 'youtube', 'twitter',
-        'payment', 'visa', 'mastercard', 'klarna', 'affirm',
-    ]
-    for term in bad_terms:
+    bad_terms = {
+        'logo': 80,
+        'icon': 70,
+        'favicon': 90,
+        'sprite': 80,
+        'placeholder': 70,
+        'spinner': 60,
+        'banner': 35,
+        'category': 30,
+        'categories': 30,
+        'lifestyle': 28,
+        'room-scene': 28,
+        'commercial-toilets': 35,
+        'commercial_toilets': 35,
+        'bathroom-toilets': 20,
+        'environment': 22,
+        'environmentcloseup': 45,
+        'closeup': 40,
+        'close-up': 40,
+        'detail': 32,
+        'parts': 25,
+        'diagram': 28,
+        'installation': 20,
+        'social': 30,
+        'facebook': 40,
+        'instagram': 40,
+        'youtube': 40,
+        'twitter': 40,
+        'payment': 40,
+        'visa': 40,
+        'mastercard': 40,
+        'klarna': 40,
+        'affirm': 40,
+    }
+    for term, penalty in bad_terms.items():
         if term in lower:
-            score -= 18
+            score -= penalty
 
     # Very tiny thumbnails often contain size hints in filenames or params.
     if any(term in lower for term in ['thumb', 'thumbnail', 'small', 'swatch']):
-        score -= 10
+        score -= 12
+
+    if model_tokens and not any(token in lower for token in model_tokens):
+        if any(term in lower for term in ['category', 'commercial', 'bathroom', 'environment', 'collection']):
+            score -= 25
 
     return score
 
@@ -1385,6 +1417,35 @@ def post_catalog_photo_diagnostics(request: CatalogPhotoRequest):
             report["attempted_count"] = photo.get("attempted_count", discovery.get("photo_attempted_count", 0))
             report["selected_candidate"] = photo.get("selected_candidate", discovery.get("selected_photo_candidate", ""))
             report["attempts"] = photo.get("attempts", discovery.get("photo_attempts", []))
+
+            # If a previous diagnostics/build pass found candidates but never cached
+            # a photo, do the intelligent retry here instead of making the editor
+            # paste a URL manually. This keeps Diagnose Photo useful as both a
+            # diagnostic and an auto-recovery action.
+            if report["image_candidates"] and not report.get("cached_photo_url") and report["download_status"] != "cached":
+                sorted_images = sorted(
+                    report["image_candidates"],
+                    key=lambda u: score_image_candidate(u, brand, model, product_page_url),
+                    reverse=True,
+                )
+                photo = cache_best_discovered_image(category, brand, model, sorted_images, max_attempts=15)
+                product = update_product_json_photo(category, brand, model, photo)
+                discovery["images"] = sorted_images
+                discovery["photo"] = photo
+                discovery["photo_attempted_count"] = photo.get("attempted_count", 0)
+                discovery["selected_photo_candidate"] = photo.get("selected_candidate", "") or photo.get("remote_url", "")
+                discovery["photo_attempts"] = photo.get("attempts", [])
+                discovery["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                discovery_path.write_text(json.dumps(discovery, indent=2), encoding="utf-8")
+                report["image_candidates"] = sorted_images
+                report["best_candidate"] = (sorted_images or [""])[0]
+                report["download_status"] = photo.get("status", "unknown")
+                report["failure_reason"] = photo.get("error", "")
+                report["cached_photo_url"] = photo.get("local_url", "") or product.get("photo_url", "")
+                report["remote_photo_url"] = photo.get("remote_url", "") or product.get("remote_photo_url", "")
+                report["attempted_count"] = photo.get("attempted_count", 0)
+                report["selected_candidate"] = photo.get("selected_candidate", "")
+                report["attempts"] = photo.get("attempts", [])
         except Exception as exc:
             report["failure_reason"] = f"Could not read discovery.json: {exc}"
 
