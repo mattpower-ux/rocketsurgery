@@ -287,8 +287,11 @@ class ProductPagePackageRequest(BaseModel):
     product_page_url: str
 
 
-class SaveWalkthroughRequest(BaseModel):
-    walkthrough: dict
+class CatalogPhotoRequest(BaseModel):
+    brand: str
+    model: str
+    category: str = "toilet"
+    image_url: str = ""
 
 
 
@@ -417,33 +420,50 @@ def package_asset_or_blank(product: dict | None, key: str) -> str:
 
 
 def get_toilet_catalog_pipeline_status(brand: str, model: str) -> dict:
+    """Status for starter catalog records plus Catalog Intelligence v2 packages."""
     manual = find_toilet_manual(brand, model)
-    local_image = find_existing_cached_product_image(brand, model)
-    local_manual = find_existing_cached_manual(brand, model)
-    package = load_overlay_package(brand, model)
+    v2_product = load_product_page_product("toilet", brand, model)
+    local_image = package_asset_or_blank(v2_product, "photo_url") or find_existing_cached_product_image(brand, model)
+    local_manual = package_asset_or_blank(v2_product, "manual_url") or find_existing_cached_manual(brand, model)
+    legacy_package = load_overlay_package(brand, model)
+    v2_overlay_path = product_package_root("toilet", brand, model) / "overlays.json"
+    v2_overlay = None
+    if v2_overlay_path.exists():
+        try:
+            v2_overlay = json.loads(v2_overlay_path.read_text(encoding="utf-8"))
+        except Exception:
+            v2_overlay = None
+
+    overlay_package = v2_overlay or legacy_package
+    source = "product_package" if v2_product else "starter_catalog"
+    product_page_url = package_asset_or_blank(v2_product, "product_page_url") or (manual or {}).get("product_page_url", "")
+    remote_photo_url = package_asset_or_blank(v2_product, "remote_photo_url") or (manual or {}).get("product_image_url", "")
+    remote_manual_url = package_asset_or_blank(v2_product, "remote_manual_url") or (manual or {}).get("manual_url", "")
+
     return {
         "brand": brand,
         "model": model,
         "category": "toilet",
+        "source": source,
         "photo": {
             "status": "cached" if local_image else "missing",
             "local_url": local_image,
-            "remote_url": (manual or {}).get("product_image_url", ""),
-            "product_page_url": (manual or {}).get("product_page_url", ""),
+            "remote_url": remote_photo_url,
+            "product_page_url": product_page_url,
         },
         "manual": {
-            "status": "cached" if local_manual else ("remote_available" if (manual or {}).get("manual_url") else "missing"),
+            "status": "cached" if local_manual else ("remote_available" if remote_manual_url else "missing"),
             "local_url": local_manual,
-            "remote_url": (manual or {}).get("manual_url", ""),
+            "remote_url": remote_manual_url,
             "title": (manual or {}).get("manual_title", ""),
         },
         "overlay": {
-            "status": "built" if package else "not_built",
-            "tip_count": len((package or {}).get("installation_tips", [])),
-            "hotspot_count": len((package or {}).get("overlays", [])),
-            "package_url": public_catalog_package_url(overlay_package_path(brand, model)) if package else "",
+            "status": "built" if overlay_package else "not_built",
+            "tip_count": len((overlay_package or {}).get("installation_tips", [])),
+            "hotspot_count": len((overlay_package or {}).get("overlays", [])),
+            "package_url": public_catalog_file_url(v2_overlay_path) if v2_overlay else (public_catalog_package_url(overlay_package_path(brand, model)) if legacy_package else ""),
         },
-        "confidence": "HIGH" if local_image and local_manual and package else ("MEDIUM" if local_manual and package else "LOW"),
+        "confidence": (v2_product or {}).get("confidence") or ("HIGH" if local_image and local_manual and overlay_package else ("MEDIUM" if local_manual and overlay_package else "LOW")),
     }
 
 def content_type_extension(content_type: str, fallback_url: str = "") -> str:
@@ -1186,6 +1206,123 @@ def post_catalog_test_build_niagara_stealth():
 
     return report
 
+
+
+def get_product_page_for_package(category: str, brand: str, model: str) -> str:
+    v2_product = load_product_page_product(category or "toilet", brand, model)
+    if v2_product and v2_product.get("product_page_url"):
+        return v2_product.get("product_page_url", "")
+    if catalog_v2_category_slug(category) == "toilets":
+        manual = find_toilet_manual(brand, model)
+        return (manual or {}).get("product_page_url", "")
+    return ""
+
+
+def update_product_json_photo(category: str, brand: str, model: str, photo_result: dict) -> dict:
+    root = product_package_root(category or "toilet", brand, model)
+    root.mkdir(parents=True, exist_ok=True)
+    product_path = root / "product.json"
+    try:
+        product = json.loads(product_path.read_text(encoding="utf-8")) if product_path.exists() else {}
+    except Exception:
+        product = {}
+    product.update({
+        "category": category or product.get("category", "toilet"),
+        "brand": brand,
+        "model": model,
+        "photo_url": photo_result.get("local_url", "") or product.get("photo_url", ""),
+        "remote_photo_url": photo_result.get("remote_url", "") or product.get("remote_photo_url", ""),
+        "product_page_url": product.get("product_page_url", get_product_page_for_package(category, brand, model)),
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    })
+    product["confidence"] = "HIGH" if product.get("photo_url") and product.get("manual_url") else ("MEDIUM" if product.get("photo_url") or product.get("manual_url") else "LOW")
+    product_path.write_text(json.dumps(product, indent=2), encoding="utf-8")
+    return product
+
+
+@app.post("/admin/catalog/photo-diagnostics")
+def post_catalog_photo_diagnostics(request: CatalogPhotoRequest):
+    category = request.category or "toilet"
+    brand = request.brand
+    model = request.model
+    root = product_package_root(category, brand, model)
+    discovery_path = root / "discovery.json"
+    product_path = root / "product.json"
+    product = load_product_page_product(category, brand, model) or {}
+    product_page_url = product.get("product_page_url") or get_product_page_for_package(category, brand, model)
+
+    report = {
+        "status": "started",
+        "category": category,
+        "brand": brand,
+        "model": model,
+        "product_page_url": product_page_url,
+        "product_json_exists": product_path.exists(),
+        "discovery_json_exists": discovery_path.exists(),
+        "cached_photo_url": product.get("photo_url", ""),
+        "remote_photo_url": product.get("remote_photo_url", ""),
+        "image_candidates": [],
+        "best_candidate": "",
+        "download_status": "not_attempted",
+        "failure_reason": "",
+    }
+
+    if discovery_path.exists():
+        try:
+            discovery = json.loads(discovery_path.read_text(encoding="utf-8"))
+            report["image_candidates"] = discovery.get("images", []) or []
+            report["best_candidate"] = (report["image_candidates"] or [""])[0]
+            photo = discovery.get("photo", {}) or {}
+            report["download_status"] = photo.get("status", "not_attempted")
+            report["failure_reason"] = photo.get("error", "")
+        except Exception as exc:
+            report["failure_reason"] = f"Could not read discovery.json: {exc}"
+
+    if not report["image_candidates"] and product_page_url:
+        try:
+            html = fetch_text_url(product_page_url)
+            images = discover_image_candidates(html, product_page_url)
+            images = sorted(images, key=lambda u: score_image_candidate(u, brand, model, product_page_url), reverse=True)
+            report["image_candidates"] = images
+            report["best_candidate"] = (images or [""])[0]
+            report["download_status"] = "candidate_discovery_only"
+            if not images:
+                report["failure_reason"] = "No usable manufacturer image candidates were discovered on the product page. Try pasting a manufacturer-hosted image URL."
+        except Exception as exc:
+            report["download_status"] = "failed"
+            report["failure_reason"] = f"Could not fetch or parse product page: {exc}"
+
+    report["status"] = "loaded"
+    return report
+
+
+@app.post("/admin/catalog/cache-photo-url")
+def post_catalog_cache_photo_url(request: CatalogPhotoRequest):
+    if not request.image_url.strip():
+        return {"status": "missing_image_url", "error": "Paste a manufacturer-hosted image URL first."}
+    result = cache_product_image_to_package(request.category or "toilet", request.brand, request.model, request.image_url.strip())
+    product = update_product_json_photo(request.category or "toilet", request.brand, request.model, result)
+
+    root = product_package_root(request.category or "toilet", request.brand, request.model)
+    discovery_path = root / "discovery.json"
+    try:
+        discovery = json.loads(discovery_path.read_text(encoding="utf-8")) if discovery_path.exists() else {}
+    except Exception:
+        discovery = {}
+    discovery.setdefault("images", [])
+    if request.image_url.strip() not in discovery["images"]:
+        discovery["images"].insert(0, request.image_url.strip())
+    discovery["photo"] = result
+    discovery["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    discovery_path.write_text(json.dumps(discovery, indent=2), encoding="utf-8")
+
+    return {
+        "status": result.get("status"),
+        "photo": result,
+        "product": product,
+        "pipeline_status": get_toilet_catalog_pipeline_status(request.brand, request.model) if catalog_v2_category_slug(request.category) == "toilets" else {},
+    }
+
 @app.get("/catalog/products")
 def get_catalog_products(category: str = "toilet"):
     """Return product packages compatible with a category/walkthrough family.
@@ -1441,39 +1578,6 @@ def post_bulk_query_ignore(request: QuerySlugRequest):
 @app.post("/admin/bulk-query-delete")
 def post_bulk_query_delete(request: QuerySlugRequest):
     return delete_bulk_query(request.query_slug)
-
-
-@app.post("/admin/save-walkthrough")
-def post_admin_save_walkthrough(request: SaveWalkthroughRequest):
-    walkthrough = request.walkthrough or {}
-    walkthrough_id = (
-        walkthrough.get("walkthrough_id")
-        or slugify(walkthrough.get("title", "edited-walkthrough"))
-    )
-
-    if not walkthrough_id:
-        return {"status": "error", "error": "Missing walkthrough_id."}
-
-    steps = walkthrough.get("steps", []) or []
-    renumbered_steps = []
-    for index, step in enumerate(steps, start=1):
-        if isinstance(step, dict):
-            updated = dict(step)
-            updated["id"] = index
-            renumbered_steps.append(updated)
-
-    walkthrough["walkthrough_id"] = walkthrough_id
-    walkthrough["steps"] = renumbered_steps
-    walkthrough["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
-    save_walkthrough(walkthrough_id, walkthrough)
-
-    return {
-        "status": "saved",
-        "walkthrough_id": walkthrough_id,
-        "step_count": len(renumbered_steps),
-        "walkthrough": walkthrough
-    }
 
 
 @app.get("/admin/walkthroughs")
