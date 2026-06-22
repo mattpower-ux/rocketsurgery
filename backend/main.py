@@ -162,10 +162,16 @@ CATALOG_IMAGES_DIR = Path("/data/rocketsurgery/catalog-images")
 CATALOG_MANUALS_DIR = Path("/data/rocketsurgery/catalog-manuals")
 CATALOG_PACKAGES_DIR = Path("/data/rocketsurgery/catalog-packages")
 BASE_CATALOG_DIR = Path("/data/rocketsurgery/catalog")
+INTELLIGENCE_DIR = Path("/data/rocketsurgery/intelligence")
+CORRECTION_MEMORY_FILE = INTELLIGENCE_DIR / "correction_memory.jsonl"
+EDITOR_DECISIONS_FILE = INTELLIGENCE_DIR / "editor_decisions.jsonl"
+CATEGORY_RULES_FILE = INTELLIGENCE_DIR / "category_rules.json"
+
 CATALOG_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 CATALOG_MANUALS_DIR.mkdir(parents=True, exist_ok=True)
 CATALOG_PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
 BASE_CATALOG_DIR.mkdir(parents=True, exist_ok=True)
+INTELLIGENCE_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount(
     "/static/images",
@@ -298,6 +304,88 @@ class CatalogPhotoRequest(BaseModel):
 def catalog_slug(value: str) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
     return cleaned or "item"
+
+
+def infer_construction_category(walkthrough_id: str = "", title: str = "", query: str = "") -> str:
+    """Infer a broad construction category for correction memory records.
+
+    This lightweight mapper is intentionally conservative. It lets the
+    intelligence layer group corrections before we have a full taxonomy service.
+    """
+    blob = f"{walkthrough_id} {title} {query}".lower()
+    if any(term in blob for term in ["tile shower", "shower pan", "shower base", "shower"]):
+        return "tile_shower"
+    if any(term in blob for term in ["toilet", "commode", "water closet"]):
+        return "toilet"
+    if any(term in blob for term in ["siding", "hardie", "fiber cement"]):
+        return "siding"
+    if any(term in blob for term in ["water heater", "tankless"]):
+        return "water_heater"
+    if any(term in blob for term in ["heat pump", "mini split", "hvac"]):
+        return "heat_pump"
+    if any(term in blob for term in ["solar", "panel", "inverter"]):
+        return "solar"
+    return "generic"
+
+
+def load_category_rules() -> dict:
+    """Load durable category visual rules from the Render disk."""
+    if not CATEGORY_RULES_FILE.exists():
+        return {}
+    try:
+        return json.loads(CATEGORY_RULES_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print("Category rules read failed:", exc)
+        return {}
+
+
+def category_rules_for(category: str) -> dict:
+    rules = load_category_rules()
+    value = rules.get(category or "generic", {})
+    return value if isinstance(value, dict) else {}
+
+
+def format_rules_for_prompt(category: str) -> str:
+    """Format category visual rules for image prompt injection."""
+    rules = category_rules_for(category)
+    must_show = rules.get("must_show", []) or []
+    must_not_show = rules.get("must_not_show", []) or []
+    parts = []
+    if must_show:
+        parts.append("Must show: " + "; ".join(str(item) for item in must_show[:8]) + ".")
+    if must_not_show:
+        parts.append("Must not show: " + "; ".join(str(item) for item in must_not_show[:8]) + ".")
+    return " ".join(parts)
+
+
+def append_jsonl(path: Path, payload: dict):
+    """Append one JSON object per line to a durable Render-disk file."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception as exc:
+        print(f"JSONL append failed for {path}:", exc)
+
+
+def log_correction_memory(payload: dict):
+    """Persist editorial corrections/actions for self-improving walkthroughs."""
+    try:
+        record = dict(payload or {})
+        record.setdefault("timestamp", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        append_jsonl(CORRECTION_MEMORY_FILE, record)
+    except Exception as exc:
+        print("Correction memory write failed:", exc)
+
+
+def log_editor_decision(payload: dict):
+    """Persist editorial decisions separately from raw correction memory."""
+    try:
+        record = dict(payload or {})
+        record.setdefault("timestamp", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        append_jsonl(EDITOR_DECISIONS_FILE, record)
+    except Exception as exc:
+        print("Editor decision write failed:", exc)
 
 
 
@@ -1557,6 +1645,25 @@ def post_catalog_cache_photo_url(request: CatalogPhotoRequest):
     discovery["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     discovery_path.write_text(json.dumps(discovery, indent=2), encoding="utf-8")
 
+    log_correction_memory({
+        "action": "product_photo_cached",
+        "category": request.category or "toilet",
+        "brand": request.brand,
+        "model": request.model,
+        "manual_photo_override": request.image_url.strip(),
+        "cached_photo_url": result.get("local_url", ""),
+        "remote_photo_url": result.get("remote_url", ""),
+        "status": result.get("status"),
+        "error": result.get("error", ""),
+    })
+    log_editor_decision({
+        "action": "product_photo_cached",
+        "category": request.category or "toilet",
+        "brand": request.brand,
+        "model": request.model,
+        "cached_photo_url": result.get("local_url", ""),
+    })
+
     return {
         "status": result.get("status"),
         "photo": result,
@@ -1616,6 +1723,22 @@ def post_catalog_reject_photo_candidates(request: CatalogPhotoRequest):
     product["confidence"] = recompute_product_confidence(product)
     product_path.parent.mkdir(parents=True, exist_ok=True)
     product_path.write_text(json.dumps(product, indent=2), encoding="utf-8")
+
+    log_correction_memory({
+        "action": "product_photo_candidates_rejected",
+        "category": category,
+        "brand": brand,
+        "model": model,
+        "rejected_count": len(rejected),
+        "rejected_image_candidates": list(rejected),
+    })
+    log_editor_decision({
+        "action": "product_photo_candidates_rejected",
+        "category": category,
+        "brand": brand,
+        "model": model,
+        "rejected_count": len(rejected),
+    })
 
     return {
         "status": "rejected",
@@ -1813,6 +1936,30 @@ def get_admin_status():
     return admin_status()
 
 
+@app.get("/admin/correction-memory")
+def get_admin_correction_memory(limit: int = 100):
+    """Return recent correction-memory records for admin review."""
+    records = []
+    if CORRECTION_MEMORY_FILE.exists():
+        try:
+            lines = CORRECTION_MEMORY_FILE.read_text(encoding="utf-8").splitlines()
+            for line in lines[-limit:]:
+                if not line.strip():
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except Exception:
+                    records.append({"raw": line})
+        except Exception as exc:
+            return {"status": "error", "error": str(exc), "records": []}
+    return {"status": "loaded", "records": records}
+
+
+@app.get("/admin/category-rules")
+def get_admin_category_rules():
+    return {"status": "loaded", "rules": load_category_rules()}
+
+
 @app.post("/admin/bulk-queries")
 def post_bulk_queries(request: BulkQueriesRequest):
     return save_bulk_queries(request.raw_text)
@@ -1947,11 +2094,18 @@ def post_regenerate_step_image(request: RegenerateStepImageRequest):
 
     original_prompt = target.get("imagePrompt") or f"{manifest.get('title', request.walkthrough_id)} — {target.get('imageLabel', '')}"
     correction = (request.correction or "Create a clearer, more accurate professional construction training illustration.").strip()
+    inferred_category = infer_construction_category(
+        walkthrough_id=request.walkthrough_id,
+        title=manifest.get("title", ""),
+        query=manifest.get("query", ""),
+    )
+    category_rule_prompt = format_rules_for_prompt(inferred_category)
 
     # Keep prompts short and explicitly safe. This reduces false moderation hits
     # and prevents long prompt-derived image filenames in image_generator.py.
     repair_prompt = " ".join((
         f"{original_prompt}. Correction request: {correction}. "
+        f"{category_rule_prompt} "
         "Professional residential construction training illustration. "
         "Show realistic materials, accurate tool placement, safe work positioning, no injuries, no weapons, no illegal activity."
     ).split())
@@ -1965,6 +2119,20 @@ def post_regenerate_step_image(request: RegenerateStepImageRequest):
     target["pendingImageUrl"] = new_image_url
     target["pendingImagePrompt"] = repair_prompt
     target["pendingCorrection"] = correction
+
+    log_correction_memory({
+        "action": "image_regeneration_requested",
+        "walkthrough_id": manifest.get("walkthrough_id") or request.walkthrough_id,
+        "category": inferred_category,
+        "step_id": request.step_id,
+        "step_instruction": target.get("instruction", ""),
+        "step_detail": target.get("detail", ""),
+        "image_label": target.get("imageLabel", ""),
+        "original_prompt": original_prompt,
+        "correction": correction,
+        "category_rules_applied": category_rules_for(inferred_category),
+        "pending_image_url": new_image_url,
+    })
 
     history = target.setdefault("imageRepairHistory", [])
     history.append({
@@ -2013,6 +2181,31 @@ def post_accept_step_image(request: AcceptStepImageRequest):
                     item["status"] = "accepted"
                     item["accepted_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
+            inferred_category = infer_construction_category(
+                walkthrough_id=request.walkthrough_id,
+                title=manifest.get("title", ""),
+                query=manifest.get("query", ""),
+            )
+            log_correction_memory({
+                "action": "image_accepted",
+                "walkthrough_id": manifest.get("walkthrough_id") or request.walkthrough_id,
+                "category": inferred_category,
+                "step_id": request.step_id,
+                "accepted_image_url": pending,
+                "previous_image_url": previous,
+                "image_prompt": step.get("imagePrompt", ""),
+                "step_instruction": step.get("instruction", ""),
+                "step_detail": step.get("detail", ""),
+                "image_label": step.get("imageLabel", ""),
+            })
+            log_editor_decision({
+                "action": "image_accepted",
+                "walkthrough_id": manifest.get("walkthrough_id") or request.walkthrough_id,
+                "category": inferred_category,
+                "step_id": request.step_id,
+                "accepted_image_url": pending,
+            })
+
             save_walkthrough(manifest.get("walkthrough_id") or slugify(request.walkthrough_id), manifest)
             return {"status": "accepted", "walkthrough": manifest}
 
@@ -2029,9 +2222,36 @@ def post_revert_step_image(request: RevertStepImageRequest):
     for step in manifest.get("steps", []) or []:
         if int(step.get("id", 0)) == int(request.step_id):
             if step.get("pendingImageUrl"):
+                pending_url = step.get("pendingImageUrl", "")
+                pending_prompt = step.get("pendingImagePrompt", "")
+                pending_correction = step.get("pendingCorrection", "")
                 step.pop("pendingImageUrl", None)
                 step.pop("pendingImagePrompt", None)
                 step.pop("pendingCorrection", None)
+                inferred_category = infer_construction_category(
+                    walkthrough_id=request.walkthrough_id,
+                    title=manifest.get("title", ""),
+                    query=manifest.get("query", ""),
+                )
+                log_correction_memory({
+                    "action": "image_rejected_pending",
+                    "walkthrough_id": manifest.get("walkthrough_id") or request.walkthrough_id,
+                    "category": inferred_category,
+                    "step_id": request.step_id,
+                    "rejected_image_url": pending_url,
+                    "rejected_prompt": pending_prompt,
+                    "correction": pending_correction,
+                    "step_instruction": step.get("instruction", ""),
+                    "step_detail": step.get("detail", ""),
+                    "image_label": step.get("imageLabel", ""),
+                })
+                log_editor_decision({
+                    "action": "image_rejected_pending",
+                    "walkthrough_id": manifest.get("walkthrough_id") or request.walkthrough_id,
+                    "category": inferred_category,
+                    "step_id": request.step_id,
+                    "rejected_image_url": pending_url,
+                })
                 save_walkthrough(manifest.get("walkthrough_id") or slugify(request.walkthrough_id), manifest)
                 return {"status": "discarded_pending", "walkthrough": manifest}
 
@@ -2040,6 +2260,30 @@ def post_revert_step_image(request: RevertStepImageRequest):
                 current = step.get("imageUrl", "")
                 step["imageUrl"] = previous
                 step["previousImageUrl"] = current
+                inferred_category = infer_construction_category(
+                    walkthrough_id=request.walkthrough_id,
+                    title=manifest.get("title", ""),
+                    query=manifest.get("query", ""),
+                )
+                log_correction_memory({
+                    "action": "image_reverted",
+                    "walkthrough_id": manifest.get("walkthrough_id") or request.walkthrough_id,
+                    "category": inferred_category,
+                    "step_id": request.step_id,
+                    "restored_image_url": previous,
+                    "replaced_image_url": current,
+                    "step_instruction": step.get("instruction", ""),
+                    "step_detail": step.get("detail", ""),
+                    "image_label": step.get("imageLabel", ""),
+                })
+                log_editor_decision({
+                    "action": "image_reverted",
+                    "walkthrough_id": manifest.get("walkthrough_id") or request.walkthrough_id,
+                    "category": inferred_category,
+                    "step_id": request.step_id,
+                    "restored_image_url": previous,
+                    "replaced_image_url": current,
+                })
                 save_walkthrough(manifest.get("walkthrough_id") or slugify(request.walkthrough_id), manifest)
                 return {"status": "reverted", "walkthrough": manifest}
 
