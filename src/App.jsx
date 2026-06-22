@@ -32,6 +32,38 @@ function buildSpecificQuery(query, brand, model) {
   return `${baseQuery} ${brand} ${model}`;
 }
 
+
+function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommit }) {
+  const [value, setValue] = useState(initialValue || "");
+
+  useEffect(() => {
+    setValue(initialValue || "");
+  }, [stepId, initialValue]);
+
+  function stopEditorShortcut(event) {
+    event.stopPropagation();
+  }
+
+  return (
+    <textarea
+      className="adminTextArea small"
+      value={value}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        setValue(nextValue);
+        onDraftChange?.(stepId, nextValue);
+      }}
+      onBlur={() => onCommit?.(stepId, value)}
+      onKeyDown={stopEditorShortcut}
+      onKeyUp={stopEditorShortcut}
+      onInput={stopEditorShortcut}
+      onClick={stopEditorShortcut}
+      onMouseDown={(event) => event.stopPropagation()}
+      placeholder="New image prompt or correction, e.g. show copper pipe, remove PVC, add propane torch."
+    />
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState("home");
 
@@ -1602,17 +1634,16 @@ function App() {
                             <textarea className="adminTextArea small" defaultValue={step.detail || ""} onBlur={(event) => updateEditorStep(step.id, "detail", event.target.value)} />
                           </label>
 
-                          <textarea
-                            className="adminTextArea small"
-                            defaultValue={repairCorrections[step.id] || ""}
-                            onChange={(event) => {
-                              repairCorrectionRefs.current[step.id] = event.target.value;
+                          <StepRepairPromptBox
+                            stepId={step.id}
+                            initialValue={repairCorrections[step.id] || repairCorrectionRefs.current[step.id] || ""}
+                            onDraftChange={(stepId, value) => {
+                              repairCorrectionRefs.current[stepId] = value;
                             }}
-                            onBlur={(event) => {
-                              repairCorrectionRefs.current[step.id] = event.target.value;
-                              setRepairCorrections((previous) => ({ ...previous, [step.id]: event.target.value }));
+                            onCommit={(stepId, value) => {
+                              repairCorrectionRefs.current[stepId] = value;
+                              setRepairCorrections((previous) => ({ ...previous, [stepId]: value }));
                             }}
-                            placeholder="New image prompt or correction, e.g. show copper pipe, remove PVC, add propane torch."
                           />
 
                           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
