@@ -1281,30 +1281,32 @@ function App() {
 
 
   function updateEditorField(field, value) {
-    if (!editorDraft) {
-      return;
-    }
-
-    setEditorDraft({
-      ...editorDraft,
-      [field]: value
+    setEditorDraft((previous) => {
+      if (!previous) {
+        return previous;
+      }
+      return {
+        ...previous,
+        [field]: value
+      };
     });
     setEditorDirty(true);
   }
 
 
   function updateEditorStep(stepId, field, value) {
-    if (!editorDraft) {
-      return;
-    }
-
-    setEditorDraft({
-      ...editorDraft,
-      steps: (editorDraft.steps || []).map((step) => (
-        Number(step.id) === Number(stepId)
-          ? { ...step, [field]: value }
-          : step
-      ))
+    setEditorDraft((previous) => {
+      if (!previous) {
+        return previous;
+      }
+      return {
+        ...previous,
+        steps: (previous.steps || []).map((step) => (
+          Number(step.id) === Number(stepId)
+            ? { ...step, [field]: value }
+            : step
+        ))
+      };
     });
     setEditorDirty(true);
   }
@@ -1532,18 +1534,18 @@ function App() {
                     <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px", marginBottom: "14px" }}>
                       <label className="fieldLabel">
                         Walkthrough title
-                        <input value={editorDraft.title || ""} onChange={(event) => updateEditorField("title", event.target.value)} />
+                        <input key={`title-${selectedAdminWalkthrough?.walkthrough_id || "draft"}`} defaultValue={editorDraft.title || ""} onBlur={(event) => updateEditorField("title", event.target.value)} />
                       </label>
                       <label className="fieldLabel">
                         Disclaimer
-                        <textarea className="adminTextArea small" value={editorDraft.disclaimer || ""} onChange={(event) => updateEditorField("disclaimer", event.target.value)} />
+                        <textarea key={`disclaimer-${selectedAdminWalkthrough?.walkthrough_id || "draft"}`} className="adminTextArea small" defaultValue={editorDraft.disclaimer || ""} onBlur={(event) => updateEditorField("disclaimer", event.target.value)} />
                       </label>
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" }}>
                       {(editorDraft.steps || []).map((step, index) => (
                         <div
-                          key={`${step.id}-${index}`}
+                          key={`editor-step-${step.id}`}
                           style={{
                             border: "1px solid rgba(0,0,0,0.14)",
                             borderRadius: "16px",
@@ -1578,23 +1580,23 @@ function App() {
 
                           <label className="fieldLabel">
                             Step title / caption
-                            <input value={step.imageLabel || ""} onChange={(event) => updateEditorStep(step.id, "imageLabel", event.target.value)} />
+                            <input defaultValue={step.imageLabel || ""} onBlur={(event) => updateEditorStep(step.id, "imageLabel", event.target.value)} />
                           </label>
 
                           <label className="fieldLabel">
                             Instruction text
-                            <textarea className="adminTextArea small" value={step.instruction || ""} onChange={(event) => updateEditorStep(step.id, "instruction", event.target.value)} />
+                            <textarea className="adminTextArea small" defaultValue={step.instruction || ""} onBlur={(event) => updateEditorStep(step.id, "instruction", event.target.value)} />
                           </label>
 
                           <label className="fieldLabel">
                             Detail text
-                            <textarea className="adminTextArea small" value={step.detail || ""} onChange={(event) => updateEditorStep(step.id, "detail", event.target.value)} />
+                            <textarea className="adminTextArea small" defaultValue={step.detail || ""} onBlur={(event) => updateEditorStep(step.id, "detail", event.target.value)} />
                           </label>
 
                           <textarea
                             className="adminTextArea small"
-                            value={repairCorrections[step.id] || ""}
-                            onChange={(event) => setRepairCorrections({ ...repairCorrections, [step.id]: event.target.value })}
+                            defaultValue={repairCorrections[step.id] || ""}
+                            onBlur={(event) => setRepairCorrections((previous) => ({ ...previous, [step.id]: event.target.value }))}
                             placeholder="New image prompt or correction, e.g. show copper pipe, remove PVC, add propane torch."
                           />
 
