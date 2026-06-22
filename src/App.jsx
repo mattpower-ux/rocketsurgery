@@ -36,6 +36,7 @@ function buildSpecificQuery(query, brand, model) {
 function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommit }) {
   const [value, setValue] = useState(initialValue || "");
   const lastStepRef = useRef(stepId);
+  const maxLength = 1000;
 
   useEffect(() => {
     if (lastStepRef.current !== stepId) {
@@ -49,29 +50,107 @@ function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommi
   }
 
   return (
-    <textarea
-      className="adminTextArea"
-      rows={5}
+    <div style={{ width: "100%" }}>
+      <textarea
+        className="adminTextArea"
+        rows={7}
+        maxLength={maxLength}
+        style={{
+          minHeight: "210px",
+          width: "100%",
+          resize: "vertical",
+          lineHeight: "1.35"
+        }}
+        value={value}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setValue(nextValue);
+          onDraftChange?.(stepId, nextValue);
+        }}
+        onBlur={() => onCommit?.(stepId, value)}
+        onKeyDown={stopEditorShortcut}
+        onKeyUp={stopEditorShortcut}
+        onInput={stopEditorShortcut}
+        onClick={stopEditorShortcut}
+        onMouseDown={(event) => event.stopPropagation()}
+        placeholder="New image prompt or correction. Example: show the installer checking the pan with a level; mortar belongs under the shower pan only; do not show mortar on top of the finished shower floor."
+      />
+      <div style={{ marginTop: "6px", fontSize: "0.78rem", color: "#666", textAlign: "right" }}>
+        {value.length}/{maxLength} characters
+      </div>
+    </div>
+  );
+}
+
+function StepImageReview({ step }) {
+  const hasPending = Boolean(step.pendingImageUrl);
+
+  if (!hasPending) {
+    return (
+      <div>
+        <img
+          src={apiAssetUrl(step.imageUrl)}
+          alt={step.imageLabel || `Step ${step.id}`}
+          style={{
+            width: "100%",
+            maxHeight: "190px",
+            objectFit: "cover",
+            borderRadius: "12px",
+            border: "1px solid rgba(0,0,0,0.1)"
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
       style={{
-        minHeight: "150px",
-        width: "100%",
-        resize: "vertical",
-        lineHeight: "1.35"
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "10px",
+        alignItems: "start",
+        marginBottom: "10px"
       }}
-      value={value}
-      onChange={(event) => {
-        const nextValue = event.target.value;
-        setValue(nextValue);
-        onDraftChange?.(stepId, nextValue);
-      }}
-      onBlur={() => onCommit?.(stepId, value)}
-      onKeyDown={stopEditorShortcut}
-      onKeyUp={stopEditorShortcut}
-      onInput={stopEditorShortcut}
-      onClick={stopEditorShortcut}
-      onMouseDown={(event) => event.stopPropagation()}
-      placeholder="New image prompt or correction. Example: show the installer checking the pan with a level; mortar belongs under the shower pan only; do not show mortar on top of the finished shower floor."
-    />
+    >
+      <div>
+        <div style={{ fontWeight: 900, fontSize: "0.82rem", marginBottom: "5px" }}>
+          CURRENT IMAGE
+        </div>
+        <img
+          src={apiAssetUrl(step.imageUrl)}
+          alt={step.imageLabel || `Step ${step.id}`}
+          style={{
+            width: "100%",
+            maxHeight: "165px",
+            objectFit: "cover",
+            borderRadius: "12px",
+            border: "1px solid rgba(0,0,0,0.15)",
+            opacity: 0.82
+          }}
+        />
+      </div>
+      <div>
+        <div style={{ fontWeight: 900, fontSize: "0.82rem", marginBottom: "5px", color: "#1d4ed8" }}>
+          NEW CANDIDATE
+        </div>
+        <img
+          src={apiAssetUrl(step.pendingImageUrl)}
+          alt={`Candidate for step ${step.id}`}
+          style={{
+            width: "100%",
+            maxHeight: "165px",
+            objectFit: "cover",
+            borderRadius: "12px",
+            border: "3px solid rgba(37,99,235,0.55)",
+            boxShadow: "0 0 0 3px rgba(37,99,235,0.12)"
+          }}
+        />
+        <div style={{ marginTop: "6px", fontSize: "0.78rem", color: "#555", lineHeight: 1.25 }}>
+          Review this candidate, then use the buttons below.
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1519,6 +1598,12 @@ function App() {
 
   return (
     <div className="app">
+      <style>{`
+        @keyframes rsSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       <header className="topbar">
         <button className="adminButton" onClick={openAdmin}>
           ADMIN
@@ -1618,20 +1703,23 @@ function App() {
                             </div>
                           </div>
 
-                          <div style={{ display: "grid", gridTemplateColumns: step.pendingImageUrl ? "1fr 1fr" : "1fr", gap: "8px" }}>
-                            <img
-                              src={apiAssetUrl(step.imageUrl)}
-                              alt={step.imageLabel || `Step ${step.id}`}
-                              style={{ width: "100%", maxHeight: "145px", objectFit: "cover", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.1)" }}
-                            />
-                            {step.pendingImageUrl && (
-                              <img
-                                src={apiAssetUrl(step.pendingImageUrl)}
-                                alt={`Candidate for step ${step.id}`}
-                                style={{ width: "100%", maxHeight: "145px", objectFit: "cover", borderRadius: "12px", border: "2px solid rgba(37,99,235,0.45)" }}
-                              />
-                            )}
-                          </div>
+                          <StepImageReview step={step} />
+
+                          {step.pendingImageUrl && (
+                            <div
+                              style={{
+                                background: "rgba(37,99,235,0.08)",
+                                border: "1px solid rgba(37,99,235,0.18)",
+                                borderRadius: "14px",
+                                padding: "10px",
+                                marginBottom: "10px",
+                                fontWeight: 800,
+                                fontSize: "0.86rem"
+                              }}
+                            >
+                              New image ready for review. Click <strong>Accept New Image</strong> to replace the current image, or <strong>Discard Candidate</strong> to keep the current one.
+                            </div>
+                          )}
 
                           <label className="fieldLabel">
                             Step title / caption
@@ -1664,22 +1752,39 @@ function App() {
                             <button
                               className="startButton"
                               onClick={() => regenerateStepImage(step.id)}
-                              disabled={adminLoading}
+                              disabled={adminLoading || regeneratingStepId === step.id}
                               style={{
-                                opacity: regeneratingStepId === step.id ? 0.75 : 1,
+                                opacity: regeneratingStepId === step.id ? 0.78 : 1,
                                 transform: regeneratingStepId === step.id ? "scale(0.98)" : "scale(1)",
-                                transition: "transform 120ms ease, opacity 120ms ease"
+                                transition: "transform 120ms ease, opacity 120ms ease",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                justifyContent: "center"
                               }}
                             >
-                              {regeneratingStepId === step.id ? "Generating…" : "Regenerate Image"}
+                              {regeneratingStepId === step.id && (
+                                <span
+                                  style={{
+                                    width: "16px",
+                                    height: "16px",
+                                    border: "2px solid rgba(255,255,255,0.45)",
+                                    borderTopColor: "#fff",
+                                    borderRadius: "999px",
+                                    display: "inline-block",
+                                    animation: "rsSpin 0.8s linear infinite"
+                                  }}
+                                />
+                              )}
+                              {regeneratingStepId === step.id ? "Generating…" : (step.pendingImageUrl ? "Generate Another" : "Regenerate Image")}
                             </button>
                             {step.pendingImageUrl && (
                               <button className="doneButton" onClick={() => acceptStepImage(step.id)} disabled={adminLoading}>
-                                Keep New
+                                Accept New Image
                               </button>
                             )}
                             <button className="secondaryButton" onClick={() => revertStepImage(step.id)} disabled={adminLoading}>
-                              Revert / Discard
+                              {step.pendingImageUrl ? "Discard Candidate" : "Revert / Discard"}
                             </button>
                           </div>
                         </div>
