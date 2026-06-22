@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
 const API_URL = "https://rocketsurgery-api.onrender.com";
@@ -82,6 +82,7 @@ function App() {
   const [walkthroughList, setWalkthroughList] = useState([]);
   const [selectedAdminWalkthrough, setSelectedAdminWalkthrough] = useState(null);
   const [repairCorrections, setRepairCorrections] = useState({});
+  const repairCorrectionRefs = useRef({});
   const [editorDraft, setEditorDraft] = useState(null);
   const [editorDirty, setEditorDirty] = useState(false);
   const [editorSaving, setEditorSaving] = useState(false);
@@ -1144,6 +1145,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        repairCorrectionRefs.current = {};
+        setRepairCorrections({});
         setEditorDraft(JSON.parse(JSON.stringify(data.walkthrough)));
         setEditorDirty(false);
         setAdminMessage(`Loaded ${data.walkthrough.title || walkthroughId}.`);
@@ -1175,7 +1178,7 @@ function App() {
         body: JSON.stringify({
           walkthrough_id: selectedAdminWalkthrough.walkthrough_id,
           step_id: stepId,
-          correction: repairCorrections[stepId] || ""
+          correction: repairCorrectionRefs.current[stepId] ?? repairCorrections[stepId] ?? ""
         })
       });
 
@@ -1183,6 +1186,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        repairCorrectionRefs.current = {};
+        setRepairCorrections({});
         setEditorDraft(JSON.parse(JSON.stringify(data.walkthrough)));
         setEditorDirty(false);
       }
@@ -1220,6 +1225,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        repairCorrectionRefs.current = {};
+        setRepairCorrections({});
         setEditorDraft(JSON.parse(JSON.stringify(data.walkthrough)));
         setEditorDirty(false);
       }
@@ -1258,6 +1265,8 @@ function App() {
 
       if (data.walkthrough) {
         setSelectedAdminWalkthrough(data.walkthrough);
+        repairCorrectionRefs.current = {};
+        setRepairCorrections({});
         setEditorDraft(JSON.parse(JSON.stringify(data.walkthrough)));
         setEditorDirty(false);
       }
@@ -1596,7 +1605,13 @@ function App() {
                           <textarea
                             className="adminTextArea small"
                             defaultValue={repairCorrections[step.id] || ""}
-                            onBlur={(event) => setRepairCorrections((previous) => ({ ...previous, [step.id]: event.target.value }))}
+                            onChange={(event) => {
+                              repairCorrectionRefs.current[step.id] = event.target.value;
+                            }}
+                            onBlur={(event) => {
+                              repairCorrectionRefs.current[step.id] = event.target.value;
+                              setRepairCorrections((previous) => ({ ...previous, [step.id]: event.target.value }));
+                            }}
                             placeholder="New image prompt or correction, e.g. show copper pipe, remove PVC, add propane torch."
                           />
 
