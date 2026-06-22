@@ -35,9 +35,13 @@ function buildSpecificQuery(query, brand, model) {
 
 function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommit }) {
   const [value, setValue] = useState(initialValue || "");
+  const lastStepRef = useRef(stepId);
 
   useEffect(() => {
-    setValue(initialValue || "");
+    if (lastStepRef.current !== stepId) {
+      lastStepRef.current = stepId;
+      setValue(initialValue || "");
+    }
   }, [stepId, initialValue]);
 
   function stopEditorShortcut(event) {
@@ -46,7 +50,14 @@ function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommi
 
   return (
     <textarea
-      className="adminTextArea small"
+      className="adminTextArea"
+      rows={5}
+      style={{
+        minHeight: "150px",
+        width: "100%",
+        resize: "vertical",
+        lineHeight: "1.35"
+      }}
       value={value}
       onChange={(event) => {
         const nextValue = event.target.value;
@@ -59,7 +70,7 @@ function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommi
       onInput={stopEditorShortcut}
       onClick={stopEditorShortcut}
       onMouseDown={(event) => event.stopPropagation()}
-      placeholder="New image prompt or correction, e.g. show copper pipe, remove PVC, add propane torch."
+      placeholder="New image prompt or correction. Example: show the installer checking the pan with a level; mortar belongs under the shower pan only; do not show mortar on top of the finished shower floor."
     />
   );
 }
@@ -93,6 +104,7 @@ function App() {
   const [catalogModels, setCatalogModels] = useState("");
   const [discoverTopModels, setDiscoverTopModels] = useState(true);
   const [adminLoading, setAdminLoading] = useState(false);
+  const [regeneratingStepId, setRegeneratingStepId] = useState(null);
 
   const [canonicalStatus, setCanonicalStatus] = useState(null);
   const [canonicalKey, setCanonicalKey] = useState("");
@@ -377,6 +389,7 @@ function App() {
 
   async function loadAdminStatus() {
     setAdminLoading(true);
+    setRegeneratingStepId(stepId);
 
     try {
       const response = await fetch(`${API_URL}/admin/status`);
@@ -389,6 +402,7 @@ function App() {
       setAdminMessage("Could not load admin status.");
     } finally {
       setAdminLoading(false);
+      setRegeneratingStepId(null);
     }
   }
 
@@ -1647,8 +1661,17 @@ function App() {
                           />
 
                           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                            <button className="startButton" onClick={() => regenerateStepImage(step.id)} disabled={adminLoading}>
-                              Regenerate Image
+                            <button
+                              className="startButton"
+                              onClick={() => regenerateStepImage(step.id)}
+                              disabled={adminLoading}
+                              style={{
+                                opacity: regeneratingStepId === step.id ? 0.75 : 1,
+                                transform: regeneratingStepId === step.id ? "scale(0.98)" : "scale(1)",
+                                transition: "transform 120ms ease, opacity 120ms ease"
+                              }}
+                            >
+                              {regeneratingStepId === step.id ? "Generating…" : "Regenerate Image"}
                             </button>
                             {step.pendingImageUrl && (
                               <button className="doneButton" onClick={() => acceptStepImage(step.id)} disabled={adminLoading}>
