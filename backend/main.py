@@ -2111,7 +2111,7 @@ def post_regenerate_step_image(request: RegenerateStepImageRequest):
     ).split())
     repair_prompt = repair_prompt.replace("house wrap", "weather-resistive wall barrier")
     repair_prompt = repair_prompt.replace("House wrap", "weather-resistive wall barrier")
-    repair_prompt = repair_prompt[:420].rstrip(" ,;:-")
+    repair_prompt = repair_prompt[:900].rstrip(" ,;:-")
 
     new_image_url = generate_step_image(repair_prompt, int(request.step_id))
 
