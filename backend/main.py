@@ -151,9 +151,15 @@ except ImportError:
     from query_logger import log_query_event
 
 try:
-    from app.walkthrough_index import rebuild_walkthrough_index_from_storage
+    from app.walkthrough_index import (
+        rebuild_walkthrough_index_from_storage,
+        walkthrough_library,
+    )
 except ImportError:
-    from walkthrough_index import rebuild_walkthrough_index_from_storage
+    from walkthrough_index import (
+        rebuild_walkthrough_index_from_storage,
+        walkthrough_library,
+    )
 
 try:
     from app.taxonomy_router import classify_taxonomy_query
@@ -2161,6 +2167,11 @@ def walkthrough_build_status():
 @app.post("/admin/rebuild-walkthrough-index")
 def post_rebuild_walkthrough_index(_: None = Depends(require_admin_token)):
     return rebuild_walkthrough_index_from_storage()
+
+
+@app.get("/admin/walkthrough-library")
+def get_walkthrough_library(limit: int = 1000, _: None = Depends(require_admin_token)):
+    return walkthrough_library(limit=limit)
 
 
 @app.get("/admin/bulk-query-list")

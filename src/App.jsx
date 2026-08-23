@@ -204,6 +204,10 @@ function App() {
 
   const [buildStatus, setBuildStatus] = useState(null);
   const [taxonomyIndexStatus, setTaxonomyIndexStatus] = useState(null);
+  const [walkthroughLibrary, setWalkthroughLibrary] = useState(null);
+  const [libraryView, setLibraryView] = useState("stored");
+  const [libraryFilter, setLibraryFilter] = useState("all");
+  const [librarySearch, setLibrarySearch] = useState("");
 
   const [bulkJobList, setBulkJobList] = useState(null);
   const [walkthroughList, setWalkthroughList] = useState([]);
@@ -215,6 +219,7 @@ function App() {
   const [editorSaving, setEditorSaving] = useState(false);
   const [adminPanels, setAdminPanels] = useState({
     qc: true,
+    library: true,
     repair: false,
     catalog: false,
     reports: false,
@@ -447,6 +452,7 @@ function App() {
     loadAdminStatus();
     loadBulkJobList();
     loadAdminWalkthroughs();
+    loadWalkthroughLibrary();
     loadCatalogPipelineStatus();
   }
 
@@ -1168,9 +1174,48 @@ function App() {
       );
       loadBuildStatus();
       loadAdminWalkthroughs();
+      loadWalkthroughLibrary();
     } catch (error) {
       console.error(error);
       setAdminMessage(`Could not rebuild walkthrough index: ${error.message}`);
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function loadWalkthroughLibrary() {
+    const token = getAdminToken("load the walkthrough library");
+    if (!token) {
+      setAdminMessage("Walkthrough library cancelled. No admin token was entered.");
+      return;
+    }
+
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/walkthrough-library?limit=1000`, {
+        headers: {
+          "X-Admin-Token": token
+        }
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        clearAdminToken();
+        throw new Error(data.detail || data.error || "Walkthrough library failed.");
+      }
+
+      setWalkthroughLibrary(data);
+      const summary = data.summary || {};
+      setTaxonomyIndexStatus((previous) => ({
+        ...(previous || {}),
+        ...summary
+      }));
+      setAdminMessage(`Library loaded: ${summary.stored_walkthrough_count || 0} stored, ${summary.prospective_taxonomy_entries_without_existing_walkthroughs || 0} prospective.`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Could not load walkthrough library: ${error.message}`);
     } finally {
       setAdminLoading(false);
     }
@@ -1387,6 +1432,59 @@ function App() {
       return qcFilter === "approved"
         ? reviewStatusFor(item) === "approved"
         : isDraftQcItem(item);
+    });
+  }
+
+
+  function libraryStoredItems() {
+    const query = librarySearch.trim().toLowerCase();
+
+    return (walkthroughLibrary?.stored_walkthroughs || []).filter((item) => {
+      if (libraryFilter === "matched" && item.coverage_status !== "matched_taxonomy") {
+        return false;
+      }
+      if (libraryFilter === "unmatched" && item.coverage_status !== "unmatched_existing") {
+        return false;
+      }
+      if (libraryFilter === "branch" && !item.requires_branch_selection) {
+        return false;
+      }
+      if (libraryFilter === "draft" && reviewStatusFor(item) !== "draft") {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+
+      return [
+        item.title,
+        item.walkthrough_id,
+        item.canonical_query,
+        item.taxonomy_walkthrough_id,
+        item.category,
+        ...(item.aliases || [])
+      ].join(" ").toLowerCase().includes(query);
+    });
+  }
+
+
+  function libraryProspectiveItems() {
+    const query = librarySearch.trim().toLowerCase();
+
+    return (walkthroughLibrary?.prospective_walkthroughs || []).filter((item) => {
+      if (libraryFilter === "branch" && !item.requires_branch_selection) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+
+      return [
+        item.title,
+        item.taxonomy_walkthrough_id,
+        item.canonical_query,
+        item.category
+      ].join(" ").toLowerCase().includes(query);
     });
   }
 
@@ -2082,6 +2180,101 @@ function App() {
                   );
                 })}
               </div>
+            </div>
+          </AdminSection>
+
+          <AdminSection
+            panelId="library"
+            title="Walkthrough Library"
+            actions={
+              <div className="adminActionRow">
+                <button className="secondaryButton" onClick={loadWalkthroughLibrary} disabled={adminLoading}>
+                  Refresh Library
+                </button>
+                <button className="secondaryButton" onClick={rebuildWalkthroughIndex} disabled={adminLoading}>
+                  Rebuild Index
+                </button>
+              </div>
+            }
+          >
+            <div className="libraryWorkspace">
+              <div className="libraryStats">
+                <div><strong>{walkthroughLibrary?.summary?.stored_walkthrough_count || 0}</strong><span>Stored</span></div>
+                <div><strong>{walkthroughLibrary?.summary?.taxonomy_entries_with_existing_walkthroughs || 0}</strong><span>Matched</span></div>
+                <div><strong>{walkthroughLibrary?.summary?.unmatched_existing_walkthrough_count || 0}</strong><span>Unmatched</span></div>
+                <div><strong>{walkthroughLibrary?.summary?.prospective_taxonomy_entries_without_existing_walkthroughs || 0}</strong><span>Prospective</span></div>
+              </div>
+
+              <div className="libraryControls">
+                <div className="segmentedControl">
+                  <button className={libraryView === "stored" ? "active" : ""} onClick={() => setLibraryView("stored")}>
+                    Stored
+                  </button>
+                  <button className={libraryView === "prospective" ? "active" : ""} onClick={() => setLibraryView("prospective")}>
+                    Prospective
+                  </button>
+                </div>
+                <select className="selectBox compact" value={libraryFilter} onChange={(event) => setLibraryFilter(event.target.value)}>
+                  <option value="all">All</option>
+                  <option value="draft">Draft</option>
+                  <option value="matched">Matched</option>
+                  <option value="unmatched">Unmatched</option>
+                  <option value="branch">Branch Needed</option>
+                </select>
+                <input
+                  className="queryBox librarySearch"
+                  type="search"
+                  value={librarySearch}
+                  onChange={(event) => setLibrarySearch(event.target.value)}
+                  placeholder="Search title, query, alias, category"
+                />
+              </div>
+
+              <div className="libraryList">
+                {libraryView === "stored" ? (
+                  libraryStoredItems().map((item) => (
+                    <div key={`library-${item.walkthrough_id}`} className="libraryRow">
+                      <div className="libraryMain">
+                        <strong>{displayText(item.title, 95)}</strong>
+                        <span>{displayText(item.canonical_query || item.walkthrough_id, 110)}</span>
+                      </div>
+                      <span className={`qcBadge qcBadge-${item.review_status || "draft"}`}>{item.review_status || "draft"}</span>
+                      <span className={`libraryMatch ${item.coverage_status === "matched_taxonomy" ? "matched" : "unmatched"}`}>
+                        {item.coverage_status === "matched_taxonomy" ? `Matched ${Math.round((item.taxonomy_match_score || 0) * 100)}%` : "Unmatched"}
+                      </span>
+                      <span className="libraryMeta">{item.category || "generic"}</span>
+                      <span className="libraryMeta">{item.step_count || 0} steps</span>
+                      <button
+                        className="secondaryButton compactButton"
+                        onClick={() => loadAdminWalkthrough(item.storage_walkthrough_id || item.walkthrough_id)}
+                        disabled={adminLoading}
+                      >
+                        Repair
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  libraryProspectiveItems().map((item) => (
+                    <div key={`prospective-${item.taxonomy_walkthrough_id}`} className="libraryRow prospectiveRow">
+                      <div className="libraryMain">
+                        <strong>{displayText(item.title, 95)}</strong>
+                        <span>{displayText(item.canonical_query || item.taxonomy_walkthrough_id, 110)}</span>
+                      </div>
+                      <span className="libraryMatch unmatched">Needed</span>
+                      <span className="libraryMeta">{item.category || "generic"}</span>
+                      <span className="libraryMeta">{item.alias_count || 0} aliases</span>
+                      <span className="libraryMeta">{item.requires_branch_selection ? "branch" : item.safety_level || "standard"}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {walkthroughLibrary && (libraryView === "stored" ? libraryStoredItems().length : libraryProspectiveItems().length) === 0 && (
+                <p className="adminHelp">No library items match the current filters.</p>
+              )}
+              {!walkthroughLibrary && (
+                <p className="adminHelp">Load the library to see stored walkthroughs, taxonomy matches, unmatched drafts, and prospective walkthroughs.</p>
+              )}
             </div>
           </AdminSection>
 

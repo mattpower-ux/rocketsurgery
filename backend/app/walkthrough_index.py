@@ -120,6 +120,31 @@ def load_search_phrase_taxonomy() -> dict:
     return data
 
 
+def load_taxonomy_coverage() -> dict:
+    if not TAXONOMY_COVERAGE_PATH.exists():
+        return {
+            "schema_version": 1,
+            "summary": {},
+            "taxonomy_coverage": {},
+            "unmatched_existing_walkthroughs": [],
+            "errors": [],
+        }
+
+    try:
+        data = json.loads(TAXONOMY_COVERAGE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+
+    if not isinstance(data, dict):
+        data = {}
+
+    data.setdefault("summary", {})
+    data.setdefault("taxonomy_coverage", {})
+    data.setdefault("unmatched_existing_walkthroughs", [])
+    data.setdefault("errors", [])
+    return data
+
+
 def save_index(index: dict) -> dict:
     INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
     index["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -233,6 +258,8 @@ def build_index_record(walkthrough_id: str, manifest: dict, manifest_path: Path 
 
     return {
         "walkthrough_id": walkthrough_id,
+        "storage_walkthrough_id": walkthrough_id,
+        "manifest_walkthrough_id": manifest.get("walkthrough_id", walkthrough_id),
         "canonical_query": manifest.get("query", manifest.get("title", walkthrough_id)),
         "title": manifest.get("title", walkthrough_id),
         "walkthrough_type": manifest.get("walkthrough_type", "generic_foundation"),
@@ -240,6 +267,7 @@ def build_index_record(walkthrough_id: str, manifest: dict, manifest_path: Path 
         "category": infer_category_from_manifest(manifest),
         "taxonomy_walkthrough_id": taxonomy_match.get("taxonomy_walkthrough_id", ""),
         "taxonomy_canonical_query": taxonomy_match.get("taxonomy_canonical_query", ""),
+        "taxonomy_title": taxonomy_match.get("taxonomy_title", ""),
         "taxonomy_category": taxonomy_match.get("taxonomy_category", ""),
         "taxonomy_match_score": taxonomy_match.get("taxonomy_match_score", 0),
         "review_status": manifest.get("review_status", "draft"),
@@ -289,7 +317,6 @@ def rebuild_walkthrough_index_from_storage() -> dict:
         walkthrough_id = manifest_path.parent.name
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            walkthrough_id = manifest.get("walkthrough_id") or walkthrough_id
             record = build_index_record(walkthrough_id, manifest, manifest_path)
             records[walkthrough_id] = record
             metadata_repository.upsert_record("walkthroughs", walkthrough_id, record)
@@ -348,6 +375,106 @@ def rebuild_walkthrough_index_from_storage() -> dict:
         "index_path": str(INDEX_PATH),
         "coverage_path": str(TAXONOMY_COVERAGE_PATH),
         **coverage["summary"],
+    }
+
+
+def walkthrough_library(limit: int = 1000) -> dict:
+    index = load_index()
+    if not index.get("walkthroughs"):
+        rebuild_walkthrough_index_from_storage()
+        index = load_index()
+
+    taxonomy = load_search_phrase_taxonomy()
+    coverage = load_taxonomy_coverage()
+    records = index.get("walkthroughs", {}) or {}
+    taxonomy_entries = taxonomy.get("walkthroughs", {}) or {}
+    status_counts = {}
+    quality_counts = {}
+    category_counts = {}
+    stored_items = []
+
+    for walkthrough_id, record in sorted(
+        records.items(),
+        key=lambda item: (item[1].get("review_status", ""), item[1].get("title", ""))
+    ):
+        review_status = record.get("review_status", "draft")
+        quality_status = record.get("quality_status", "unvalidated")
+        category = record.get("taxonomy_category") or record.get("category") or "generic"
+        taxonomy_id = record.get("taxonomy_walkthrough_id", "")
+        taxonomy_entry = taxonomy_entries.get(taxonomy_id, {}) if taxonomy_id else {}
+
+        status_counts[review_status] = status_counts.get(review_status, 0) + 1
+        quality_counts[quality_status] = quality_counts.get(quality_status, 0) + 1
+        category_counts[category] = category_counts.get(category, 0) + 1
+
+        stored_items.append({
+            "walkthrough_id": walkthrough_id,
+            "storage_walkthrough_id": record.get("storage_walkthrough_id", walkthrough_id),
+            "manifest_walkthrough_id": record.get("manifest_walkthrough_id", ""),
+            "title": record.get("title", walkthrough_id),
+            "canonical_query": record.get("canonical_query", ""),
+            "category": category,
+            "review_status": review_status,
+            "quality_status": quality_status,
+            "step_count": record.get("step_count", 0),
+            "image_count": record.get("image_count", 0),
+            "taxonomy_walkthrough_id": taxonomy_id,
+            "taxonomy_title": record.get("taxonomy_title", taxonomy_entry.get("title", "")),
+            "taxonomy_match_score": record.get("taxonomy_match_score", 0),
+            "coverage_status": "matched_taxonomy" if taxonomy_id else "unmatched_existing",
+            "requires_branch_selection": bool(taxonomy_entry.get("requires_branch_selection")),
+            "branch_question": taxonomy_entry.get("branch_question", ""),
+            "branches": taxonomy_entry.get("branches", []) or [],
+            "aliases": record.get("aliases", []) or [],
+        })
+
+    covered_taxonomy_ids = {
+        item.get("taxonomy_walkthrough_id", "")
+        for item in stored_items
+        if item.get("taxonomy_walkthrough_id")
+    }
+    prospective_items = []
+    for taxonomy_id, entry in sorted(taxonomy_entries.items()):
+        resolved_id = entry.get("walkthrough_id") or taxonomy_id
+        if resolved_id in covered_taxonomy_ids or taxonomy_id in covered_taxonomy_ids:
+            continue
+        prospective_items.append({
+            "taxonomy_walkthrough_id": resolved_id,
+            "title": entry.get("title", resolved_id),
+            "canonical_query": entry.get("canonical_query", ""),
+            "category": entry.get("category", "generic"),
+            "safety_level": entry.get("safety_level", "standard"),
+            "requires_branch_selection": bool(entry.get("requires_branch_selection")),
+            "branch_question": entry.get("branch_question", ""),
+            "branches": entry.get("branches", []) or [],
+            "alias_count": len(entry.get("aliases", []) or []),
+        })
+
+    stored_items = stored_items[:max(1, min(limit, 5000))]
+    prospective_items = prospective_items[:max(1, min(limit, 5000))]
+
+    return {
+        "status": "loaded",
+        "summary": {
+            "stored_walkthrough_count": len(records),
+            "taxonomy_entry_count": len(taxonomy_entries),
+            "taxonomy_entries_with_existing_walkthroughs": len(covered_taxonomy_ids),
+            "prospective_taxonomy_entries_without_existing_walkthroughs": max(
+                0,
+                len(taxonomy_entries) - len(covered_taxonomy_ids)
+            ),
+            "unmatched_existing_walkthrough_count": len([
+                item for item in stored_items if item.get("coverage_status") == "unmatched_existing"
+            ]),
+            "coverage_file_unmatched_count": len(coverage.get("unmatched_existing_walkthroughs", []) or []),
+            "error_count": len(coverage.get("errors", []) or []),
+            "status_counts": status_counts,
+            "quality_counts": quality_counts,
+            "category_counts": category_counts,
+        },
+        "stored_walkthroughs": stored_items,
+        "prospective_walkthroughs": prospective_items,
+        "errors": coverage.get("errors", []) or [],
     }
 
 

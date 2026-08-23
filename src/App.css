@@ -551,6 +551,163 @@ body {
   font-weight: 900;
 }
 
+.adminActionRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.libraryWorkspace {
+  display: grid;
+  gap: 12px;
+}
+
+.libraryStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.libraryStats div {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.libraryStats strong,
+.libraryStats span {
+  display: block;
+}
+
+.libraryStats strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.libraryStats span {
+  margin-top: 5px;
+  color: #555;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.libraryControls {
+  display: grid;
+  grid-template-columns: auto auto minmax(220px, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.segmentedControl {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+}
+
+.segmentedControl button {
+  border: 0;
+  border-right: 1px solid #d1d5db;
+  background: white;
+  padding: 11px 13px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.segmentedControl button:last-child {
+  border-right: 0;
+}
+
+.segmentedControl button.active {
+  background: #111827;
+  color: white;
+}
+
+.librarySearch {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.libraryList {
+  display: grid;
+  gap: 6px;
+}
+
+.libraryRow {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto auto minmax(92px, auto) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: white;
+}
+
+.prospectiveRow {
+  grid-template-columns: minmax(280px, 1fr) auto minmax(92px, auto) auto auto;
+}
+
+.libraryMain {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.libraryMain strong,
+.libraryMain span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryMain span {
+  color: #555;
+  font-size: 12px;
+}
+
+.libraryMeta {
+  color: #555;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.libraryMatch {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.libraryMatch.matched {
+  border-color: #86efac;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.libraryMatch.unmatched {
+  border-color: #fecaca;
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.compactButton {
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
 .qcWorkspace {
   display: grid;
   gap: 12px;
@@ -804,6 +961,17 @@ body {
 
   .adminStats {
     grid-template-columns: 1fr;
+  }
+
+  .libraryStats,
+  .libraryControls,
+  .libraryRow,
+  .prospectiveRow {
+    grid-template-columns: 1fr;
+  }
+
+  .libraryRow {
+    align-items: stretch;
   }
 
   .adminScreen,
