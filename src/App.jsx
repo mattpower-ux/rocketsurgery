@@ -1901,12 +1901,24 @@ function App() {
 
                   return (
                     <div key={`qc-${walkthroughId}`} className={`qcRow ${expanded ? "qcRowOpen" : ""}`}>
-                      <button className="qcRowSummary" onClick={() => toggleQcWalkthrough(walkthroughId)}>
-                        <span className="qcCaret">{expanded ? "▾" : "▸"}</span>
-                        <span className="qcTitle">{displayText(item.title, 120)}</span>
+                      <div className="qcRowSummary">
+                        <button className="qcRowExpand" onClick={() => toggleQcWalkthrough(walkthroughId)}>
+                          <span className="qcCaret">{expanded ? "▾" : "▸"}</span>
+                          <span className="qcTitle">{displayText(item.title, 120)}</span>
+                        </button>
                         <span className={`qcBadge qcBadge-${staged || status}`}>{staged || status}</span>
                         <span className="qcMeta">{item.step_count} steps</span>
-                      </button>
+                        {status !== "approved" && (
+                          <button
+                            className="qcDeleteButton"
+                            onClick={() => stageQcChange(walkthroughId, "delete", draft?.steps || [])}
+                            disabled={staged === "delete"}
+                            title="Stage this walkthrough for deletion"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
 
                       {expanded && (
                         <div className="qcExpanded">
