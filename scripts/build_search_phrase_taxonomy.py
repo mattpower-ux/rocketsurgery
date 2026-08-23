@@ -272,6 +272,24 @@ SUPPLEMENTAL_CANONICAL_ENTRIES = [
         "category": "doors_windows",
         "safety_level": "standard",
         "review_status": "draft",
+        "requires_branch_selection": True,
+        "branch_question": "What type of window are you installing or replacing?",
+        "branches": [
+            {
+                "branch_id": "standard-window",
+                "label": "Standard window unit",
+                "query": "install a window",
+                "target_walkthrough_id": "install-window",
+                "notes": "Use for a primary window unit installed into a rough opening or existing frame opening.",
+            },
+            {
+                "branch_id": "storm-window",
+                "label": "Storm window",
+                "query": "replace storm window",
+                "target_walkthrough_id": "replace-storm-window",
+                "notes": "Use for exterior or interior storm window panels installed over an existing primary window.",
+            },
+        ],
         "aliases": [
             "add new window",
             "correct way to put in a window",

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-23T02:34:23Z",
+  "updated_at": "2026-08-23T02:35:52Z",
   "source": {
     "file": "edited_home_project_search_phrases.xlsx",
     "edited_by_user": true,
@@ -663,7 +663,25 @@
         "Supplemental Window Alias"
       ],
       "kept_phrase_count": 10,
-      "removed_phrase_count_from_cluster": 0
+      "removed_phrase_count_from_cluster": 0,
+      "requires_branch_selection": true,
+      "branch_question": "What type of window are you installing or replacing?",
+      "branches": [
+        {
+          "branch_id": "standard-window",
+          "label": "Standard window unit",
+          "query": "install a window",
+          "target_walkthrough_id": "install-window",
+          "notes": "Use for a primary window unit installed into a rough opening or existing frame opening."
+        },
+        {
+          "branch_id": "storm-window",
+          "label": "Storm window",
+          "query": "replace storm window",
+          "target_walkthrough_id": "replace-storm-window",
+          "notes": "Use for exterior or interior storm window panels installed over an existing primary window."
+        }
+      ]
     },
     "repair-leaky-faucet": {
       "walkthrough_id": "repair-leaky-faucet",
