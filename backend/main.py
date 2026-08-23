@@ -339,6 +339,13 @@ class RegenerateStepImageRequest(BaseModel):
     correction: str = ""
 
 
+class GenerateQcStepImageRequest(BaseModel):
+    walkthrough_id: str
+    title: str = ""
+    query: str = ""
+    step: dict
+
+
 class AcceptStepImageRequest(BaseModel):
     walkthrough_id: str
     step_id: int
@@ -2564,6 +2571,54 @@ def post_regenerate_step_image(request: RegenerateStepImageRequest):
         "old_image_url": target.get("imageUrl", ""),
         "new_image_url": new_image_url,
         "walkthrough": manifest
+    }
+
+
+@app.post("/admin/qc/generate-step-image")
+def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = Depends(require_admin_token)):
+    step = dict(request.step or {})
+    step_id = int(step.get("id") or 1)
+    inferred_category = infer_construction_category(
+        walkthrough_id=request.walkthrough_id,
+        title=request.title,
+        query=request.query,
+    )
+    category_rule_prompt = format_rules_for_prompt(inferred_category)
+    label = step.get("imageLabel") or step.get("instruction") or f"Step {step_id}"
+    instruction = step.get("instruction", "")
+    detail = step.get("detail", "")
+
+    image_prompt = " ".join((
+        f"{request.title or request.query or request.walkthrough_id}. "
+        f"Step {step_id}: {label}. "
+        f"Instruction: {instruction}. Detail: {detail}. "
+        f"{category_rule_prompt} "
+        "Professional residential construction training illustration. "
+        "Use the established RocketSurgery walkthrough style: high-quality rendered illustration, clean neutral jobsite background, realistic residential materials, clear single-step composition, consistent perspective, crisp tool and material placement, no decorative clutter. "
+        "Show accurate tool placement, safe work positioning, no injuries, no weapons, no illegal activity."
+    ).split())
+    image_prompt = image_prompt.replace("house wrap", "weather-resistive wall barrier")
+    image_prompt = image_prompt.replace("House wrap", "weather-resistive wall barrier")
+    image_prompt = image_prompt[:900].rstrip(" ,;:-")
+
+    image_url = generate_step_image(image_prompt, step_id)
+    log_correction_memory({
+        "action": "qc_step_image_generated",
+        "walkthrough_id": request.walkthrough_id,
+        "category": inferred_category,
+        "step_id": step_id,
+        "step_instruction": instruction,
+        "step_detail": detail,
+        "image_label": label,
+        "image_prompt": image_prompt,
+        "image_url": image_url,
+    })
+
+    return {
+        "status": "generated",
+        "step_id": step_id,
+        "image_url": image_url,
+        "image_prompt": image_prompt,
     }
 
 

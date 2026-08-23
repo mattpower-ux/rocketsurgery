@@ -236,6 +236,7 @@ function App() {
   const [qcWalkthroughs, setQcWalkthroughs] = useState({});
   const [qcChanges, setQcChanges] = useState({});
   const [qcSaving, setQcSaving] = useState(false);
+  const [qcImageGenerating, setQcImageGenerating] = useState({});
   const [catalogPipelineStatus, setCatalogPipelineStatus] = useState(null);
   const [catalogPipelineRunning, setCatalogPipelineRunning] = useState("");
   const [productPackageBrand, setProductPackageBrand] = useState("Niagara");
@@ -1535,7 +1536,7 @@ function App() {
   }
 
 
-  function stageQcChange(walkthroughId, action, steps = null, title = "") {
+  function stageQcChange(walkthroughId, action, steps = null, title = "", announce = true) {
     setQcChanges((previous) => {
       const existing = previous[walkthroughId] || {};
       return {
@@ -1547,12 +1548,19 @@ function App() {
         }
       };
     });
-    const labels = {
-      approve: "Approval staged",
-      save: "Save staged",
-      delete: "Delete staged"
-    };
-    setAdminMessage(`${labels[action] || "Change staged"} for ${title || walkthroughId}. Click Save All to apply it.`);
+    if (announce) {
+      const labels = {
+        approve: "Approval staged",
+        save: "Save staged",
+        delete: "Delete staged"
+      };
+      setAdminMessage(`${labels[action] || "Change staged"} for ${title || walkthroughId}. Click Save All to apply it.`);
+    }
+  }
+
+
+  function stopQcEditorEvent(event) {
+    event.stopPropagation();
   }
 
 
@@ -1625,7 +1633,7 @@ function App() {
 
     const updatedSteps = (draft.steps || []).map((step) => (
       Number(step.id) === Number(stepId)
-        ? { ...step, [field]: value }
+        ? { ...step, [field]: value, imageStale: true }
         : step
     ));
 
@@ -1636,7 +1644,7 @@ function App() {
         steps: updatedSteps
       }
     }));
-    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", updatedSteps);
+    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", updatedSteps, "", false);
   }
 
 
@@ -1657,7 +1665,8 @@ function App() {
       imageLabel: `Step ${templateNumber}: New step`,
       instruction: `Step ${templateNumber}: New step`,
       detail: "Describe the missing action here.",
-      imagePrompt: ""
+      imagePrompt: "",
+      imageStale: true
     };
 
     steps.splice(insertIndex, 0, newStep);
@@ -1670,7 +1679,7 @@ function App() {
         steps: renumbered
       }
     }));
-    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", renumbered);
+    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", renumbered, "", false);
   }
 
 
@@ -1691,7 +1700,79 @@ function App() {
         steps: renumbered
       }
     }));
-    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", renumbered);
+    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", renumbered, "", false);
+  }
+
+
+  async function generateQcStepImage(walkthroughId, stepId) {
+    const draft = qcWalkthroughs[walkthroughId];
+    const step = (draft?.steps || []).find((item) => Number(item.id) === Number(stepId));
+    if (!draft || !step) {
+      return;
+    }
+
+    const token = getAdminToken("generate a QC step image");
+    if (!token) {
+      setAdminMessage("Image generation cancelled. No admin token was entered.");
+      return;
+    }
+
+    const key = `${walkthroughId}-${stepId}`;
+    setQcImageGenerating((previous) => ({ ...previous, [key]: true }));
+    setAdminMessage(`Generating image for step ${stepId}...`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/qc/generate-step-image`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        body: JSON.stringify({
+          walkthrough_id: walkthroughId,
+          title: draft.title || "",
+          query: draft.query || "",
+          step
+        })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          clearAdminToken();
+        }
+        throw new Error(data.detail || data.error || "Image generation failed.");
+      }
+
+      const updatedSteps = (draft.steps || []).map((item) => (
+        Number(item.id) === Number(stepId)
+          ? {
+              ...item,
+              imageUrl: data.image_url,
+              imagePrompt: data.image_prompt,
+              imageStale: false
+            }
+          : item
+      ));
+      setQcWalkthroughs((previous) => ({
+        ...previous,
+        [walkthroughId]: {
+          ...draft,
+          steps: updatedSteps
+        }
+      }));
+      stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", updatedSteps, draft.title || walkthroughId, false);
+      setAdminMessage(`Generated a new image for step ${stepId}. Click Save All to keep it.`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Image generation failed: ${error.message}`);
+    } finally {
+      setQcImageGenerating((previous) => {
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      });
+    }
   }
 
 
@@ -2301,6 +2382,10 @@ function App() {
                                     className="qcStepInput"
                                     value={draft.title || ""}
                                     onChange={(event) => updateQcMetadata(walkthroughId, "title", event.target.value)}
+                                    onKeyDown={stopQcEditorEvent}
+                                    onKeyUp={stopQcEditorEvent}
+                                    onClick={stopQcEditorEvent}
+                                    onMouseDown={(event) => event.stopPropagation()}
                                     placeholder="Clear walkthrough title"
                                   />
                                 </label>
@@ -2310,6 +2395,10 @@ function App() {
                                     className="qcStepInput"
                                     value={draft.query || ""}
                                     onChange={(event) => updateQcMetadata(walkthroughId, "query", event.target.value)}
+                                    onKeyDown={stopQcEditorEvent}
+                                    onKeyUp={stopQcEditorEvent}
+                                    onClick={stopQcEditorEvent}
+                                    onMouseDown={(event) => event.stopPropagation()}
                                     placeholder="Example: install a refrigerator icemaker water line"
                                   />
                                 </label>
@@ -2342,22 +2431,44 @@ function App() {
                                         className="qcStepInput"
                                         value={step.imageLabel || ""}
                                         onChange={(event) => updateQcStep(walkthroughId, step.id, "imageLabel", event.target.value)}
+                                        onKeyDown={stopQcEditorEvent}
+                                        onKeyUp={stopQcEditorEvent}
+                                        onClick={stopQcEditorEvent}
+                                        onMouseDown={(event) => event.stopPropagation()}
                                         placeholder="Step label"
                                       />
                                       <input
                                         className="qcStepInput"
                                         value={step.instruction || ""}
                                         onChange={(event) => updateQcStep(walkthroughId, step.id, "instruction", event.target.value)}
+                                        onKeyDown={stopQcEditorEvent}
+                                        onKeyUp={stopQcEditorEvent}
+                                        onClick={stopQcEditorEvent}
+                                        onMouseDown={(event) => event.stopPropagation()}
                                         placeholder="Instruction"
                                       />
                                       <textarea
                                         className="qcStepTextarea"
                                         value={step.detail || ""}
                                         onChange={(event) => updateQcStep(walkthroughId, step.id, "detail", event.target.value)}
+                                        onKeyDown={stopQcEditorEvent}
+                                        onKeyUp={stopQcEditorEvent}
+                                        onClick={stopQcEditorEvent}
+                                        onMouseDown={(event) => event.stopPropagation()}
                                         placeholder="Step detail"
                                       />
+                                      {step.imageUrl && (
+                                        <img className="qcStepImagePreview" src={apiAssetUrl(step.imageUrl)} alt={step.imageLabel || `Step ${step.id}`} />
+                                      )}
                                     </div>
                                     <div className="qcStepActions">
+                                      <button
+                                        className={step.imageStale ? "startButton compactButton" : "secondaryButton"}
+                                        onClick={() => generateQcStepImage(walkthroughId, step.id)}
+                                        disabled={!!qcImageGenerating[`${walkthroughId}-${step.id}`]}
+                                      >
+                                        {qcImageGenerating[`${walkthroughId}-${step.id}`] ? "Generating..." : "Generate New Image"}
+                                      </button>
                                       <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, step.id, -1)} disabled={index === 0}>↑</button>
                                       <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, step.id, 1)} disabled={index === (draft.steps || []).length - 1}>↓</button>
                                       <button className="secondaryButton" onClick={() => addQcStepAfter(walkthroughId, step.id)}>+ Step</button>
