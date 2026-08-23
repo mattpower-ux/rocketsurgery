@@ -9,9 +9,9 @@ except ImportError:
     from image_generator import generate_step_image
 
 try:
-    from app.step_planner import generate_installation_steps
+    from app.step_planner import generate_installation_steps_with_research
 except ImportError:
-    from step_planner import generate_installation_steps
+    from step_planner import generate_installation_steps_with_research
 
 try:
     from app.labor_estimator import estimate_labor_minutes
@@ -32,6 +32,19 @@ try:
     from app.quality_rules import format_rules_for_prompt
 except ImportError:
     from quality_rules import format_rules_for_prompt
+
+try:
+    from app.source_research import (
+        discover_source_research,
+        format_research_for_image_prompt,
+        format_research_for_planner,
+    )
+except ImportError:
+    from source_research import (
+        discover_source_research,
+        format_research_for_image_prompt,
+        format_research_for_planner,
+    )
 
 
 MAX_GENERATION_QUERY_LENGTH = 160
@@ -69,7 +82,11 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     clean_query = safe_task_text(query)
     walkthrough_id = query_to_walkthrough_id(clean_query)
 
-    planned_steps = generate_installation_steps(clean_query)
+    source_research = discover_source_research(clean_query)
+    research_context = format_research_for_planner(source_research)
+    research_image_prompt = format_research_for_image_prompt(source_research)
+
+    planned_steps = generate_installation_steps_with_research(clean_query, research_context)
     sequence_validation = validate_and_repair_step_sequence(clean_query, planned_steps)
     planned_steps = sequence_validation["steps"]
     learned_rule_prompt = format_rules_for_prompt(sequence_validation["category"])
@@ -86,7 +103,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     for index, planned_step in enumerate(planned_steps[:8], start=1):
 
         image_prompt = safe_image_prompt(
-            f"{clean_query} — {planned_step.get('title', f'Step {index}')}. {learned_rule_prompt}"
+            f"{clean_query} — {planned_step.get('title', f'Step {index}')}. {learned_rule_prompt} {research_image_prompt}"
         )
 
         if index - 1 < len(canonical_images):
@@ -130,6 +147,14 @@ def generate_placeholder_walkthrough(query: str) -> dict:
             "category": sequence_validation["category"],
             "issues": sequence_validation["issues"],
             "learned_rules_applied": bool(learned_rule_prompt),
+            "source_research_applied": bool(research_context or research_image_prompt),
+        },
+        "source_research": {
+            "status": source_research.get("status", ""),
+            "researched_at": source_research.get("researched_at", ""),
+            "source_types": source_research.get("source_types", []),
+            "source_candidate_count": source_research.get("source_candidate_count", 0),
+            "brief": source_research.get("brief", {}),
         },
         "disclaimer": "Draft walkthrough only. Manufacturer instructions and local codes must be verified.",
         "estimated_labor_minutes": labor["estimated_labor_minutes"],

@@ -215,6 +215,11 @@ except ImportError:
     from editor_learning import learn_from_walkthrough_edit
 
 try:
+    from app.source_research import discover_source_research
+except ImportError:
+    from source_research import discover_source_research
+
+try:
     from app.product_packages import save_product_package_manifest
 except ImportError:
     from product_packages import save_product_package_manifest
@@ -315,6 +320,11 @@ class ManualWalkthroughRequest(BaseModel):
 
 class BulkQueriesRequest(BaseModel):
     raw_text: str
+
+
+class SourceResearchRequest(BaseModel):
+    query: str
+    force_refresh: bool = False
 
 
 class CatalogEntryRequest(BaseModel):
@@ -2335,6 +2345,14 @@ def post_process_bulk_queries(limit: int = 5):
     # Manual processing trigger from Admin.
     # This does not start the external Render worker service; it runs queued jobs now.
     return run_next_bulk_queries(limit=limit)
+
+
+@app.post("/admin/source-research")
+def post_source_research(request: SourceResearchRequest, _: None = Depends(require_admin_token)):
+    return discover_source_research(
+        request.query,
+        force_refresh=request.force_refresh,
+    )
 
 
 @app.post("/admin/process-model-discovery")

@@ -45,6 +45,18 @@ Return this format:
 
 
 def generate_installation_steps(query: str):
+    return generate_installation_steps_with_research(query)
+
+
+def generate_installation_steps_with_research(query: str, research_context: str = ""):
+    user_content = f"Create a contractor walkthrough for: {query}"
+    if research_context:
+        user_content += (
+            "\n\nBackground research signals to use for accuracy. "
+            "Do not cite or quote these; convert them into original steps:\n"
+            f"{research_context}"
+        )
+
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
         temperature=0.4,
@@ -55,7 +67,7 @@ def generate_installation_steps(query: str):
             },
             {
                 "role": "user",
-                "content": f"Create a contractor walkthrough for: {query}"
+                "content": user_content
             }
         ]
     )
