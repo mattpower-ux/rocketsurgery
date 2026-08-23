@@ -1375,11 +1375,15 @@ function App() {
 
 
   function qcListItems() {
-    return (walkthroughList || []).filter((item) => (
-      qcFilter === "approved"
+    return (walkthroughList || []).filter((item) => {
+      if (qcChanges[item.walkthrough_id]?.action === "delete") {
+        return false;
+      }
+
+      return qcFilter === "approved"
         ? reviewStatusFor(item) === "approved"
-        : isDraftQcItem(item)
-    ));
+        : isDraftQcItem(item);
+    });
   }
 
 
@@ -1544,13 +1548,11 @@ function App() {
         throw new Error(data.detail || data.error || "Delete failed.");
       }
 
-      const deleted = (data.results || []).some((item) => (
-        item.walkthrough_id === walkthroughId && item.status === "deleted"
-      ));
+      const result = (data.results || [])[0] || {};
+      const deleted = result.status === "deleted";
 
       if (!deleted) {
-        const skipped = (data.results || []).find((item) => item.walkthrough_id === walkthroughId);
-        throw new Error(skipped?.message || "Walkthrough was not deleted.");
+        throw new Error(result.message || `Walkthrough was not deleted. Status: ${result.status || "unknown"}.`);
       }
 
       setWalkthroughList((previous) => previous.filter((item) => item.walkthrough_id !== walkthroughId));
@@ -1568,6 +1570,7 @@ function App() {
         setQcExpandedId("");
       }
       setAdminMessage(`Deleted ${title || walkthroughId}.`);
+      loadAdminWalkthroughs();
       loadBuildStatus();
     } catch (error) {
       console.error(error);
