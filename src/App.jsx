@@ -208,6 +208,9 @@ function App() {
   const [libraryView, setLibraryView] = useState("stored");
   const [libraryFilter, setLibraryFilter] = useState("all");
   const [librarySearch, setLibrarySearch] = useState("");
+  const [libraryMessage, setLibraryMessage] = useState("");
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryRebuilding, setLibraryRebuilding] = useState(false);
 
   const [bulkJobList, setBulkJobList] = useState(null);
   const [walkthroughList, setWalkthroughList] = useState([]);
@@ -1139,14 +1142,16 @@ function App() {
   }
 
 
-  async function rebuildWalkthroughIndex() {
-    const token = getAdminToken("sift existing walkthroughs");
+  async function rebuildWalkthroughIndex(tokenOverride = "") {
+    const token = tokenOverride || getAdminToken("sift existing walkthroughs");
     if (!token) {
       setAdminMessage("Walkthrough indexing cancelled. No token was entered.");
+      setLibraryMessage("Rebuild cancelled. No admin token was entered.");
       return;
     }
 
-    setAdminLoading(true);
+    setLibraryRebuilding(true);
+    setLibraryMessage("Rebuilding walkthrough index from persistent storage...");
 
     try {
       const response = await fetch(
@@ -1167,31 +1172,35 @@ function App() {
       }
 
       setTaxonomyIndexStatus(data);
-      setAdminMessage(
+      const message =
         `Sifted ${data.stored_walkthrough_count || 0} stored walkthroughs. ` +
         `${data.taxonomy_entries_with_existing_walkthroughs || 0} taxonomy entries now have existing walkthrough matches; ` +
-        `${data.prospective_taxonomy_entries_without_existing_walkthroughs || 0} remain prospective.`
-      );
+        `${data.prospective_taxonomy_entries_without_existing_walkthroughs || 0} remain prospective.`;
+      setAdminMessage(message);
+      setLibraryMessage(message);
       loadBuildStatus();
       loadAdminWalkthroughs();
-      loadWalkthroughLibrary();
+      await loadWalkthroughLibrary(token);
     } catch (error) {
       console.error(error);
       setAdminMessage(`Could not rebuild walkthrough index: ${error.message}`);
+      setLibraryMessage(`Rebuild failed: ${error.message}`);
     } finally {
-      setAdminLoading(false);
+      setLibraryRebuilding(false);
     }
   }
 
 
-  async function loadWalkthroughLibrary() {
-    const token = getAdminToken("load the walkthrough library");
+  async function loadWalkthroughLibrary(tokenOverride = "") {
+    const token = tokenOverride || getAdminToken("load the walkthrough library");
     if (!token) {
       setAdminMessage("Walkthrough library cancelled. No admin token was entered.");
+      setLibraryMessage("Library load cancelled. No admin token was entered.");
       return;
     }
 
-    setAdminLoading(true);
+    setLibraryLoading(true);
+    setLibraryMessage("Loading walkthrough library...");
 
     try {
       const response = await fetch(`${API_URL}/admin/walkthrough-library?limit=1000`, {
@@ -1212,12 +1221,15 @@ function App() {
         ...(previous || {}),
         ...summary
       }));
-      setAdminMessage(`Library loaded: ${summary.stored_walkthrough_count || 0} stored, ${summary.prospective_taxonomy_entries_without_existing_walkthroughs || 0} prospective.`);
+      const message = `Library loaded: ${summary.stored_walkthrough_count || 0} stored, ${summary.prospective_taxonomy_entries_without_existing_walkthroughs || 0} prospective.`;
+      setAdminMessage(message);
+      setLibraryMessage(message);
     } catch (error) {
       console.error(error);
       setAdminMessage(`Could not load walkthrough library: ${error.message}`);
+      setLibraryMessage(`Library load failed: ${error.message}`);
     } finally {
-      setAdminLoading(false);
+      setLibraryLoading(false);
     }
   }
 
@@ -2198,16 +2210,22 @@ function App() {
             title="Walkthrough Library"
             actions={
               <div className="adminActionRow">
-                <button className="secondaryButton" onClick={loadWalkthroughLibrary} disabled={adminLoading}>
-                  Refresh Library
+                <button className="secondaryButton" onClick={() => loadWalkthroughLibrary()} disabled={libraryLoading || libraryRebuilding}>
+                  {libraryLoading ? "Refreshing..." : "Refresh Library"}
                 </button>
-                <button className="secondaryButton" onClick={rebuildWalkthroughIndex} disabled={adminLoading}>
-                  Rebuild Index
+                <button className="secondaryButton" onClick={() => rebuildWalkthroughIndex()} disabled={libraryLoading || libraryRebuilding}>
+                  {libraryRebuilding ? "Rebuilding..." : "Rebuild Index"}
                 </button>
               </div>
             }
           >
             <div className="libraryWorkspace">
+              {libraryMessage && (
+                <div className={`libraryNotice ${libraryMessage.toLowerCase().includes("failed") ? "error" : ""}`}>
+                  {libraryMessage}
+                </div>
+              )}
+
               <div className="libraryStats">
                 <div><strong>{walkthroughLibrary?.summary?.stored_walkthrough_count || 0}</strong><span>Stored</span></div>
                 <div><strong>{walkthroughLibrary?.summary?.taxonomy_entries_with_existing_walkthroughs || 0}</strong><span>Matched</span></div>
