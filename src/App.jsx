@@ -96,6 +96,12 @@ function QcDraftField({ as = "input", className = "", value = "", onCommit, plac
 
   function stopEditorShortcut(event) {
     event.stopPropagation();
+    if (as !== "textarea" && event.key === "Enter") {
+      event.preventDefault();
+      editingRef.current = false;
+      onCommit?.(draftValue);
+      event.currentTarget.blur();
+    }
   }
 
   return (
@@ -1611,6 +1617,15 @@ function App() {
       ...previous,
       [walkthroughId]: updatedDraft
     }));
+    setWalkthroughList((previous) => previous.map((item) => (
+      qcItemId(item) === walkthroughId
+        ? {
+            ...item,
+            title: field === "title" ? value : item.title,
+            query: field === "query" ? value : item.query
+          }
+        : item
+    )));
     setQcChanges((previous) => {
       const existing = previous[walkthroughId] || {};
       return {
@@ -2382,8 +2397,9 @@ function App() {
                             <>
                               <div className="qcExpandedHeader">
                                 <div>
-                                  <strong>{draft.walkthrough_id}</strong>
-                                  <span>{draft.quality_status || "unvalidated"}</span>
+                                  <strong>{draft.title || draft.query || draft.walkthrough_id}</strong>
+                                  <span>{draft.query ? `Query: ${draft.query}` : "Query not set yet"}</span>
+                                  <span>{draft.quality_status || "unvalidated"} · storage id: {draft.walkthrough_id}</span>
                                 </div>
                                 <div className="qcActions">
                                   <button
