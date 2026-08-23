@@ -22,6 +22,7 @@ try:
         IMAGES_DIR,
         load_walkthrough,
         save_walkthrough,
+        delete_walkthrough,
         load_walkthrough_by_id,
         list_walkthrough_manifests,
         slugify
@@ -32,6 +33,7 @@ except ImportError:
         IMAGES_DIR,
         load_walkthrough,
         save_walkthrough,
+        delete_walkthrough,
         load_walkthrough_by_id,
         list_walkthrough_manifests,
         slugify
@@ -2249,10 +2251,21 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
                     "message": "Approved walkthroughs cannot be deleted from QC."
                 })
                 continue
-            manifest["review_status"] = "deleted"
-            manifest["quality_status"] = "removed_from_qc"
-            manifest["deleted_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-            result_status = "deleted"
+            deletion = delete_walkthrough(walkthrough_id)
+            log_editor_decision({
+                "action": "qc_deleted",
+                "walkthrough_id": walkthrough_id,
+                "review_status": current_status,
+                "quality_status": manifest.get("quality_status", ""),
+                "step_count": len(manifest.get("steps", []) or []),
+                "deleted": deletion.get("deleted", False),
+            })
+            results.append({
+                "walkthrough_id": walkthrough_id,
+                "status": "deleted",
+                "deleted": deletion.get("deleted", False),
+            })
+            continue
         elif action == "save":
             if current_status not in ["approved", "deleted"]:
                 manifest["review_status"] = "edited"

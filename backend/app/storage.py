@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+import shutil
 from pathlib import Path
 
 try:
@@ -179,6 +180,36 @@ def save_walkthrough(walkthrough_id: str, manifest: dict):
     update_walkthrough_index(walkthrough_id, manifest, path)
 
     return path
+
+
+def delete_walkthrough(walkthrough_id: str) -> dict:
+    ensure_storage()
+
+    safe_id = slugify(walkthrough_id or "")
+    folder = WALKTHROUGHS_DIR / safe_id
+    root = WALKTHROUGHS_DIR.resolve()
+    target = folder.resolve()
+
+    if root not in target.parents:
+        raise ValueError("Refusing to delete outside the walkthrough storage directory.")
+
+    deleted = False
+    if target.exists():
+        shutil.rmtree(target)
+        deleted = True
+
+    try:
+        from app.walkthrough_index import remove_walkthrough_from_index
+    except ImportError:
+        from walkthrough_index import remove_walkthrough_from_index
+
+    remove_walkthrough_from_index(safe_id)
+
+    return {
+        "walkthrough_id": safe_id,
+        "deleted": deleted,
+        "path": str(target),
+    }
 
 
 def load_walkthrough_by_id(walkthrough_id: str):

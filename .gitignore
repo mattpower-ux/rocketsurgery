@@ -16,3 +16,4 @@ outputs/search_phrase_taxonomy/*.png
 outputs/search_phrase_taxonomy/*.inspect.ndjson
 outputs/search_phrase_taxonomy/workbook_data.json
 outputs/index_fixture/
+outputs/delete_fixture/

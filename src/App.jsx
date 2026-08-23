@@ -1481,7 +1481,8 @@ function App() {
       setQcChanges({});
       setQcWalkthroughs({});
       setQcExpandedId("");
-      setAdminMessage(`QC saved: ${data.processed_count || 0} item(s) updated.`);
+      const deletedCount = (data.results || []).filter((item) => item.status === "deleted").length;
+      setAdminMessage(`QC saved: ${data.processed_count || 0} item(s) updated. Deleted: ${deletedCount}.`);
       loadAdminWalkthroughs();
       loadBuildStatus();
     } catch (error) {
