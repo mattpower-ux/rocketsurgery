@@ -1926,6 +1926,15 @@ function App() {
     if (!draft || !step) {
       return;
     }
+    const imageDirectionKey = `${walkthroughId}-${stepIndex}-imageDirection`;
+    const latestImageDirection = qcDraftValueCache.has(imageDirectionKey)
+      ? qcDraftValueCache.get(imageDirectionKey)
+      : step.imageDirection || "";
+    const stepForGeneration = {
+      ...step,
+      imageDirection: latestImageDirection,
+      imageStale: true
+    };
 
     const token = getAdminToken("generate a QC step image");
     if (!token) {
@@ -1948,8 +1957,8 @@ function App() {
           walkthrough_id: walkthroughId,
           title: draft.title || "",
           query: draft.query || "",
-          step,
-          image_direction: step.imageDirection || ""
+          step: stepForGeneration,
+          image_direction: latestImageDirection
         })
       });
       const data = await response.json();
@@ -1967,7 +1976,7 @@ function App() {
               ...item,
               imageUrl: data.image_url,
               imagePrompt: data.image_prompt,
-              imageDirection: step.imageDirection || "",
+              imageDirection: latestImageDirection,
               imageStale: false
             }
           : item
@@ -2711,6 +2720,7 @@ function App() {
                                     <div className="qcStepActions">
                                       <button
                                         className={step.imageStale ? "startButton compactButton" : "secondaryButton"}
+                                        onMouseDown={(event) => event.preventDefault()}
                                         onClick={() => generateQcStepImage(walkthroughId, index)}
                                         disabled={!!qcImageGenerating[`${walkthroughId}-${index}`]}
                                       >
