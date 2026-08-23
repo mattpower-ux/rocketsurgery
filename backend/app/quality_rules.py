@@ -12,6 +12,16 @@ CATEGORY_RULES_FILE = INTELLIGENCE_DIR / "category_rules.json"
 
 def infer_construction_category(walkthrough_id: str = "", title: str = "", query: str = "") -> str:
     blob = f"{walkthrough_id} {title} {query}".lower()
+    if any(term in blob for term in ["shower cartridge", "valve cartridge", "mixing cartridge", "temperature control cartridge"]):
+        return "shower_cartridge"
+    if any(term in blob for term in ["replace shower valve", "install shower valve", "shower valve body", "concealed shower valve", "mixing valve"]):
+        return "shower_valve"
+    if any(term in blob for term in ["acrylic shower", "fiberglass shower", "prefab shower", "shower kit", "shower surround"]):
+        return "prefab_shower"
+    if any(term in blob for term in ["shower head", "showerhead", "shower arm", "shower fixture"]):
+        return "shower_fixture"
+    if any(term in blob for term in ["bathroom sink", "vanity sink", "bathroom basin", "sink replacement"]):
+        return "plumbing_sink"
     if any(term in blob for term in ["gfci", "outlet", "switch", "breaker", "wire", "wiring", "electrical"]):
         return "electrical"
     if any(term in blob for term in ["insulation", "attic insulation", "spray foam"]):
@@ -26,7 +36,7 @@ def infer_construction_category(walkthrough_id: str = "", title: str = "", query
         return "door_window"
     if any(term in blob for term in ["floor", "flooring", "hardwood", "laminate", "vinyl plank"]):
         return "flooring"
-    if any(term in blob for term in ["tile shower", "shower pan", "shower base", "shower"]):
+    if any(term in blob for term in ["tile shower", "tile a shower", "shower tile", "grout shower", "shower mortar bed"]):
         return "tile_shower"
     if any(term in blob for term in ["toilet", "commode", "water closet"]):
         return "toilet"
@@ -36,7 +46,7 @@ def infer_construction_category(walkthrough_id: str = "", title: str = "", query
         return "water_heater"
     if any(term in blob for term in ["heat pump", "mini split", "hvac"]):
         return "heat_pump"
-    if any(term in blob for term in ["solar", "panel", "inverter"]):
+    if any(term in blob for term in ["solar panel", "pv panel", "photovoltaic", "solar inverter", "solar array"]):
         return "solar"
     return "generic"
 

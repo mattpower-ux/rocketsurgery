@@ -29,7 +29,8 @@ try:
         resolve_walkthrough_storage_id,
         load_walkthrough_by_id,
         list_walkthrough_manifests,
-        slugify
+        slugify,
+        query_to_walkthrough_id
     )
 except ImportError:
     from storage import (
@@ -41,7 +42,8 @@ except ImportError:
         resolve_walkthrough_storage_id,
         load_walkthrough_by_id,
         list_walkthrough_manifests,
-        slugify
+        slugify,
+        query_to_walkthrough_id
     )
 
 try:
@@ -167,12 +169,14 @@ try:
     from app.walkthrough_index import (
         find_approved_duplicate_for_manifest,
         rebuild_walkthrough_index_from_storage,
+        taxonomy_integrity_report,
         walkthrough_library,
     )
 except ImportError:
     from walkthrough_index import (
         find_approved_duplicate_for_manifest,
         rebuild_walkthrough_index_from_storage,
+        taxonomy_integrity_report,
         walkthrough_library,
     )
 
@@ -434,6 +438,16 @@ def infer_construction_category(walkthrough_id: str = "", title: str = "", query
     intelligence layer group corrections before we have a full taxonomy service.
     """
     blob = f"{walkthrough_id} {title} {query}".lower()
+    if any(term in blob for term in ["shower cartridge", "valve cartridge", "mixing cartridge", "temperature control cartridge"]):
+        return "shower_cartridge"
+    if any(term in blob for term in ["replace shower valve", "install shower valve", "shower valve body", "concealed shower valve", "mixing valve"]):
+        return "shower_valve"
+    if any(term in blob for term in ["acrylic shower", "fiberglass shower", "prefab shower", "shower kit", "shower surround"]):
+        return "prefab_shower"
+    if any(term in blob for term in ["shower head", "showerhead", "shower arm", "shower fixture"]):
+        return "shower_fixture"
+    if any(term in blob for term in ["bathroom sink", "vanity sink", "bathroom basin", "sink replacement"]):
+        return "plumbing_sink"
     if any(term in blob for term in ["gfci", "outlet", "switch", "breaker", "wire", "wiring", "electrical"]):
         return "electrical"
     if any(term in blob for term in ["insulation", "attic insulation", "spray foam"]):
@@ -448,7 +462,7 @@ def infer_construction_category(walkthrough_id: str = "", title: str = "", query
         return "door_window"
     if any(term in blob for term in ["floor", "flooring", "hardwood", "laminate", "vinyl plank"]):
         return "flooring"
-    if any(term in blob for term in ["tile shower", "shower pan", "shower base", "shower"]):
+    if any(term in blob for term in ["tile shower", "tile a shower", "shower tile", "grout shower", "shower mortar bed"]):
         return "tile_shower"
     if any(term in blob for term in ["toilet", "commode", "water closet"]):
         return "toilet"
@@ -458,7 +472,7 @@ def infer_construction_category(walkthrough_id: str = "", title: str = "", query
         return "water_heater"
     if any(term in blob for term in ["heat pump", "mini split", "hvac"]):
         return "heat_pump"
-    if any(term in blob for term in ["solar", "panel", "inverter"]):
+    if any(term in blob for term in ["solar panel", "pv panel", "photovoltaic", "solar inverter", "solar array"]):
         return "solar"
     return "generic"
 
@@ -2404,6 +2418,11 @@ def get_walkthrough_library(limit: int = 1000, _: None = Depends(require_admin_t
     return walkthrough_library(limit=limit)
 
 
+@app.get("/admin/taxonomy-integrity")
+def get_taxonomy_integrity(_: None = Depends(require_admin_token)):
+    return taxonomy_integrity_report()
+
+
 @app.get("/admin/bulk-query-list")
 def get_bulk_query_list():
     return list_bulk_query_jobs()
@@ -2541,11 +2560,16 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
             add_manifest_alias(manifest, manifest["query"])
 
         if item.steps:
+            previous_validation = manifest.get("step_sequence_validation") or {}
+            previous_issues = previous_validation.get("issues", []) or []
             manifest["steps"] = normalize_step_numbering(item.steps)
             manifest["step_sequence_validation"] = {
                 "status": "editor_reviewed",
                 "category": (manifest.get("step_sequence_validation") or {}).get("category", "generic"),
-                "issues": [],
+                "issues": previous_issues,
+                "automated_status": previous_validation.get("status", ""),
+                "automated_issues": previous_issues,
+                "editor_decision": action or "save",
                 "reviewed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
 
@@ -3162,8 +3186,17 @@ def get_walkthrough(
     http_request: Request
 ):
     start_time = time.time()
+    taxonomy_match = classify_taxonomy_query(request.query)
+    canonical_query = request.query
+    canonical_walkthrough_id = query_to_walkthrough_id(request.query)
 
-    cached = load_walkthrough(request.query)
+    if taxonomy_match.get("status") == "matched":
+        canonical_query = taxonomy_match.get("canonical_query") or request.query
+        canonical_walkthrough_id = taxonomy_match.get("walkthrough_id") or query_to_walkthrough_id(canonical_query)
+
+    cached = load_walkthrough_by_id(canonical_walkthrough_id)
+    if not cached:
+        cached = load_walkthrough(canonical_query)
 
     client_ip = client_ip_from_request(http_request)
     user_agent = user_agent_from_request(http_request)
@@ -3188,18 +3221,31 @@ def get_walkthrough(
                 time_spent_seconds=round(elapsed_ms / 1000, 2),
                 ip_address=client_ip,
                 user_agent=user_agent,
-                metadata={"cache_hit": True}
+                metadata={
+                    "cache_hit": True,
+                    "taxonomy_match": taxonomy_match,
+                    "canonical_query": canonical_query,
+                    "canonical_walkthrough_id": canonical_walkthrough_id,
+                }
             )
         except Exception as e:
             print("Query logging failed:", e)
 
         return cached
 
-    generated = generate_placeholder_walkthrough(request.query)
+    generated = generate_placeholder_walkthrough(canonical_query)
+    generated["walkthrough_id"] = canonical_walkthrough_id
+    generated["query"] = canonical_query
+    generated.setdefault("aliases", [])
+    add_manifest_alias(generated, request.query)
+    if canonical_query != request.query:
+        add_manifest_alias(generated, canonical_query)
+    generated["taxonomy_match"] = taxonomy_match
 
-    save_walkthrough(generated["walkthrough_id"], generated)
+    save_walkthrough(canonical_walkthrough_id, generated)
 
     elapsed_ms = int((time.time() - start_time) * 1000)
+    latency_warning = elapsed_ms > 60000
 
     try:
         log_query_event(
@@ -3218,9 +3264,22 @@ def get_walkthrough(
             time_spent_seconds=round(elapsed_ms / 1000, 2),
             ip_address=client_ip,
             user_agent=user_agent,
-            metadata={"cache_hit": False}
+            metadata={
+                "cache_hit": False,
+                "taxonomy_match": taxonomy_match,
+                "canonical_query": canonical_query,
+                "canonical_walkthrough_id": canonical_walkthrough_id,
+                "latency_warning": latency_warning,
+            }
         )
     except Exception as e:
         print("Query logging failed:", e)
+
+    if latency_warning:
+        generated["latency_warning"] = {
+            "threshold_seconds": 60,
+            "response_time_seconds": round(elapsed_ms / 1000, 2),
+            "message": "Uncached generation exceeded the operational latency target.",
+        }
 
     return generated

@@ -706,6 +706,100 @@
       "kept_phrase_count": 8,
       "removed_phrase_count_from_cluster": 0
     },
+    "replace-bathroom-sink": {
+      "walkthrough_id": "replace-bathroom-sink",
+      "canonical_query": "how to replace a bathroom sink",
+      "title": "Replace a Bathroom Sink",
+      "category": "plumbing",
+      "safety_level": "plumbing",
+      "review_status": "draft",
+      "aliases": [
+        "replace bathroom sink",
+        "replace a bathroom sink",
+        "install bathroom sink",
+        "install a bathroom sink",
+        "bathroom sink replacement",
+        "replace vanity sink",
+        "install vanity sink",
+        "replace bathroom basin",
+        "remove and replace bathroom sink",
+        "change bathroom sink"
+      ],
+      "source_clusters": [
+        "Supplemental Bathroom Sink Alias"
+      ],
+      "kept_phrase_count": 10,
+      "removed_phrase_count_from_cluster": 0
+    },
+    "replace-acrylic-shower-kit": {
+      "walkthrough_id": "replace-acrylic-shower-kit",
+      "canonical_query": "how to replace an acrylic or fiberglass shower kit",
+      "title": "Replace an Acrylic or Fiberglass Shower Kit",
+      "category": "prefab_shower",
+      "safety_level": "plumbing_waterproofing",
+      "review_status": "draft",
+      "aliases": [
+        "replace acrylic shower kit",
+        "replace fiberglass shower kit",
+        "install acrylic shower kit",
+        "install fiberglass shower kit",
+        "replace prefab shower",
+        "install prefab shower",
+        "replace shower surround",
+        "install shower surround",
+        "replace acrylic shower pan",
+        "replace fiberglass shower pan"
+      ],
+      "source_clusters": [
+        "Supplemental Shower Branch Alias"
+      ],
+      "kept_phrase_count": 10,
+      "removed_phrase_count_from_cluster": 0
+    },
+    "shower-cartridge": {
+      "walkthrough_id": "shower-cartridge",
+      "canonical_query": "how to replace a shower cartridge",
+      "title": "Replace a Shower Cartridge",
+      "category": "shower_cartridge",
+      "safety_level": "plumbing",
+      "review_status": "draft",
+      "aliases": [
+        "replace shower cartridge",
+        "shower cartridge",
+        "change shower cartridge",
+        "repair shower cartridge",
+        "replace shower valve cartridge",
+        "replace shower mixing cartridge",
+        "fix leaking shower valve",
+        "shower will not turn off",
+        "shower temperature control cartridge"
+      ],
+      "source_clusters": [
+        "Supplemental Shower Branch Alias"
+      ],
+      "kept_phrase_count": 9,
+      "removed_phrase_count_from_cluster": 0
+    },
+    "replace-shower-valve": {
+      "walkthrough_id": "replace-shower-valve",
+      "canonical_query": "how to replace a shower valve",
+      "title": "Replace a Shower Valve",
+      "category": "shower_valve",
+      "safety_level": "licensed_or_high_risk",
+      "review_status": "draft",
+      "aliases": [
+        "replace shower valve",
+        "replace shower mixing valve",
+        "install shower valve",
+        "replace shower valve body",
+        "replace concealed shower valve"
+      ],
+      "source_clusters": [
+        "Supplemental Shower Branch Alias"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 0
+    },
     "replace-shower": {
       "walkthrough_id": "replace-shower",
       "canonical_query": "how to replace a shower",
@@ -747,10 +841,17 @@
         },
         {
           "branch_id": "shower-cartridge",
-          "label": "Shower valve or cartridge only",
+          "label": "Shower cartridge only",
           "query": "replace shower cartridge",
-          "target_walkthrough_id": "replace-shower-cartridge",
-          "notes": "Use when the shower enclosure stays and only the control valve/cartridge is being repaired."
+          "target_walkthrough_id": "shower-cartridge",
+          "notes": "Use when the shower enclosure stays and only the removable cartridge is being repaired."
+        },
+        {
+          "branch_id": "shower-valve",
+          "label": "Complete shower valve replacement",
+          "query": "replace shower valve",
+          "target_walkthrough_id": "replace-shower-valve",
+          "notes": "Use when the valve body is replaced and the wall may need to be opened for new plumbing connections."
         }
       ]
     }

@@ -34,6 +34,11 @@ except ImportError:
     from quality_rules import format_rules_for_prompt
 
 try:
+    from app.taxonomy_router import classify_taxonomy_query
+except ImportError:
+    from taxonomy_router import classify_taxonomy_query
+
+try:
     from app.source_research import (
         discover_source_research,
         format_research_for_image_prompt,
@@ -80,7 +85,12 @@ def safe_image_prompt(text: str) -> str:
 
 def generate_placeholder_walkthrough(query: str) -> dict:
     clean_query = safe_task_text(query)
-    walkthrough_id = query_to_walkthrough_id(clean_query)
+    taxonomy_match = classify_taxonomy_query(clean_query)
+    if taxonomy_match.get("status") == "matched":
+        clean_query = safe_task_text(taxonomy_match.get("canonical_query") or clean_query)
+        walkthrough_id = taxonomy_match.get("walkthrough_id") or query_to_walkthrough_id(clean_query)
+    else:
+        walkthrough_id = query_to_walkthrough_id(clean_query)
 
     source_research = discover_source_research(clean_query)
     research_context = format_research_for_planner(source_research)
@@ -137,6 +147,8 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     return {
         "walkthrough_id": walkthrough_id,
         "query": clean_query,
+        "aliases": [query] if query != clean_query else [],
+        "taxonomy_match": taxonomy_match,
         "walkthrough_type": "generic_foundation",
         "title": f"PLANNED WALKTHROUGH: {clean_query}",
         "review_status": "draft",

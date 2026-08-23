@@ -13,6 +13,11 @@ try:
 except ImportError:
     from metadata_repository import metadata_repository
 
+try:
+    from app.quality_rules import infer_construction_category
+except ImportError:
+    from quality_rules import infer_construction_category
+
 
 INDEX_PATH = BASE_DIR / "walkthrough-index.json"
 WALKTHROUGHS_DIR = BASE_DIR / "walkthroughs"
@@ -183,6 +188,114 @@ def taxonomy_aliases(entry: dict) -> list[str]:
         if normalized:
             aliases.add(normalized)
     return sorted(aliases)
+
+
+def taxonomy_integrity_report() -> dict:
+    taxonomy = load_search_phrase_taxonomy()
+    index = load_index()
+    entries = taxonomy.get("walkthroughs", {}) or {}
+    indexed_walkthroughs = index.get("walkthroughs", {}) or {}
+
+    missing_branch_targets = []
+    alias_claims = {}
+    id_mismatches = []
+    category_mismatches = []
+
+    for taxonomy_id, entry in entries.items():
+        walkthrough_id = entry.get("walkthrough_id") or taxonomy_id
+        if walkthrough_id != taxonomy_id:
+            id_mismatches.append({
+                "taxonomy_id": taxonomy_id,
+                "walkthrough_id": walkthrough_id,
+            })
+
+        for alias in taxonomy_aliases({
+            **entry,
+            "walkthrough_id": walkthrough_id,
+        }):
+            alias_claims.setdefault(alias, []).append(walkthrough_id)
+
+        declared_category = entry.get("category", "")
+        inferred_category = infer_construction_category(
+            walkthrough_id=walkthrough_id,
+            title=entry.get("title", ""),
+            query=entry.get("canonical_query", ""),
+        )
+        compatible_categories = {
+            declared_category,
+            declared_category.replace("doors_windows", "door_window"),
+            declared_category.replace("roofing_gutters", "roofing"),
+            declared_category.replace("flooring_tile", "flooring"),
+            declared_category.replace("flooring_tile", "tile_shower"),
+            declared_category.replace("insulation_energy", "insulation"),
+            declared_category.replace("bath_shower", "tile_shower"),
+            "generic",
+        }
+        broad_category_children = {
+            "plumbing": {"faucet", "plumbing_sink", "shower_cartridge", "shower_valve"},
+            "hvac": {"heat_pump"},
+            "appliances": {"dishwasher"},
+            "electrical_energy": {"solar", "electrical"},
+            "bath_shower": {"tile_shower", "prefab_shower", "shower_cartridge", "shower_valve", "shower_fixture"},
+        }
+        compatible_categories.update(broad_category_children.get(declared_category, set()))
+        if inferred_category not in compatible_categories:
+            category_mismatches.append({
+                "walkthrough_id": walkthrough_id,
+                "declared_category": declared_category,
+                "inferred_category": inferred_category,
+            })
+
+        for branch in entry.get("branches", []) or []:
+            target = branch.get("target_walkthrough_id", "")
+            if target and target not in entries:
+                missing_branch_targets.append({
+                    "walkthrough_id": walkthrough_id,
+                    "branch_id": branch.get("branch_id", ""),
+                    "target_walkthrough_id": target,
+                })
+
+    duplicate_aliases = [
+        {
+            "alias": alias,
+            "walkthrough_ids": sorted(set(ids)),
+        }
+        for alias, ids in sorted(alias_claims.items())
+        if len(set(ids)) > 1
+    ]
+
+    indexed_absent_from_taxonomy = [
+        walkthrough_id
+        for walkthrough_id in sorted(indexed_walkthroughs.keys())
+        if walkthrough_id not in entries
+    ]
+
+    issue_count = (
+        len(missing_branch_targets)
+        + len(duplicate_aliases)
+        + len(id_mismatches)
+        + len(indexed_absent_from_taxonomy)
+        + len(category_mismatches)
+    )
+
+    return {
+        "status": "passed" if issue_count == 0 else "issues_found",
+        "summary": {
+            "taxonomy_entry_count": len(entries),
+            "indexed_walkthrough_count": len(indexed_walkthroughs),
+            "issue_count": issue_count,
+            "missing_branch_target_count": len(missing_branch_targets),
+            "duplicate_alias_count": len(duplicate_aliases),
+            "id_mismatch_count": len(id_mismatches),
+            "indexed_absent_from_taxonomy_count": len(indexed_absent_from_taxonomy),
+            "category_mismatch_count": len(category_mismatches),
+        },
+        "missing_branch_targets": missing_branch_targets,
+        "duplicate_aliases": duplicate_aliases,
+        "id_mismatches": id_mismatches,
+        "indexed_walkthroughs_absent_from_taxonomy": indexed_absent_from_taxonomy,
+        "category_mismatches": category_mismatches,
+    }
 
 
 def match_score(source_aliases: set[str], target_aliases: set[str]) -> float:
