@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.local-data/
+backend/.local-data/
 
 .venv/
 __pycache__/

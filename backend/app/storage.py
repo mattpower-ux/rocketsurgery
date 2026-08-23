@@ -3,7 +3,12 @@ import json
 import re
 from pathlib import Path
 
-BASE_DIR = Path("/data/rocketsurgery")
+try:
+    from app.config import BASE_DIR
+except ImportError:
+    from config import BASE_DIR
+
+
 WALKTHROUGHS_DIR = BASE_DIR / "walkthroughs"
 IMAGES_DIR = BASE_DIR / "images"
 
@@ -134,6 +139,16 @@ def load_walkthrough(query: str):
     path = walkthrough_path(walkthrough_id)
 
     if not path.exists():
+        try:
+            from app.walkthrough_index import find_walkthrough_id_for_query
+        except ImportError:
+            from walkthrough_index import find_walkthrough_id_for_query
+
+        indexed_id = find_walkthrough_id_for_query(query)
+        if indexed_id:
+            path = walkthrough_path(indexed_id)
+
+    if not path.exists():
         return None
 
     with path.open("r", encoding="utf-8") as f:
@@ -143,6 +158,11 @@ def load_walkthrough(query: str):
 def save_walkthrough(walkthrough_id: str, manifest: dict):
     ensure_storage()
 
+    manifest.setdefault("walkthrough_id", walkthrough_id)
+    manifest.setdefault("review_status", "needs_review")
+    manifest.setdefault("quality_status", "unvalidated")
+    manifest.setdefault("version", 1)
+
     folder = WALKTHROUGHS_DIR / walkthrough_id
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -150,6 +170,13 @@ def save_walkthrough(walkthrough_id: str, manifest: dict):
 
     with path.open("w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
+
+    try:
+        from app.walkthrough_index import update_walkthrough_index
+    except ImportError:
+        from walkthrough_index import update_walkthrough_index
+
+    update_walkthrough_index(walkthrough_id, manifest, path)
 
     return path
 
@@ -183,6 +210,8 @@ def list_walkthrough_manifests(limit: int = 250):
             items.append({
                 "walkthrough_id": manifest.get("walkthrough_id") or manifest_path.parent.name,
                 "title": manifest.get("title", manifest_path.parent.name),
+                "review_status": manifest.get("review_status", "needs_review"),
+                "quality_status": manifest.get("quality_status", "unvalidated"),
                 "step_count": len(steps),
                 "modified_at": stat.st_mtime,
                 "modified_at_iso": __import__("datetime").datetime.fromtimestamp(

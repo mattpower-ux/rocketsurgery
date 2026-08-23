@@ -5,10 +5,13 @@ try:
 except ImportError:
     from storage import BASE_DIR, slugify
 
+try:
+    from app.config import API_BASE_URL
+except ImportError:
+    from config import API_BASE_URL
+
 
 CANONICAL_IMAGE_DIR = BASE_DIR / "canonical-images"
-
-API_BASE_URL = "https://rocketsurgery-api.onrender.com"
 
 
 CANONICAL_STEP_IMAGE_SETS = {

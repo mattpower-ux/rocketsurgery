@@ -18,6 +18,8 @@ except ImportError:
 
 try:
     from app.storage import (
+        BASE_DIR,
+        IMAGES_DIR,
         load_walkthrough,
         save_walkthrough,
         load_walkthrough_by_id,
@@ -26,6 +28,8 @@ try:
     )
 except ImportError:
     from storage import (
+        BASE_DIR,
+        IMAGES_DIR,
         load_walkthrough,
         save_walkthrough,
         load_walkthrough_by_id,
@@ -157,12 +161,12 @@ from html import unescape
 
 app = FastAPI(title="RocketSurgery API")
 
-Path("/data/rocketsurgery/images").mkdir(parents=True, exist_ok=True)
-CATALOG_IMAGES_DIR = Path("/data/rocketsurgery/catalog-images")
-CATALOG_MANUALS_DIR = Path("/data/rocketsurgery/catalog-manuals")
-CATALOG_PACKAGES_DIR = Path("/data/rocketsurgery/catalog-packages")
-BASE_CATALOG_DIR = Path("/data/rocketsurgery/catalog")
-INTELLIGENCE_DIR = Path("/data/rocketsurgery/intelligence")
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+CATALOG_IMAGES_DIR = BASE_DIR / "catalog-images"
+CATALOG_MANUALS_DIR = BASE_DIR / "catalog-manuals"
+CATALOG_PACKAGES_DIR = BASE_DIR / "catalog-packages"
+BASE_CATALOG_DIR = BASE_DIR / "catalog"
+INTELLIGENCE_DIR = BASE_DIR / "intelligence"
 CORRECTION_MEMORY_FILE = INTELLIGENCE_DIR / "correction_memory.jsonl"
 EDITOR_DECISIONS_FILE = INTELLIGENCE_DIR / "editor_decisions.jsonl"
 CATEGORY_RULES_FILE = INTELLIGENCE_DIR / "category_rules.json"
@@ -175,7 +179,7 @@ INTELLIGENCE_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount(
     "/static/images",
-    StaticFiles(directory="/data/rocketsurgery/images"),
+    StaticFiles(directory=str(IMAGES_DIR)),
     name="images"
 )
 

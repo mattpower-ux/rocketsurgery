@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
-const API_URL = "https://rocketsurgery-api.onrender.com";
+const API_URL = (import.meta.env.VITE_API_URL || "https://rocketsurgery-api.onrender.com").replace(/\/$/, "");
 
 function displayText(value, max = 140) {
   const text = String(value || "").replace(/\s+/g, " ").trim();

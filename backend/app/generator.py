@@ -23,6 +23,11 @@ try:
 except ImportError:
     from canonical_images import get_canonical_image_urls
 
+try:
+    from app.step_sequence_validator import validate_and_repair_step_sequence
+except ImportError:
+    from step_sequence_validator import validate_and_repair_step_sequence
+
 
 MAX_GENERATION_QUERY_LENGTH = 160
 MAX_IMAGE_PROMPT_LENGTH = 420
@@ -60,6 +65,8 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     walkthrough_id = query_to_walkthrough_id(clean_query)
 
     planned_steps = generate_installation_steps(clean_query)
+    sequence_validation = validate_and_repair_step_sequence(clean_query, planned_steps)
+    planned_steps = sequence_validation["steps"]
 
     labor = estimate_labor_minutes(
         query=clean_query,
@@ -106,7 +113,16 @@ def generate_placeholder_walkthrough(query: str) -> dict:
 
     return {
         "walkthrough_id": walkthrough_id,
+        "query": clean_query,
         "title": f"PLANNED WALKTHROUGH: {clean_query}",
+        "review_status": "needs_review",
+        "quality_status": "order_validated",
+        "version": 1,
+        "step_sequence_validation": {
+            "status": sequence_validation["status"],
+            "category": sequence_validation["category"],
+            "issues": sequence_validation["issues"],
+        },
         "disclaimer": "Draft walkthrough only. Manufacturer instructions and local codes must be verified.",
         "estimated_labor_minutes": labor["estimated_labor_minutes"],
         "estimated_labor_label": labor["estimated_labor_label"],

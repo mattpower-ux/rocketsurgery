@@ -9,10 +9,13 @@ try:
 except ImportError:
     from storage import IMAGES_DIR, slugify, ensure_storage
 
+try:
+    from app.config import API_BASE_URL
+except ImportError:
+    from config import API_BASE_URL
+
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-API_BASE_URL = "https://rocketsurgery-api.onrender.com"
 
 
 def build_image_prompt(query: str, step_label: str = "Step 1") -> str:
