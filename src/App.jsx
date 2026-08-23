@@ -154,6 +154,8 @@ function QcDraftField({ as = "input", className = "", value = "", onCommit, plac
       onClick={(event) => event.stopPropagation()}
       onMouseDownCapture={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
+      spellCheck={as === "textarea"}
+      wrap={as === "textarea" ? "soft" : undefined}
       placeholder={placeholder}
     />
   );
