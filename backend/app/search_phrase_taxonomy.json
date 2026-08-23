@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-23T02:29:08Z",
+  "updated_at": "2026-08-23T02:34:23Z",
   "source": {
     "file": "edited_home_project_search_phrases.xlsx",
     "edited_by_user": true,
@@ -687,6 +687,54 @@
       ],
       "kept_phrase_count": 8,
       "removed_phrase_count_from_cluster": 0
+    },
+    "replace-shower": {
+      "walkthrough_id": "replace-shower",
+      "canonical_query": "how to replace a shower",
+      "title": "Replace a Shower",
+      "category": "bath_shower",
+      "safety_level": "plumbing_waterproofing",
+      "review_status": "draft",
+      "aliases": [
+        "replace shower",
+        "replace a shower",
+        "replace my shower",
+        "remove and replace shower",
+        "install shower",
+        "install a shower",
+        "shower replacement",
+        "shower installation"
+      ],
+      "source_clusters": [
+        "Supplemental Shower Branch Alias"
+      ],
+      "kept_phrase_count": 8,
+      "removed_phrase_count_from_cluster": 0,
+      "requires_branch_selection": true,
+      "branch_question": "What type of shower are you replacing?",
+      "branches": [
+        {
+          "branch_id": "acrylic-fiberglass-shower-kit",
+          "label": "Acrylic or fiberglass shower kit",
+          "query": "replace acrylic shower kit",
+          "target_walkthrough_id": "replace-acrylic-shower-kit",
+          "notes": "Use for one-piece or multi-piece prefab shower surrounds and pans."
+        },
+        {
+          "branch_id": "tile-shower",
+          "label": "Tile shower",
+          "query": "tile a shower",
+          "target_walkthrough_id": "tile-shower",
+          "notes": "Use for waterproofing board, membrane, mortar bed, tile, and grout workflows."
+        },
+        {
+          "branch_id": "shower-cartridge",
+          "label": "Shower valve or cartridge only",
+          "query": "replace shower cartridge",
+          "target_walkthrough_id": "replace-shower-cartridge",
+          "notes": "Use when the shower enclosure stays and only the control valve/cartridge is being repaired."
+        }
+      ]
     }
   },
   "removed_phrase_examples": [

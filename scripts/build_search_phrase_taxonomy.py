@@ -310,6 +310,53 @@ SUPPLEMENTAL_CANONICAL_ENTRIES = [
         "source_rank_min": 0,
         "kept_phrase_count": 8,
         "removed_phrase_count_from_cluster": 0,
+    },
+    {
+        "walkthrough_id": "replace-shower",
+        "canonical_query": "how to replace a shower",
+        "title": "Replace a Shower",
+        "category": "bath_shower",
+        "safety_level": "plumbing_waterproofing",
+        "review_status": "draft",
+        "requires_branch_selection": True,
+        "branch_question": "What type of shower are you replacing?",
+        "branches": [
+            {
+                "branch_id": "acrylic-fiberglass-shower-kit",
+                "label": "Acrylic or fiberglass shower kit",
+                "query": "replace acrylic shower kit",
+                "target_walkthrough_id": "replace-acrylic-shower-kit",
+                "notes": "Use for one-piece or multi-piece prefab shower surrounds and pans.",
+            },
+            {
+                "branch_id": "tile-shower",
+                "label": "Tile shower",
+                "query": "tile a shower",
+                "target_walkthrough_id": "tile-shower",
+                "notes": "Use for waterproofing board, membrane, mortar bed, tile, and grout workflows.",
+            },
+            {
+                "branch_id": "shower-cartridge",
+                "label": "Shower valve or cartridge only",
+                "query": "replace shower cartridge",
+                "target_walkthrough_id": "replace-shower-cartridge",
+                "notes": "Use when the shower enclosure stays and only the control valve/cartridge is being repaired.",
+            },
+        ],
+        "aliases": [
+            "replace shower",
+            "replace a shower",
+            "replace my shower",
+            "remove and replace shower",
+            "install shower",
+            "install a shower",
+            "shower replacement",
+            "shower installation",
+        ],
+        "source_clusters": ["Supplemental Shower Branch Alias"],
+        "source_rank_min": 0,
+        "kept_phrase_count": 8,
+        "removed_phrase_count_from_cluster": 0,
     }
 ]
 
@@ -468,6 +515,12 @@ def build_outputs():
         "drop_reason_counts": dict(Counter(item["drop_reason"] for item in removed)),
     }
 
+    passthrough_keys = [
+        "requires_branch_selection",
+        "branch_question",
+        "branches",
+    ]
+
     taxonomy = {
         "schema_version": 1,
         "updated_at": now,
@@ -488,6 +541,11 @@ def build_outputs():
                 "source_clusters": item["source_clusters"],
                 "kept_phrase_count": item["kept_phrase_count"],
                 "removed_phrase_count_from_cluster": item["removed_phrase_count_from_cluster"],
+                **{
+                    key: item[key]
+                    for key in passthrough_keys
+                    if key in item
+                },
             }
             for item in taxonomy_entries
         },

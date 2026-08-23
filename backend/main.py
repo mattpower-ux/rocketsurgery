@@ -152,6 +152,11 @@ except ImportError:
     from walkthrough_index import rebuild_walkthrough_index_from_storage
 
 try:
+    from app.taxonomy_router import classify_taxonomy_query
+except ImportError:
+    from taxonomy_router import classify_taxonomy_query
+
+try:
     from app.image_generator import generate_step_image
 except ImportError:
     from image_generator import generate_step_image
@@ -1989,8 +1994,17 @@ def seed_demo():
 
 @app.get("/product-options")
 def product_options(query: str):
+    taxonomy_match = classify_taxonomy_query(query)
+
     if is_toilet_query(query):
-        return toilet_product_options(query)
+        options = toilet_product_options(query)
+        return {
+            **options,
+            "taxonomy_match": taxonomy_match,
+            "requires_branch_selection": taxonomy_match.get("status") == "branch_selection_required",
+            "branch_question": taxonomy_match.get("question", ""),
+            "branches": taxonomy_match.get("branches", []),
+        }
 
     options = get_product_options_for_query(query)
 
@@ -1999,7 +2013,11 @@ def product_options(query: str):
         "category": options.get("category", "generic"),
         "brands": options.get("brands", []),
         "query_has_known_brand_and_model":
-            query_has_known_brand_and_model(query)
+            query_has_known_brand_and_model(query),
+        "taxonomy_match": taxonomy_match,
+        "requires_branch_selection": taxonomy_match.get("status") == "branch_selection_required",
+        "branch_question": taxonomy_match.get("question", ""),
+        "branches": taxonomy_match.get("branches", []),
     }
 
 

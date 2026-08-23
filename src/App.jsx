@@ -167,6 +167,8 @@ function App() {
     brands: [],
     query_has_known_brand_and_model: false
   });
+  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [selectedBranchQuery, setSelectedBranchQuery] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [loading, setLoading] = useState(false);
@@ -239,6 +241,7 @@ function App() {
 
   const currentStep = walkthrough?.steps?.[stepIndex];
   const availableBrands = productOptions?.brands || [];
+  const branchOptions = productOptions?.branches || [];
   const selectedBrandRecord = availableBrands.find(
     (item) => item.brand === selectedBrand
   );
@@ -330,6 +333,8 @@ function App() {
     setInstallMode("");
     setSelectedBrand("");
     setSelectedModel("");
+    setSelectedBranchId("");
+    setSelectedBranchQuery("");
     setActiveHotspot(null);
     setComplete(false);
 
@@ -364,11 +369,11 @@ function App() {
 
   function continueGeneric() {
     setInstallMode("generic");
-    fetchWalkthrough(query.trim() || "generic installation walkthrough");
+    fetchWalkthrough(selectedBranchQuery || query.trim() || "generic installation walkthrough");
   }
 
   async function continueSpecific() {
-    const finalQuery = buildSpecificQuery(query, selectedBrand, selectedModel);
+    const finalQuery = buildSpecificQuery(selectedBranchQuery || query, selectedBrand, selectedModel);
     setInstallMode("specific");
     setSpecificQuery(finalQuery);
     setTipsExpanded(false);
@@ -399,6 +404,8 @@ function App() {
     setStarted(false);
     setClarifying(false);
     setInstallMode("");
+    setSelectedBranchId("");
+    setSelectedBranchQuery("");
     setProductOptions({
       category: "generic",
       brands: [],
@@ -2553,6 +2560,29 @@ function App() {
             Query: <strong>{query || "Generic installation walkthrough"}</strong>
           </p>
 
+          {productOptions?.requires_branch_selection && (
+            <section className="choicePanel">
+              <h2>{productOptions.branch_question || "Which type of walkthrough do you need?"}</h2>
+              {branchOptions.map((branch) => (
+                <label key={branch.branch_id} className={`choiceCard ${selectedBranchId === branch.branch_id ? "choiceSelected" : ""}`}>
+                  <input
+                    type="radio"
+                    name="walkthroughBranch"
+                    checked={selectedBranchId === branch.branch_id}
+                    onChange={() => {
+                      setSelectedBranchId(branch.branch_id);
+                      setSelectedBranchQuery(branch.query || branch.target_walkthrough_id || query);
+                    }}
+                  />
+                  <span>
+                    <strong>{branch.label}</strong>
+                    <small>{branch.notes || branch.query}</small>
+                  </span>
+                </label>
+              ))}
+            </section>
+          )}
+
           <section className="choicePanel">
             <label className={`choiceCard ${installMode === "generic" ? "choiceSelected" : ""}`}>
               <input
@@ -2635,7 +2665,7 @@ function App() {
               <button
                 className="startButton"
                 onClick={continueSpecific}
-                disabled={loading || !selectedBrand || !selectedModel}
+                disabled={loading || !selectedBrand || !selectedModel || (productOptions?.requires_branch_selection && !selectedBranchId)}
               >
                 {loading ? "LOADING MODEL BRIEFING..." : "VIEW MODEL BRIEFING"}
               </button>
@@ -2643,7 +2673,7 @@ function App() {
               <button
                 className="startButton"
                 onClick={continueGeneric}
-                disabled={loading}
+                disabled={loading || (productOptions?.requires_branch_selection && !selectedBranchId)}
               >
                 {loading ? "BUILDING..." : "CONTINUE GENERIC"}
               </button>
