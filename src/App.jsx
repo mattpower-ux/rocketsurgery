@@ -1877,7 +1877,26 @@ function App() {
 
 
   function renumberQcSteps(steps) {
-    return (steps || []).map((step, idx) => ({ ...step, id: idx + 1 }));
+    return (steps || []).map((step, idx) => {
+      const stepNumber = idx + 1;
+      const normalizeStepPrefix = (value) => {
+        const text = String(value || "");
+        if (!text) {
+          return text;
+        }
+        if (/^step\s+\d+\s*:/i.test(text)) {
+          return text.replace(/^step\s+\d+\s*:/i, `Step ${stepNumber}:`);
+        }
+        return text;
+      };
+
+      return {
+        ...step,
+        id: stepNumber,
+        imageLabel: normalizeStepPrefix(step.imageLabel),
+        instruction: normalizeStepPrefix(step.instruction)
+      };
+    });
   }
 
 

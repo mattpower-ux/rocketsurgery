@@ -509,6 +509,24 @@ def add_manifest_alias(manifest: dict, alias: str):
         aliases.append(value)
 
 
+def normalize_step_numbering(steps: list[dict]) -> list[dict]:
+    normalized_steps = []
+    for index, step in enumerate(steps or [], start=1):
+        next_step = dict(step or {})
+        next_step["id"] = index
+        for field in ["imageLabel", "instruction"]:
+            value = str(next_step.get(field) or "")
+            if re.match(r"^step\s+\d+\s*:", value, flags=re.IGNORECASE):
+                next_step[field] = re.sub(
+                    r"^step\s+\d+\s*:",
+                    f"Step {index}:",
+                    value,
+                    flags=re.IGNORECASE,
+                )
+        normalized_steps.append(next_step)
+    return normalized_steps
+
+
 def require_admin_token(x_admin_token: str = Header(default="")):
     expected = os.getenv("ADMIN_API_TOKEN", "")
     if not expected:
@@ -2396,8 +2414,7 @@ def post_save_admin_walkthrough(request: SaveWalkthroughRequest, _: None = Depen
     if manifest.get("review_status", "draft") not in ["approved", "deleted", "deprecated"]:
         manifest["review_status"] = manifest.get("review_status") or "edited"
 
-    for index, step in enumerate(manifest.get("steps", []) or [], start=1):
-        step["id"] = index
+    manifest["steps"] = normalize_step_numbering(manifest.get("steps", []) or [])
 
     manifest["version"] = int(manifest.get("version", 1)) + 1
     manifest["editor_saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -2455,9 +2472,7 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
             add_manifest_alias(manifest, manifest["query"])
 
         if item.steps:
-            manifest["steps"] = item.steps
-            for index, step in enumerate(manifest.get("steps", []) or [], start=1):
-                step["id"] = index
+            manifest["steps"] = normalize_step_numbering(item.steps)
             manifest["step_sequence_validation"] = {
                 "status": "editor_reviewed",
                 "category": (manifest.get("step_sequence_validation") or {}).get("category", "generic"),
@@ -2698,9 +2713,7 @@ def post_qc_adopt_approved_match(request: AdoptApprovedMatchRequest, _: None = D
         }
 
     adopted = json.loads(json.dumps(candidate_manifest))
-    adopted["steps"] = json.loads(json.dumps(approved_manifest.get("steps", []) or []))
-    for index, step in enumerate(adopted.get("steps", []) or [], start=1):
-        step["id"] = index
+    adopted["steps"] = normalize_step_numbering(json.loads(json.dumps(approved_manifest.get("steps", []) or [])))
     adopted["adopted_from_walkthrough_id"] = duplicate_id
     adopted["adopted_from_title"] = approved_manifest.get("title", duplicate_id)
     adopted["quality_status"] = "matched_approved_walkthrough"
