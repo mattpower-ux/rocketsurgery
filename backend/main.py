@@ -210,6 +210,11 @@ except ImportError:
     )
 
 try:
+    from app.editor_learning import learn_from_walkthrough_edit
+except ImportError:
+    from editor_learning import learn_from_walkthrough_edit
+
+try:
     from app.product_packages import save_product_package_manifest
 except ImportError:
     from product_packages import save_product_package_manifest
@@ -419,6 +424,20 @@ def infer_construction_category(walkthrough_id: str = "", title: str = "", query
     intelligence layer group corrections before we have a full taxonomy service.
     """
     blob = f"{walkthrough_id} {title} {query}".lower()
+    if any(term in blob for term in ["gfci", "outlet", "switch", "breaker", "wire", "wiring", "electrical"]):
+        return "electrical"
+    if any(term in blob for term in ["insulation", "attic insulation", "spray foam"]):
+        return "insulation"
+    if any(term in blob for term in ["dishwasher"]):
+        return "dishwasher"
+    if any(term in blob for term in ["faucet", "sink fixture"]):
+        return "faucet"
+    if any(term in blob for term in ["roof", "shingle", "flashing"]):
+        return "roofing"
+    if any(term in blob for term in ["window", "door", "sash", "sliding glass"]):
+        return "door_window"
+    if any(term in blob for term in ["floor", "flooring", "hardwood", "laminate", "vinyl plank"]):
+        return "flooring"
     if any(term in blob for term in ["tile shower", "shower pan", "shower base", "shower"]):
         return "tile_shower"
     if any(term in blob for term in ["toilet", "commode", "water closet"]):
@@ -456,11 +475,17 @@ def format_rules_for_prompt(category: str) -> str:
     rules = category_rules_for(category)
     must_show = rules.get("must_show", []) or []
     must_not_show = rules.get("must_not_show", []) or []
+    step_order = rules.get("step_order", []) or []
+    common_errors = rules.get("common_errors", []) or []
     parts = []
+    if step_order:
+        parts.append("Preferred step logic: " + "; ".join(str(item) for item in step_order[:10]) + ".")
     if must_show:
         parts.append("Must show: " + "; ".join(str(item) for item in must_show[:8]) + ".")
     if must_not_show:
         parts.append("Must not show: " + "; ".join(str(item) for item in must_not_show[:8]) + ".")
+    if common_errors:
+        parts.append("Avoid these known errors: " + "; ".join(str(item) for item in common_errors[:8]) + ".")
     return " ".join(parts)
 
 
@@ -492,6 +517,22 @@ def log_editor_decision(payload: dict):
         append_jsonl(EDITOR_DECISIONS_FILE, record)
     except Exception as exc:
         print("Editor decision write failed:", exc)
+
+
+def learn_editor_rules(action: str, before: dict, after: dict, context: dict | None = None):
+    try:
+        result = learn_from_walkthrough_edit(action, before, after, context or {})
+        log_editor_decision({
+            "action": "editor_learning_updated",
+            "source_action": action,
+            "category": result.get("category", ""),
+            "walkthrough_id": (after or before or {}).get("walkthrough_id", ""),
+            "learned_example_count": (result.get("rules") or {}).get("learned_example_count", 0),
+        })
+        return result
+    except Exception as exc:
+        print("Editor learning failed:", exc)
+        return {"status": "learning_failed", "error": str(exc)}
 
 
 def add_manifest_alias(manifest: dict, alias: str):
@@ -2436,11 +2477,21 @@ def post_save_admin_walkthrough(request: SaveWalkthroughRequest, _: None = Depen
             "requested_walkthrough_id": requested_id,
         }
     )
+    learning_result = learn_editor_rules(
+        "repair_editor_saved",
+        before_manifest,
+        manifest,
+        {
+            "source": "walkthrough_repair_editor",
+            "requested_walkthrough_id": requested_id,
+        },
+    )
 
     return {
         "status": "saved",
         "walkthrough_id": walkthrough_id,
         "walkthrough": manifest,
+        "editor_learning": learning_result,
     }
 
 
@@ -2528,6 +2579,16 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
                         "canonical_walkthrough_id": duplicate_id,
                     }
                 )
+                learning_result = learn_editor_rules(
+                    "qc_merged_duplicate",
+                    before_manifest,
+                    canonical_manifest,
+                    {
+                        "source": "step_order_quality_control",
+                        "requested_walkthrough_id": requested_walkthrough_id,
+                        "canonical_walkthrough_id": duplicate_id,
+                    },
+                )
                 results.append({
                     "walkthrough_id": duplicate_id,
                     "deprecated_walkthrough_id": walkthrough_id,
@@ -2535,6 +2596,7 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
                     "status": "merged_duplicate",
                     "review_status": canonical_manifest.get("review_status"),
                     "quality_status": canonical_manifest.get("quality_status"),
+                    "editor_learning": learning_result,
                     "message": "Matched an existing approved walkthrough; added this phrasing as an alias and deprecated the duplicate draft.",
                 })
                 continue
@@ -2623,12 +2685,24 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
                 "query_alias_candidate_id": (alias_candidate or {}).get("id", ""),
             }
         )
+        learning_result = learn_editor_rules(
+            f"qc_{result_status}",
+            before_manifest,
+            manifest,
+            {
+                "source": "step_order_quality_control",
+                "requested_walkthrough_id": requested_walkthrough_id,
+                "submitted_step_count": len(item.steps or []),
+                "query_alias_candidate_id": (alias_candidate or {}).get("id", ""),
+            },
+        )
         results.append({
             "walkthrough_id": walkthrough_id,
             "requested_walkthrough_id": requested_walkthrough_id,
             "status": result_status,
             "review_status": manifest.get("review_status"),
             "quality_status": manifest.get("quality_status"),
+            "editor_learning": learning_result,
         })
 
     return {

@@ -12,6 +12,20 @@ CATEGORY_RULES_FILE = INTELLIGENCE_DIR / "category_rules.json"
 
 def infer_construction_category(walkthrough_id: str = "", title: str = "", query: str = "") -> str:
     blob = f"{walkthrough_id} {title} {query}".lower()
+    if any(term in blob for term in ["gfci", "outlet", "switch", "breaker", "wire", "wiring", "electrical"]):
+        return "electrical"
+    if any(term in blob for term in ["insulation", "attic insulation", "spray foam"]):
+        return "insulation"
+    if any(term in blob for term in ["dishwasher"]):
+        return "dishwasher"
+    if any(term in blob for term in ["faucet", "sink fixture"]):
+        return "faucet"
+    if any(term in blob for term in ["roof", "shingle", "flashing"]):
+        return "roofing"
+    if any(term in blob for term in ["window", "door", "sash", "sliding glass"]):
+        return "door_window"
+    if any(term in blob for term in ["floor", "flooring", "hardwood", "laminate", "vinyl plank"]):
+        return "flooring"
     if any(term in blob for term in ["tile shower", "shower pan", "shower base", "shower"]):
         return "tile_shower"
     if any(term in blob for term in ["toilet", "commode", "water closet"]):
@@ -36,6 +50,12 @@ def load_category_rules() -> dict:
         return {}
 
 
+def save_category_rules(rules: dict) -> dict:
+    INTELLIGENCE_DIR.mkdir(parents=True, exist_ok=True)
+    CATEGORY_RULES_FILE.write_text(json.dumps(rules or {}, indent=2), encoding="utf-8")
+    return rules or {}
+
+
 def category_rules_for(category: str) -> dict:
     rules = load_category_rules()
     value = rules.get(category or "generic", {})
@@ -50,12 +70,12 @@ def format_rules_for_prompt(category: str) -> str:
     common_errors = rules.get("common_errors", []) or []
 
     parts = []
-    if step_order:
-        parts.append("Preferred order: " + "; ".join(str(item) for item in step_order[:10]) + ".")
     if must_show:
         parts.append("Must show: " + "; ".join(str(item) for item in must_show[:8]) + ".")
     if must_not_show:
         parts.append("Must not show: " + "; ".join(str(item) for item in must_not_show[:8]) + ".")
+    if step_order:
+        parts.append("Preferred step logic: " + "; ".join(str(item) for item in step_order[:10]) + ".")
     if common_errors:
         parts.append("Avoid these known errors: " + "; ".join(str(item) for item in common_errors[:8]) + ".")
 

@@ -28,6 +28,11 @@ try:
 except ImportError:
     from step_sequence_validator import validate_and_repair_step_sequence
 
+try:
+    from app.quality_rules import format_rules_for_prompt
+except ImportError:
+    from quality_rules import format_rules_for_prompt
+
 
 MAX_GENERATION_QUERY_LENGTH = 160
 MAX_IMAGE_PROMPT_LENGTH = 420
@@ -67,6 +72,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     planned_steps = generate_installation_steps(clean_query)
     sequence_validation = validate_and_repair_step_sequence(clean_query, planned_steps)
     planned_steps = sequence_validation["steps"]
+    learned_rule_prompt = format_rules_for_prompt(sequence_validation["category"])
 
     labor = estimate_labor_minutes(
         query=clean_query,
@@ -80,7 +86,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     for index, planned_step in enumerate(planned_steps[:8], start=1):
 
         image_prompt = safe_image_prompt(
-            f"{clean_query} — {planned_step.get('title', f'Step {index}')}"
+            f"{clean_query} — {planned_step.get('title', f'Step {index}')}. {learned_rule_prompt}"
         )
 
         if index - 1 < len(canonical_images):
@@ -123,6 +129,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
             "status": sequence_validation["status"],
             "category": sequence_validation["category"],
             "issues": sequence_validation["issues"],
+            "learned_rules_applied": bool(learned_rule_prompt),
         },
         "disclaimer": "Draft walkthrough only. Manufacturer instructions and local codes must be verified.",
         "estimated_labor_minutes": labor["estimated_labor_minutes"],
