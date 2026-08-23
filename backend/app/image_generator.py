@@ -14,6 +14,11 @@ try:
 except ImportError:
     from config import API_BASE_URL
 
+try:
+    from app.image_quality import assess_and_record_image_quality
+except ImportError:
+    from image_quality import assess_and_record_image_quality
+
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -65,7 +70,17 @@ def generate_step_image(query: str, step_number: int = 1) -> str:
     output_path = IMAGES_DIR / filename
 
     if output_path.exists():
-        return f"{API_BASE_URL}/static/images/{filename}"
+        image_url = f"{API_BASE_URL}/static/images/{filename}"
+        assess_and_record_image_quality(
+            image_url=image_url,
+            local_path=output_path,
+            context={
+                "source": "image_cache_hit",
+                "image_prompt": query,
+                "step_number": step_number,
+            },
+        )
+        return image_url
 
     prompt = build_image_prompt(query, f"Step {step_number}")
 
@@ -80,4 +95,15 @@ def generate_step_image(query: str, step_number: int = 1) -> str:
 
     output_path.write_bytes(image_bytes)
 
-    return f"{API_BASE_URL}/static/images/{filename}"
+    image_url = f"{API_BASE_URL}/static/images/{filename}"
+    assess_and_record_image_quality(
+        image_url=image_url,
+        local_path=output_path,
+        context={
+            "source": "generated_step_image",
+            "image_prompt": query,
+            "step_number": step_number,
+        },
+    )
+
+    return image_url

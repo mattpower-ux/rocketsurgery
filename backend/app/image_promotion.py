@@ -11,6 +11,16 @@ try:
 except ImportError:
     from image_registry import build_image_registry
 
+try:
+    from app.image_quality import assess_and_record_image_quality
+except ImportError:
+    from image_quality import assess_and_record_image_quality
+
+try:
+    from app.config import API_BASE_URL
+except ImportError:
+    from config import API_BASE_URL
+
 
 IMAGE_DIR = BASE_DIR / "images"
 CANONICAL_DIR = BASE_DIR / "canonical-images"
@@ -46,6 +56,18 @@ def promote_image_to_canonical(
 
     shutil.copy2(source_path, target_path)
 
+    quality = assess_and_record_image_quality(
+        image_url=f"{API_BASE_URL}/static/canonical-images/{canonical_filename}",
+        local_path=target_path,
+        context={
+            "source": "canonical_promotion",
+            "canonical_key": canonical_key,
+            "step_number": step,
+            "source_filename": filename,
+            "editor_accepted": True,
+        },
+    )
+
     build_image_registry()
 
     return {
@@ -54,5 +76,6 @@ def promote_image_to_canonical(
         "target": str(target_path),
         "canonical_key": canonical_key,
         "step_number": step,
-        "filename": canonical_filename
+        "filename": canonical_filename,
+        "quality": quality
     }

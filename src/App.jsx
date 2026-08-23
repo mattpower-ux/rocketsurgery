@@ -210,6 +210,7 @@ function App() {
   const [editorDirty, setEditorDirty] = useState(false);
   const [editorSaving, setEditorSaving] = useState(false);
   const [adminPanels, setAdminPanels] = useState({
+    qc: true,
     repair: false,
     catalog: false,
     reports: false,
@@ -218,6 +219,11 @@ function App() {
     activity: false,
     advanced: false
   });
+  const [qcFilter, setQcFilter] = useState("draft");
+  const [qcExpandedId, setQcExpandedId] = useState("");
+  const [qcWalkthroughs, setQcWalkthroughs] = useState({});
+  const [qcChanges, setQcChanges] = useState({});
+  const [qcSaving, setQcSaving] = useState(false);
   const [catalogPipelineStatus, setCatalogPipelineStatus] = useState(null);
   const [catalogPipelineRunning, setCatalogPipelineRunning] = useState("");
   const [productPackageBrand, setProductPackageBrand] = useState("Niagara");
@@ -1287,6 +1293,188 @@ function App() {
   }
 
 
+  function reviewStatusFor(item) {
+    return String(item?.review_status || "draft").toLowerCase();
+  }
+
+
+  function isDraftQcItem(item) {
+    const status = reviewStatusFor(item);
+    return !["approved", "deleted", "deprecated"].includes(status);
+  }
+
+
+  function qcListItems() {
+    return (walkthroughList || []).filter((item) => (
+      qcFilter === "approved"
+        ? reviewStatusFor(item) === "approved"
+        : isDraftQcItem(item)
+    ));
+  }
+
+
+  async function toggleQcWalkthrough(walkthroughId) {
+    if (qcExpandedId === walkthroughId) {
+      setQcExpandedId("");
+      return;
+    }
+
+    setQcExpandedId(walkthroughId);
+
+    if (qcWalkthroughs[walkthroughId]) {
+      return;
+    }
+
+    setAdminLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/admin/walkthroughs/${encodeURIComponent(walkthroughId)}`);
+      const data = await response.json();
+
+      if (data.walkthrough) {
+        setQcWalkthroughs((previous) => ({
+          ...previous,
+          [walkthroughId]: JSON.parse(JSON.stringify(data.walkthrough))
+        }));
+      } else {
+        setAdminMessage("Walkthrough not found.");
+      }
+    } catch (error) {
+      console.error(error);
+      setAdminMessage("Could not load QC walkthrough.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  function stageQcChange(walkthroughId, action, steps = null) {
+    setQcChanges((previous) => {
+      const existing = previous[walkthroughId] || {};
+      return {
+        ...previous,
+        [walkthroughId]: {
+          ...existing,
+          action,
+          steps: steps || existing.steps || []
+        }
+      };
+    });
+  }
+
+
+  function moveQcStep(walkthroughId, stepId, direction) {
+    const draft = qcWalkthroughs[walkthroughId];
+    if (!draft?.steps?.length) {
+      return;
+    }
+
+    const steps = [...draft.steps];
+    const index = steps.findIndex((step) => Number(step.id) === Number(stepId));
+    const nextIndex = index + direction;
+
+    if (index < 0 || nextIndex < 0 || nextIndex >= steps.length) {
+      return;
+    }
+
+    const [removed] = steps.splice(index, 1);
+    steps.splice(nextIndex, 0, removed);
+    const renumbered = steps.map((step, idx) => ({ ...step, id: idx + 1 }));
+
+    setQcWalkthroughs((previous) => ({
+      ...previous,
+      [walkthroughId]: {
+        ...draft,
+        steps: renumbered
+      }
+    }));
+    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", renumbered);
+  }
+
+
+  async function saveAllQcChanges() {
+    const actions = Object.entries(qcChanges)
+      .filter(([, change]) => change?.action)
+      .map(([walkthroughId, change]) => ({
+        walkthrough_id: walkthroughId,
+        action: change.action,
+        steps: change.steps || qcWalkthroughs[walkthroughId]?.steps || []
+      }));
+
+    if (!actions.length) {
+      setAdminMessage("No QC changes to save.");
+      return;
+    }
+
+    const token = window.prompt("Enter admin token to save QC changes:");
+    if (!token) {
+      setAdminMessage("QC save cancelled. No token was entered.");
+      return;
+    }
+
+    setQcSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/admin/qc/save-all`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        body: JSON.stringify({ actions })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || "QC save failed.");
+      }
+
+      setQcChanges({});
+      setQcWalkthroughs({});
+      setQcExpandedId("");
+      setAdminMessage(`QC saved: ${data.processed_count || 0} item(s) updated.`);
+      loadAdminWalkthroughs();
+      loadBuildStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`QC save failed: ${error.message}`);
+    } finally {
+      setQcSaving(false);
+    }
+  }
+
+
+  async function markAllWalkthroughsAsDrafts() {
+    const token = window.prompt("Enter admin token to mark all current walkthroughs as DRAFT:");
+    if (!token) {
+      setAdminMessage("Draft migration cancelled. No token was entered.");
+      return;
+    }
+
+    setQcSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/admin/qc/mark-all-drafts`, {
+        method: "POST",
+        headers: {
+          "X-Admin-Token": token
+        }
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || "Draft migration failed.");
+      }
+
+      setAdminMessage(`Marked ${data.updated_count || 0} walkthrough(s) as DRAFT. Skipped ${data.skipped_count || 0}.`);
+      loadAdminWalkthroughs();
+      loadBuildStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Draft migration failed: ${error.message}`);
+    } finally {
+      setQcSaving(false);
+    }
+  }
+
+
   async function regenerateStepImage(stepId) {
     if (!selectedAdminWalkthrough) {
       return;
@@ -1620,6 +1808,123 @@ function App() {
 
           <h1>RocketSurgery Builder</h1>
 
+          <AdminSection
+            panelId="qc"
+            title="Step Order Quality Control"
+            actions={
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                <select className="selectBox compact" value={qcFilter} onChange={(event) => setQcFilter(event.target.value)}>
+                  <option value="draft">DRAFT</option>
+                  <option value="approved">APPROVED</option>
+                </select>
+                <button className="secondaryButton" onClick={loadAdminWalkthroughs} disabled={adminLoading}>
+                  Refresh
+                </button>
+                <button className="secondaryButton" onClick={markAllWalkthroughsAsDrafts} disabled={qcSaving}>
+                  Mark Existing as Drafts
+                </button>
+                <button className="startButton" onClick={saveAllQcChanges} disabled={qcSaving || !Object.keys(qcChanges).length}>
+                  {qcSaving ? "Saving..." : `Save All (${Object.keys(qcChanges).length})`}
+                </button>
+              </div>
+            }
+          >
+            <div className="qcWorkspace">
+              <div className="qcToolbar">
+                <div>
+                  <strong>{qcFilter === "approved" ? "Approved walkthroughs" : "Draft walkthroughs"}</strong>
+                  <span>{qcListItems().length} item(s)</span>
+                </div>
+                <p className="adminHelp">
+                  Expand a draft, adjust step order, then stage Approve or Delete. Save All pushes approved walkthroughs to the next stage.
+                </p>
+              </div>
+
+              <div className="qcList">
+                {qcListItems().map((item) => {
+                  const walkthroughId = item.walkthrough_id;
+                  const expanded = qcExpandedId === walkthroughId;
+                  const draft = qcWalkthroughs[walkthroughId];
+                  const staged = qcChanges[walkthroughId]?.action || "";
+                  const status = reviewStatusFor(item);
+
+                  return (
+                    <div key={`qc-${walkthroughId}`} className={`qcRow ${expanded ? "qcRowOpen" : ""}`}>
+                      <button className="qcRowSummary" onClick={() => toggleQcWalkthrough(walkthroughId)}>
+                        <span className="qcCaret">{expanded ? "▾" : "▸"}</span>
+                        <span className="qcTitle">{displayText(item.title, 120)}</span>
+                        <span className={`qcBadge qcBadge-${staged || status}`}>{staged || status}</span>
+                        <span className="qcMeta">{item.step_count} steps</span>
+                      </button>
+
+                      {expanded && (
+                        <div className="qcExpanded">
+                          {draft ? (
+                            <>
+                              <div className="qcExpandedHeader">
+                                <div>
+                                  <strong>{draft.walkthrough_id}</strong>
+                                  <span>{draft.quality_status || "unvalidated"}</span>
+                                </div>
+                                <div className="qcActions">
+                                  <button
+                                    className="secondaryButton"
+                                    onClick={() => stageQcChange(walkthroughId, "save", draft.steps || [])}
+                                  >
+                                    Stage Save
+                                  </button>
+                                  <button
+                                    className="doneButton"
+                                    onClick={() => stageQcChange(walkthroughId, "approve", draft.steps || [])}
+                                  >
+                                    Approve
+                                  </button>
+                                  {status !== "approved" && (
+                                    <button
+                                      className="secondaryButton dangerButton"
+                                      onClick={() => stageQcChange(walkthroughId, "delete", draft.steps || [])}
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {draft.step_sequence_validation?.issues?.length ? (
+                                <div className="qcNotice">
+                                  {draft.step_sequence_validation.issues.map((issue, index) => (
+                                    <div key={`qc-issue-${walkthroughId}-${index}`}>{issue.message || issue.type}</div>
+                                  ))}
+                                </div>
+                              ) : null}
+
+                              <div className="qcStepList">
+                                {(draft.steps || []).map((step, index) => (
+                                  <div key={`qc-step-${walkthroughId}-${step.id}-${index}`} className="qcStep">
+                                    <div className="qcStepNumber">{index + 1}</div>
+                                    <div>
+                                      <strong>{displayText(step.imageLabel || step.instruction, 90)}</strong>
+                                      <p>{displayText(step.detail || step.instruction, 180)}</p>
+                                    </div>
+                                    <div className="qcStepActions">
+                                      <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, step.id, -1)} disabled={index === 0}>↑</button>
+                                      <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, step.id, 1)} disabled={index === (draft.steps || []).length - 1}>↓</button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <p className="adminHelp">Loading walkthrough...</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </AdminSection>
 
           <AdminSection
             panelId="repair"

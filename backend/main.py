@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -151,9 +151,25 @@ try:
 except ImportError:
     from image_generator import generate_step_image
 
+try:
+    from app.image_quality import assess_and_record_image_quality
+except ImportError:
+    from image_quality import assess_and_record_image_quality
+
+try:
+    from app.training_examples import image_repair_example, product_photo_example
+except ImportError:
+    from training_examples import image_repair_example, product_photo_example
+
+try:
+    from app.product_packages import save_product_package_manifest
+except ImportError:
+    from product_packages import save_product_package_manifest
+
 import time
 import re
 import urllib.request
+import os
 from urllib.parse import urlparse, urljoin
 from fastapi import Request
 from html import unescape
@@ -248,6 +264,16 @@ class CatalogEntryRequest(BaseModel):
 
 class BulkCatalogRequest(BaseModel):
     raw_text: str
+
+
+class QcWalkthroughAction(BaseModel):
+    walkthrough_id: str
+    action: str
+    steps: list[dict] = []
+
+
+class QcSaveAllRequest(BaseModel):
+    actions: list[QcWalkthroughAction]
 
 
 class OverlayRequest(BaseModel):
@@ -390,6 +416,17 @@ def log_editor_decision(payload: dict):
         append_jsonl(EDITOR_DECISIONS_FILE, record)
     except Exception as exc:
         print("Editor decision write failed:", exc)
+
+
+def require_admin_token(x_admin_token: str = Header(default="")):
+    expected = os.getenv("ADMIN_API_TOKEN", "")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="ADMIN_API_TOKEN is not configured on the API service."
+        )
+    if x_admin_token != expected:
+        raise HTTPException(status_code=401, detail="Invalid admin token.")
 
 
 
@@ -950,6 +987,23 @@ def public_catalog_file_url(path: Path) -> str:
     return "/static/catalog/" + str(relative).replace("\\", "/")
 
 
+def local_static_path_for_url(url: str) -> Path | None:
+    parsed_path = urlparse(url or "").path
+    static_roots = [
+        ("/static/images/", IMAGES_DIR),
+        ("/static/catalog-images/", CATALOG_IMAGES_DIR),
+        ("/static/catalog-manuals/", CATALOG_MANUALS_DIR),
+        ("/static/catalog-packages/", CATALOG_PACKAGES_DIR),
+        ("/static/catalog/", BASE_CATALOG_DIR),
+        ("/static/canonical-images/", CANONICAL_IMAGE_DIR),
+    ]
+    for prefix, root in static_roots:
+        if parsed_path.startswith(prefix):
+            relative = parsed_path[len(prefix):].lstrip("/")
+            return root / relative
+    return None
+
+
 def fetch_text_url(url: str, timeout: int = 20) -> str:
     request = urllib.request.Request(
         url,
@@ -1221,7 +1275,20 @@ def cache_product_image_to_package(category: str, brand: str, model: str, image_
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"hero{ext}"
         out_path.write_bytes(data)
-        return {"status": "cached", "local_url": public_catalog_file_url(out_path), "remote_url": image_url, "error": ""}
+        local_url = public_catalog_file_url(out_path)
+        quality = assess_and_record_image_quality(
+            image_url=local_url,
+            local_path=out_path,
+            context={
+                "source": "product_package_photo",
+                "category": category,
+                "brand": brand,
+                "model": model,
+                "remote_url": image_url,
+                "editor_accepted": False,
+            },
+        )
+        return {"status": "cached", "local_url": local_url, "remote_url": image_url, "error": "", "quality": quality}
     except Exception as exc:
         return {"status": "unavailable", "local_url": "", "remote_url": image_url, "error": str(exc)}
 
@@ -1318,7 +1385,7 @@ def build_product_page_package(category: str, brand: str, model: str, product_pa
     overlay_payload = toilet_model_overlay(
         OverlayRequest(query="install a toilet", category="toilet", brand=brand, model=model)
     )
-    (root / "overlays.json").write_text(json.dumps({
+    overlays_document = {
         "category": category,
         "brand": brand,
         "model": model,
@@ -1326,15 +1393,26 @@ def build_product_page_package(category: str, brand: str, model: str, product_pa
         "installation_tips": overlay_payload.get("installation_tips", []),
         "overlays": overlay_payload.get("overlays", []),
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }, indent=2), encoding="utf-8")
+    }
+    (root / "overlays.json").write_text(json.dumps(overlays_document, indent=2), encoding="utf-8")
+    package_manifest = save_product_package_manifest(
+        category=category,
+        brand=brand,
+        model=model,
+        product=product,
+        discovery=discovery,
+        overlays=overlays_document.get("overlays", []),
+    )
 
     return {
         "status": discovery.get("status", "unknown"),
         "product": product,
         "discovery": discovery,
+        "package_manifest": package_manifest,
         "product_json_url": public_catalog_file_url(root / "product.json"),
         "discovery_json_url": public_catalog_file_url(root / "discovery.json"),
         "overlays_json_url": public_catalog_file_url(root / "overlays.json"),
+        "package_manifest_url": public_catalog_file_url(root / "package-manifest.json"),
     }
 
 
@@ -1667,6 +1745,18 @@ def post_catalog_cache_photo_url(request: CatalogPhotoRequest):
         "model": request.model,
         "cached_photo_url": result.get("local_url", ""),
     })
+    product_photo_example(
+        "accepted",
+        request.category or "toilet",
+        request.brand,
+        request.model,
+        {
+            "remote_photo_url": result.get("remote_url", ""),
+            "cached_photo_url": result.get("local_url", ""),
+            "quality": result.get("quality", {}),
+            "source": "manual_override" if discovery.get("manual_photo_override") else "candidate_cache",
+        },
+    )
 
     return {
         "status": result.get("status"),
@@ -1743,6 +1833,17 @@ def post_catalog_reject_photo_candidates(request: CatalogPhotoRequest):
         "model": model,
         "rejected_count": len(rejected),
     })
+    product_photo_example(
+        "rejected_candidates",
+        category,
+        brand,
+        model,
+        {
+            "rejected_count": len(rejected),
+            "rejected_image_candidates": list(rejected),
+            "current_remote_photo_url": current_remote or "",
+        },
+    )
 
     return {
         "status": "rejected",
@@ -2078,6 +2179,129 @@ def get_admin_walkthrough(walkthrough_id: str):
     return {"status": "loaded", "walkthrough": manifest}
 
 
+@app.post("/admin/qc/save-all")
+def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_token)):
+    results = []
+
+    for item in request.actions:
+        walkthrough_id = slugify(item.walkthrough_id)
+        manifest = load_walkthrough_by_id(walkthrough_id)
+        if not manifest:
+            results.append({
+                "walkthrough_id": walkthrough_id,
+                "status": "not_found",
+            })
+            continue
+
+        action = (item.action or "").lower().strip()
+        current_status = manifest.get("review_status", "draft")
+
+        if item.steps:
+            manifest["steps"] = item.steps
+            for index, step in enumerate(manifest.get("steps", []) or [], start=1):
+                step["id"] = index
+            manifest["step_sequence_validation"] = {
+                "status": "editor_reviewed",
+                "category": (manifest.get("step_sequence_validation") or {}).get("category", "generic"),
+                "issues": [],
+                "reviewed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+
+        if action == "approve":
+            manifest["review_status"] = "approved"
+            manifest["quality_status"] = "approved_for_next_stage"
+            manifest["next_stage"] = "product_specific_overlay"
+            manifest["approved_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            result_status = "approved"
+        elif action == "delete":
+            if current_status == "approved":
+                results.append({
+                    "walkthrough_id": walkthrough_id,
+                    "status": "skipped",
+                    "message": "Approved walkthroughs cannot be deleted from QC."
+                })
+                continue
+            manifest["review_status"] = "deleted"
+            manifest["quality_status"] = "removed_from_qc"
+            manifest["deleted_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            result_status = "deleted"
+        elif action == "save":
+            if current_status not in ["approved", "deleted"]:
+                manifest["review_status"] = "edited"
+            manifest["quality_status"] = "editor_reviewed"
+            result_status = "saved"
+        else:
+            results.append({
+                "walkthrough_id": walkthrough_id,
+                "status": "skipped",
+                "message": f"Unknown QC action: {item.action}"
+            })
+            continue
+
+        manifest["version"] = int(manifest.get("version", 1)) + 1
+        manifest["qc_updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        save_walkthrough(walkthrough_id, manifest)
+        log_editor_decision({
+            "action": f"qc_{result_status}",
+            "walkthrough_id": walkthrough_id,
+            "review_status": manifest.get("review_status", ""),
+            "quality_status": manifest.get("quality_status", ""),
+            "step_count": len(manifest.get("steps", []) or []),
+        })
+        results.append({
+            "walkthrough_id": walkthrough_id,
+            "status": result_status,
+            "review_status": manifest.get("review_status"),
+            "quality_status": manifest.get("quality_status"),
+        })
+
+    return {
+        "status": "saved",
+        "processed_count": len([item for item in results if item.get("status") in ["approved", "deleted", "saved"]]),
+        "results": results,
+    }
+
+
+@app.post("/admin/qc/mark-all-drafts")
+def post_qc_mark_all_drafts(_: None = Depends(require_admin_token)):
+    items = list_walkthrough_manifests(limit=10000)
+    updated = []
+    skipped = []
+
+    for item in items:
+        walkthrough_id = item.get("walkthrough_id", "")
+        manifest = load_walkthrough_by_id(walkthrough_id)
+        if not manifest:
+            skipped.append({"walkthrough_id": walkthrough_id, "status": "not_found"})
+            continue
+
+        current_status = (manifest.get("review_status") or "draft").lower()
+        if current_status in ["approved", "deleted", "deprecated"]:
+            skipped.append({"walkthrough_id": walkthrough_id, "status": current_status})
+            continue
+
+        manifest["review_status"] = "draft"
+        manifest["quality_status"] = "awaiting_qc"
+        manifest["qc_stage"] = "step_order_review"
+        manifest["draft_marked_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        save_walkthrough(walkthrough_id, manifest)
+        updated.append(walkthrough_id)
+
+    log_editor_decision({
+        "action": "qc_mark_all_drafts",
+        "updated_count": len(updated),
+        "skipped_count": len(skipped),
+    })
+
+    return {
+        "status": "drafts_marked",
+        "updated_count": len(updated),
+        "skipped_count": len(skipped),
+        "updated": updated,
+        "skipped": skipped,
+    }
+
+
 @app.post("/admin/regenerate-step-image")
 def post_regenerate_step_image(request: RegenerateStepImageRequest):
     manifest = load_walkthrough_by_id(request.walkthrough_id)
@@ -2209,6 +2433,31 @@ def post_accept_step_image(request: AcceptStepImageRequest):
                 "step_id": request.step_id,
                 "accepted_image_url": pending,
             })
+            quality = assess_and_record_image_quality(
+                image_url=pending,
+                local_path=local_static_path_for_url(pending) or "",
+                context={
+                    "source": "repair_editor_acceptance",
+                    "walkthrough_id": manifest.get("walkthrough_id") or request.walkthrough_id,
+                    "category": inferred_category,
+                    "step_id": request.step_id,
+                    "query": manifest.get("query", ""),
+                    "step_instruction": step.get("instruction", ""),
+                    "step_detail": step.get("detail", ""),
+                    "image_label": step.get("imageLabel", ""),
+                    "image_prompt": step.get("imagePrompt", ""),
+                    "editor_accepted": True,
+                },
+            )
+            image_repair_example(
+                "accepted",
+                manifest,
+                step,
+                before_image_url=previous,
+                after_image_url=pending,
+                correction=step.get("imageRepairHistory", [{}])[-1].get("correctionPrompt", "") if step.get("imageRepairHistory") else "",
+            )
+            step["imageQuality"] = quality
 
             save_walkthrough(manifest.get("walkthrough_id") or slugify(request.walkthrough_id), manifest)
             return {"status": "accepted", "walkthrough": manifest}
@@ -2256,6 +2505,26 @@ def post_revert_step_image(request: RevertStepImageRequest):
                     "step_id": request.step_id,
                     "rejected_image_url": pending_url,
                 })
+                assess_and_record_image_quality(
+                    image_url=pending_url,
+                    local_path=local_static_path_for_url(pending_url) or "",
+                    context={
+                        "source": "repair_editor_rejection",
+                        "walkthrough_id": manifest.get("walkthrough_id") or request.walkthrough_id,
+                        "category": inferred_category,
+                        "step_id": request.step_id,
+                        "correction": pending_correction,
+                        "editor_rejected": True,
+                    },
+                )
+                image_repair_example(
+                    "rejected",
+                    manifest,
+                    step,
+                    before_image_url=step.get("imageUrl", ""),
+                    after_image_url=pending_url,
+                    correction=pending_correction,
+                )
                 save_walkthrough(manifest.get("walkthrough_id") or slugify(request.walkthrough_id), manifest)
                 return {"status": "discarded_pending", "walkthrough": manifest}
 

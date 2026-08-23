@@ -159,7 +159,7 @@ def save_walkthrough(walkthrough_id: str, manifest: dict):
     ensure_storage()
 
     manifest.setdefault("walkthrough_id", walkthrough_id)
-    manifest.setdefault("review_status", "needs_review")
+    manifest.setdefault("review_status", "draft")
     manifest.setdefault("quality_status", "unvalidated")
     manifest.setdefault("version", 1)
 
@@ -210,7 +210,7 @@ def list_walkthrough_manifests(limit: int = 250):
             items.append({
                 "walkthrough_id": manifest.get("walkthrough_id") or manifest_path.parent.name,
                 "title": manifest.get("title", manifest_path.parent.name),
-                "review_status": manifest.get("review_status", "needs_review"),
+                "review_status": manifest.get("review_status", "draft"),
                 "quality_status": manifest.get("quality_status", "unvalidated"),
                 "step_count": len(steps),
                 "modified_at": stat.st_mtime,

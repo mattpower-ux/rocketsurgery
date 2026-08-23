@@ -114,8 +114,9 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     return {
         "walkthrough_id": walkthrough_id,
         "query": clean_query,
+        "walkthrough_type": "generic_foundation",
         "title": f"PLANNED WALKTHROUGH: {clean_query}",
-        "review_status": "needs_review",
+        "review_status": "draft",
         "quality_status": "order_validated",
         "version": 1,
         "step_sequence_validation": {

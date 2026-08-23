@@ -8,6 +8,11 @@ try:
 except ImportError:
     from config import BASE_DIR
 
+try:
+    from app.metadata_repository import metadata_repository
+except ImportError:
+    from metadata_repository import metadata_repository
+
 
 INDEX_PATH = BASE_DIR / "walkthrough-index.json"
 
@@ -104,9 +109,10 @@ def build_index_record(walkthrough_id: str, manifest: dict, manifest_path: Path 
         "walkthrough_id": walkthrough_id,
         "canonical_query": manifest.get("query", manifest.get("title", walkthrough_id)),
         "title": manifest.get("title", walkthrough_id),
+        "walkthrough_type": manifest.get("walkthrough_type", "generic_foundation"),
         "aliases": build_aliases(manifest),
         "category": infer_category_from_manifest(manifest),
-        "review_status": manifest.get("review_status", "needs_review"),
+        "review_status": manifest.get("review_status", "draft"),
         "quality_status": manifest.get("quality_status", "unvalidated"),
         "version": manifest.get("version", 1),
         "step_count": len(steps),
@@ -119,7 +125,15 @@ def build_index_record(walkthrough_id: str, manifest: dict, manifest_path: Path 
 
 def update_walkthrough_index(walkthrough_id: str, manifest: dict, manifest_path: Path | None = None) -> dict:
     index = load_index()
-    index["walkthroughs"][walkthrough_id] = build_index_record(walkthrough_id, manifest, manifest_path)
+    record = build_index_record(walkthrough_id, manifest, manifest_path)
+    index["walkthroughs"][walkthrough_id] = record
+    metadata_repository.upsert_record("walkthroughs", walkthrough_id, record)
+    return save_index(index)
+
+
+def remove_walkthrough_from_index(walkthrough_id: str) -> dict:
+    index = load_index()
+    index.get("walkthroughs", {}).pop(walkthrough_id, None)
     return save_index(index)
 
 
