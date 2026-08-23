@@ -30,6 +30,9 @@ def normalize_search_text(text: str) -> str:
         normalized
     )
     normalized = re.sub(r"\bget\s+(?:a\s+)?mice\s+out\b", " rid mice ", normalized)
+    normalized = re.sub(r"\b(fix|repair|stop|stopping|seal|sealing)\b", " repair ", normalized)
+    normalized = re.sub(r"\b(leaky|leaking|leaks)\b", " leak ", normalized)
+    normalized = re.sub(r"\bfaucet\s+leak\b", " leak faucet ", normalized)
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     normalized = re.sub(r"\b(how|to|the|a|an|diy|guide|tutorial|my|your|from|of|in|out)\b", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()

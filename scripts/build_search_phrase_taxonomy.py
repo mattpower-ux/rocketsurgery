@@ -241,6 +241,79 @@ DROP_PATTERNS = [
 ]
 
 
+SUPPLEMENTAL_CANONICAL_ENTRIES = [
+    {
+        "walkthrough_id": "install-dishwasher",
+        "canonical_query": "how to install a dishwasher",
+        "title": "Install or Replace a Dishwasher",
+        "category": "appliances",
+        "safety_level": "electrical_plumbing",
+        "review_status": "draft",
+        "aliases": [
+            "dishwasher installation",
+            "dishwasher replacement",
+            "how to install a dishwasher",
+            "how to replace a dishwasher",
+            "install dishwasher",
+            "install a dishwasher",
+            "replace dishwasher",
+            "replace a dishwasher",
+            "replace my dishwasher",
+        ],
+        "source_clusters": ["Supplemental Appliance Alias"],
+        "source_rank_min": 0,
+        "kept_phrase_count": 9,
+        "removed_phrase_count_from_cluster": 0,
+    },
+    {
+        "walkthrough_id": "install-window",
+        "canonical_query": "how to install a window",
+        "title": "Install or Replace a Window",
+        "category": "doors_windows",
+        "safety_level": "standard",
+        "review_status": "draft",
+        "aliases": [
+            "add new window",
+            "correct way to put in a window",
+            "how to install a window",
+            "how to replace a window",
+            "install a new window",
+            "install a window",
+            "install new window",
+            "remove and replace old window",
+            "replace a window",
+            "replace old window",
+        ],
+        "source_clusters": ["Supplemental Window Alias"],
+        "source_rank_min": 0,
+        "kept_phrase_count": 10,
+        "removed_phrase_count_from_cluster": 0,
+    },
+    {
+        "walkthrough_id": "repair-leaky-faucet",
+        "canonical_query": "how to repair a leaky faucet",
+        "title": "Repair a Leaky Faucet",
+        "category": "plumbing",
+        "safety_level": "plumbing",
+        "review_status": "draft",
+        "aliases": [
+            "fix a faucet leak",
+            "fix a leaky faucet",
+            "how to fix a leaky faucet",
+            "how to repair a leaky faucet",
+            "repair a faucet leak",
+            "repair leaky faucet",
+            "stop a faucet leak",
+            "stop a leaking faucet",
+        ],
+        "source_clusters": ["Supplemental Plumbing Alias"],
+        "source_rank_min": 0,
+        "kept_phrase_count": 8,
+        "removed_phrase_count_from_cluster": 0,
+    }
+]
+
+
 ACTION_TERMS = re.compile(
     r"\b(how to|diy|step by step|install|replace|repair|fix|clean|paint|build|"
     r"remove|get rid|shingle|tile|insulate|add|use|vacuum|pour|seal|"
@@ -372,6 +445,12 @@ def build_outputs():
                 "removed_phrase_count_from_cluster": int(removed_counter[variants[0]["source_cluster"]]),
             }
         )
+
+    existing_taxonomy_ids = {item["walkthrough_id"] for item in taxonomy_entries}
+    for item in SUPPLEMENTAL_CANONICAL_ENTRIES:
+        if item["walkthrough_id"] not in existing_taxonomy_ids:
+            taxonomy_entries.append(item)
+            existing_taxonomy_ids.add(item["walkthrough_id"])
 
     data = {
         "summary": {

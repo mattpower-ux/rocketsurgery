@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-23T02:16:57Z",
+  "updated_at": "2026-08-23T02:29:08Z",
   "source": {
     "file": "edited_home_project_search_phrases.xlsx",
     "edited_by_user": true,
@@ -615,6 +615,78 @@
       ],
       "kept_phrase_count": 6,
       "removed_phrase_count_from_cluster": 8
+    },
+    "install-dishwasher": {
+      "walkthrough_id": "install-dishwasher",
+      "canonical_query": "how to install a dishwasher",
+      "title": "Install or Replace a Dishwasher",
+      "category": "appliances",
+      "safety_level": "electrical_plumbing",
+      "review_status": "draft",
+      "aliases": [
+        "dishwasher installation",
+        "dishwasher replacement",
+        "how to install a dishwasher",
+        "how to replace a dishwasher",
+        "install dishwasher",
+        "install a dishwasher",
+        "replace dishwasher",
+        "replace a dishwasher",
+        "replace my dishwasher"
+      ],
+      "source_clusters": [
+        "Supplemental Appliance Alias"
+      ],
+      "kept_phrase_count": 9,
+      "removed_phrase_count_from_cluster": 0
+    },
+    "install-window": {
+      "walkthrough_id": "install-window",
+      "canonical_query": "how to install a window",
+      "title": "Install or Replace a Window",
+      "category": "doors_windows",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "add new window",
+        "correct way to put in a window",
+        "how to install a window",
+        "how to replace a window",
+        "install a new window",
+        "install a window",
+        "install new window",
+        "remove and replace old window",
+        "replace a window",
+        "replace old window"
+      ],
+      "source_clusters": [
+        "Supplemental Window Alias"
+      ],
+      "kept_phrase_count": 10,
+      "removed_phrase_count_from_cluster": 0
+    },
+    "repair-leaky-faucet": {
+      "walkthrough_id": "repair-leaky-faucet",
+      "canonical_query": "how to repair a leaky faucet",
+      "title": "Repair a Leaky Faucet",
+      "category": "plumbing",
+      "safety_level": "plumbing",
+      "review_status": "draft",
+      "aliases": [
+        "fix a faucet leak",
+        "fix a leaky faucet",
+        "how to fix a leaky faucet",
+        "how to repair a leaky faucet",
+        "repair a faucet leak",
+        "repair leaky faucet",
+        "stop a faucet leak",
+        "stop a leaking faucet"
+      ],
+      "source_clusters": [
+        "Supplemental Plumbing Alias"
+      ],
+      "kept_phrase_count": 8,
+      "removed_phrase_count_from_cluster": 0
     }
   },
   "removed_phrase_examples": [
