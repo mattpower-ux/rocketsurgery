@@ -1811,6 +1811,69 @@ function App() {
   }
 
 
+  async function adoptApprovedMatch(walkthroughId) {
+    const draft = qcWalkthroughs[walkthroughId];
+    if (!draft) {
+      setAdminMessage("Open the draft before adopting an approved match.");
+      return;
+    }
+
+    const token = getAdminToken("adopt an approved walkthrough match");
+    if (!token) {
+      setAdminMessage("Approved match adoption cancelled. No admin token was entered.");
+      return;
+    }
+
+    setQcSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/admin/qc/adopt-approved-match`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        body: JSON.stringify({
+          walkthrough_id: walkthroughId,
+          walkthrough: draft
+        })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        clearAdminToken();
+        throw new Error(data.detail || data.error || "Could not adopt approved match.");
+      }
+
+      if (data.status !== "matched" || !data.walkthrough) {
+        throw new Error(data.message || "No approved equivalent walkthrough was found.");
+      }
+
+      setQcWalkthroughs((previous) => ({
+        ...previous,
+        [walkthroughId]: JSON.parse(JSON.stringify(data.walkthrough))
+      }));
+      setQcChanges((previous) => ({
+        ...previous,
+        [walkthroughId]: {
+          ...(previous[walkthroughId] || {}),
+          action: previous[walkthroughId]?.action || "save",
+          steps: data.walkthrough.steps || [],
+          title: data.walkthrough.title,
+          query: data.walkthrough.query
+        }
+      }));
+      setAdminMessage(
+        `Copied ${data.step_count || 0} steps and ${data.image_count || 0} image(s) from approved walkthrough "${data.approved_title || data.approved_walkthrough_id}". Review, then Save All or Stage Approve.`
+      );
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Approved match adoption failed: ${error.message}`);
+    } finally {
+      setQcSaving(false);
+    }
+  }
+
+
   function renumberQcSteps(steps) {
     return (steps || []).map((step, idx) => ({ ...step, id: idx + 1 }));
   }
@@ -2614,6 +2677,15 @@ function App() {
                                   <span>{draft.quality_status || "unvalidated"} · storage id: {draft.walkthrough_id}</span>
                                 </div>
                                 <div className="qcActions">
+                                  {status !== "approved" && (
+                                    <button
+                                      className="secondaryButton"
+                                      onClick={() => adoptApprovedMatch(walkthroughId)}
+                                      disabled={qcSaving}
+                                    >
+                                      Use Approved Match
+                                    </button>
+                                  )}
                                   <button
                                     className="secondaryButton"
                                     onClick={() => stageQcChange(walkthroughId, "save", draft.steps || [], item.title)}

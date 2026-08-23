@@ -371,6 +371,11 @@ class GenerateQcStepImageRequest(BaseModel):
     image_direction: str = ""
 
 
+class AdoptApprovedMatchRequest(BaseModel):
+    walkthrough_id: str
+    walkthrough: dict = Field(default_factory=dict)
+
+
 class AcceptStepImageRequest(BaseModel):
     walkthrough_id: str
     step_id: int
@@ -2655,6 +2660,66 @@ def post_qc_mark_all_drafts(_: None = Depends(require_admin_token)):
         "skipped_count": len(skipped),
         "updated": updated,
         "skipped": skipped,
+    }
+
+
+@app.post("/admin/qc/adopt-approved-match")
+def post_qc_adopt_approved_match(request: AdoptApprovedMatchRequest, _: None = Depends(require_admin_token)):
+    requested_id = request.walkthrough_id
+    walkthrough_id = resolve_walkthrough_storage_id(requested_id)
+    stored_manifest = load_walkthrough_by_id(walkthrough_id) or {}
+    candidate_manifest = dict(request.walkthrough or stored_manifest or {})
+
+    if not candidate_manifest:
+        return {
+            "status": "not_found",
+            "walkthrough_id": walkthrough_id,
+        }
+
+    candidate_manifest["walkthrough_id"] = candidate_manifest.get("walkthrough_id") or walkthrough_id
+    duplicate_id = find_approved_duplicate_for_manifest(
+        candidate_manifest,
+        exclude_walkthrough_id=walkthrough_id,
+    )
+
+    if not duplicate_id:
+        return {
+            "status": "no_match",
+            "walkthrough_id": walkthrough_id,
+            "message": "No approved equivalent walkthrough was found.",
+        }
+
+    approved_manifest = load_walkthrough_by_id(duplicate_id) or {}
+    if not approved_manifest:
+        return {
+            "status": "not_found",
+            "walkthrough_id": walkthrough_id,
+            "approved_walkthrough_id": duplicate_id,
+        }
+
+    adopted = json.loads(json.dumps(candidate_manifest))
+    adopted["steps"] = json.loads(json.dumps(approved_manifest.get("steps", []) or []))
+    for index, step in enumerate(adopted.get("steps", []) or [], start=1):
+        step["id"] = index
+    adopted["adopted_from_walkthrough_id"] = duplicate_id
+    adopted["adopted_from_title"] = approved_manifest.get("title", duplicate_id)
+    adopted["quality_status"] = "matched_approved_walkthrough"
+    adopted["source_approved_at"] = approved_manifest.get("approved_at", "")
+    add_manifest_alias(adopted, approved_manifest.get("query", ""))
+    add_manifest_alias(adopted, approved_manifest.get("title", ""))
+
+    return {
+        "status": "matched",
+        "walkthrough_id": walkthrough_id,
+        "approved_walkthrough_id": duplicate_id,
+        "approved_title": approved_manifest.get("title", duplicate_id),
+        "approved_query": approved_manifest.get("query", ""),
+        "step_count": len(adopted.get("steps", []) or []),
+        "image_count": len([
+            step for step in adopted.get("steps", []) or []
+            if step.get("imageUrl")
+        ]),
+        "walkthrough": adopted,
     }
 
 
