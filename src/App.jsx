@@ -1535,7 +1535,7 @@ function App() {
   }
 
 
-  function stageQcChange(walkthroughId, action, steps = null) {
+  function stageQcChange(walkthroughId, action, steps = null, title = "") {
     setQcChanges((previous) => {
       const existing = previous[walkthroughId] || {};
       return {
@@ -1547,6 +1547,12 @@ function App() {
         }
       };
     });
+    const labels = {
+      approve: "Approval staged",
+      save: "Save staged",
+      delete: "Delete staged"
+    };
+    setAdminMessage(`${labels[action] || "Change staged"} for ${title || walkthroughId}. Click Save All to apply it.`);
   }
 
 
@@ -2114,6 +2120,13 @@ function App() {
                   const draft = qcWalkthroughs[walkthroughId];
                   const staged = qcChanges[walkthroughId]?.action || "";
                   const status = reviewStatusFor(item);
+                  const stagedLabel = staged === "approve"
+                    ? "Approval staged"
+                    : staged === "save"
+                      ? "Save staged"
+                      : staged === "delete"
+                        ? "Delete staged"
+                        : "";
 
                   return (
                     <div key={`qc-${walkthroughId}`} className={`qcRow ${expanded ? "qcRowOpen" : ""}`}>
@@ -2148,26 +2161,36 @@ function App() {
                                 <div className="qcActions">
                                   <button
                                     className="secondaryButton"
-                                    onClick={() => stageQcChange(walkthroughId, "save", draft.steps || [])}
+                                    onClick={() => stageQcChange(walkthroughId, "save", draft.steps || [], item.title)}
                                   >
-                                    Stage Save
+                                    {staged === "save" ? "Save Staged" : "Stage Save"}
                                   </button>
                                   <button
                                     className="doneButton"
-                                    onClick={() => stageQcChange(walkthroughId, "approve", draft.steps || [])}
+                                    onClick={() => stageQcChange(walkthroughId, "approve", draft.steps || [], item.title)}
                                   >
-                                    Approve
+                                    {staged === "approve" ? "Approval Staged" : "Stage Approve"}
                                   </button>
                                   {status !== "approved" && (
                                     <button
                                       className="secondaryButton dangerButton"
-                                      onClick={() => stageQcChange(walkthroughId, "delete", draft.steps || [])}
+                                      onClick={() => stageQcChange(walkthroughId, "delete", draft.steps || [], item.title)}
                                     >
-                                      Delete
+                                      {staged === "delete" ? "Delete Staged" : "Stage Delete"}
                                     </button>
                                   )}
                                 </div>
                               </div>
+
+                              {stagedLabel && (
+                                <div className="qcNotice qcNoticeStaged">
+                                  <strong>{stagedLabel}.</strong>
+                                  <span>Click Save All to apply this change to persistent storage.</span>
+                                  <button className="startButton compactButton" onClick={saveAllQcChanges} disabled={qcSaving}>
+                                    {qcSaving ? "Saving..." : `Save All (${Object.keys(qcChanges).length})`}
+                                  </button>
+                                </div>
+                              )}
 
                               {draft.step_sequence_validation?.issues?.length ? (
                                 <div className="qcNotice">

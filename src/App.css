@@ -905,6 +905,21 @@ body {
   font-weight: 700;
 }
 
+.qcNoticeStaged {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.qcNoticeStaged span {
+  color: #166534;
+  font-size: 13px;
+}
+
 .qcStepList {
   display: grid;
   gap: 6px;
@@ -997,7 +1012,8 @@ body {
   }
 
   .qcToolbar,
-  .qcExpandedHeader {
+  .qcExpandedHeader,
+  .qcNoticeStaged {
     display: grid;
   }
 
