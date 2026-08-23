@@ -1585,6 +1585,84 @@ function App() {
   }
 
 
+  function updateQcStep(walkthroughId, stepId, field, value) {
+    const draft = qcWalkthroughs[walkthroughId];
+    if (!draft?.steps?.length) {
+      return;
+    }
+
+    const updatedSteps = (draft.steps || []).map((step) => (
+      Number(step.id) === Number(stepId)
+        ? { ...step, [field]: value }
+        : step
+    ));
+
+    setQcWalkthroughs((previous) => ({
+      ...previous,
+      [walkthroughId]: {
+        ...draft,
+        steps: updatedSteps
+      }
+    }));
+    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", updatedSteps);
+  }
+
+
+  function addQcStepAfter(walkthroughId, stepId = null) {
+    const draft = qcWalkthroughs[walkthroughId];
+    if (!draft) {
+      return;
+    }
+
+    const steps = [...(draft.steps || [])];
+    const foundIndex = stepId == null
+      ? -1
+      : steps.findIndex((step) => Number(step.id) === Number(stepId));
+    const insertIndex = foundIndex < 0 ? steps.length : foundIndex + 1;
+    const templateNumber = insertIndex + 1;
+    const newStep = {
+      id: templateNumber,
+      imageLabel: `Step ${templateNumber}: New step`,
+      instruction: `Step ${templateNumber}: New step`,
+      detail: "Describe the missing action here.",
+      imagePrompt: ""
+    };
+
+    steps.splice(insertIndex, 0, newStep);
+    const renumbered = steps.map((step, idx) => ({ ...step, id: idx + 1 }));
+
+    setQcWalkthroughs((previous) => ({
+      ...previous,
+      [walkthroughId]: {
+        ...draft,
+        steps: renumbered
+      }
+    }));
+    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", renumbered);
+  }
+
+
+  function deleteQcStep(walkthroughId, stepId) {
+    const draft = qcWalkthroughs[walkthroughId];
+    if (!draft?.steps?.length) {
+      return;
+    }
+
+    const renumbered = (draft.steps || [])
+      .filter((step) => Number(step.id) !== Number(stepId))
+      .map((step, idx) => ({ ...step, id: idx + 1 }));
+
+    setQcWalkthroughs((previous) => ({
+      ...previous,
+      [walkthroughId]: {
+        ...draft,
+        steps: renumbered
+      }
+    }));
+    stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", renumbered);
+  }
+
+
   async function saveAllQcChanges() {
     const actions = Object.entries(qcChanges)
       .filter(([, change]) => change?.action)
@@ -2204,16 +2282,37 @@ function App() {
                                 {(draft.steps || []).map((step, index) => (
                                   <div key={`qc-step-${walkthroughId}-${step.id}-${index}`} className="qcStep">
                                     <div className="qcStepNumber">{index + 1}</div>
-                                    <div>
-                                      <strong>{displayText(step.imageLabel || step.instruction, 90)}</strong>
-                                      <p>{displayText(step.detail || step.instruction, 180)}</p>
+                                    <div className="qcStepEditor">
+                                      <input
+                                        className="qcStepInput"
+                                        value={step.imageLabel || ""}
+                                        onChange={(event) => updateQcStep(walkthroughId, step.id, "imageLabel", event.target.value)}
+                                        placeholder="Step label"
+                                      />
+                                      <input
+                                        className="qcStepInput"
+                                        value={step.instruction || ""}
+                                        onChange={(event) => updateQcStep(walkthroughId, step.id, "instruction", event.target.value)}
+                                        placeholder="Instruction"
+                                      />
+                                      <textarea
+                                        className="qcStepTextarea"
+                                        value={step.detail || ""}
+                                        onChange={(event) => updateQcStep(walkthroughId, step.id, "detail", event.target.value)}
+                                        placeholder="Step detail"
+                                      />
                                     </div>
                                     <div className="qcStepActions">
                                       <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, step.id, -1)} disabled={index === 0}>↑</button>
                                       <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, step.id, 1)} disabled={index === (draft.steps || []).length - 1}>↓</button>
+                                      <button className="secondaryButton" onClick={() => addQcStepAfter(walkthroughId, step.id)}>+ Step</button>
+                                      <button className="secondaryButton dangerButton" onClick={() => deleteQcStep(walkthroughId, step.id)} disabled={(draft.steps || []).length <= 1}>Delete</button>
                                     </div>
                                   </div>
                                 ))}
+                                <button className="secondaryButton qcAddStepButton" onClick={() => addQcStepAfter(walkthroughId)}>
+                                  + Add Step At End
+                                </button>
                               </div>
                             </>
                           ) : (

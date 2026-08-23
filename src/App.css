@@ -890,6 +890,16 @@ body {
   flex-wrap: wrap;
 }
 
+.qcStepActions {
+  justify-content: flex-end;
+}
+
+.qcStepActions .secondaryButton {
+  padding: 9px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
 .dangerButton {
   border-color: #fca5a5;
   color: #991b1b;
@@ -928,7 +938,7 @@ body {
 .qcStep {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 10px;
   padding: 8px;
   border: 1px solid #e5e7eb;
@@ -947,6 +957,40 @@ body {
   color: white;
   font-weight: 900;
   font-size: 12px;
+}
+
+.qcStepEditor {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.qcStepInput,
+.qcStepTextarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  background: white;
+}
+
+.qcStepInput {
+  min-height: 36px;
+  font-weight: 800;
+}
+
+.qcStepTextarea {
+  min-height: 54px;
+  resize: vertical;
+  line-height: 1.3;
+}
+
+.qcAddStepButton {
+  justify-self: start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
 }
 
 .qcStep p {
@@ -1032,6 +1076,7 @@ body {
 
   .qcStepActions {
     grid-column: 2;
+    justify-content: flex-start;
   }
 
   .clarifyActions {
