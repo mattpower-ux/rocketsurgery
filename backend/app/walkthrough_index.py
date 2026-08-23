@@ -486,19 +486,35 @@ def find_walkthrough_id_for_query(query: str) -> str:
     index = load_index()
     records = index.get("walkthroughs", {})
 
+    def record_rank(record: dict) -> int:
+        status = str(record.get("review_status") or "").lower()
+        if status == "approved":
+            return 3
+        if status in ["edited", "saved"]:
+            return 2
+        if status in ["deleted", "deprecated"]:
+            return 0
+        return 1
+
+    exact_matches = []
     for walkthrough_id, record in records.items():
         if record.get("review_status") in ["deleted", "deprecated"]:
             continue
         aliases = record.get("aliases", []) or []
         if normalized_query in aliases:
-            return walkthrough_id
+            exact_matches.append((record_rank(record), walkthrough_id))
+
+    if exact_matches:
+        exact_matches.sort(reverse=True)
+        return exact_matches[0][1]
 
     query_terms = set(normalized_query.split())
     if len(query_terms) < 2:
         return ""
 
     best_id = ""
-    best_score = 0
+    best_ranked_score = 0
+    best_raw_score = 0
 
     for walkthrough_id, record in records.items():
         if record.get("review_status") in ["deleted", "deprecated"]:
@@ -506,8 +522,41 @@ def find_walkthrough_id_for_query(query: str) -> str:
         aliases = record.get("aliases", []) or []
         for alias in aliases:
             score = alias_similarity(normalized_query, alias)
-            if score > best_score:
+            ranked_score = score + (record_rank(record) * 0.01)
+            if ranked_score > best_ranked_score:
                 best_id = walkthrough_id
-                best_score = score
+                best_ranked_score = ranked_score
+                best_raw_score = score
+
+    return best_id if best_raw_score >= 0.72 else ""
+
+
+def find_approved_duplicate_for_manifest(manifest: dict, exclude_walkthrough_id: str = "") -> str:
+    source_aliases = set(build_aliases(manifest))
+    if not source_aliases:
+        return ""
+
+    index = load_index()
+    best_id = ""
+    best_score = 0
+    source_taxonomy = find_taxonomy_match_for_manifest(
+        manifest,
+        manifest.get("walkthrough_id") or exclude_walkthrough_id
+    ).get("taxonomy_walkthrough_id", "")
+
+    for walkthrough_id, record in index.get("walkthroughs", {}).items():
+        if walkthrough_id == exclude_walkthrough_id:
+            continue
+        if str(record.get("review_status") or "").lower() != "approved":
+            continue
+
+        record_taxonomy = record.get("taxonomy_walkthrough_id", "")
+        if source_taxonomy and record_taxonomy and source_taxonomy == record_taxonomy:
+            return walkthrough_id
+
+        score = match_score(source_aliases, set(record.get("aliases", []) or []))
+        if score > best_score:
+            best_id = walkthrough_id
+            best_score = score
 
     return best_id if best_score >= 0.72 else ""

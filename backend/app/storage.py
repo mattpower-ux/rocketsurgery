@@ -139,15 +139,25 @@ def load_walkthrough(query: str):
     walkthrough_id = query_to_walkthrough_id(query)
     path = walkthrough_path(walkthrough_id)
 
-    if not path.exists():
-        try:
-            from app.walkthrough_index import find_walkthrough_id_for_query
-        except ImportError:
-            from walkthrough_index import find_walkthrough_id_for_query
+    try:
+        from app.walkthrough_index import find_walkthrough_id_for_query
+    except ImportError:
+        from walkthrough_index import find_walkthrough_id_for_query
 
-        indexed_id = find_walkthrough_id_for_query(query)
-        if indexed_id:
-            path = walkthrough_path(indexed_id)
+    indexed_id = find_walkthrough_id_for_query(query)
+    if indexed_id:
+        indexed_path = walkthrough_path(indexed_id)
+        if indexed_path.exists():
+            use_indexed_path = not path.exists()
+            if not use_indexed_path:
+                try:
+                    with indexed_path.open("r", encoding="utf-8") as f:
+                        indexed_manifest = json.load(f)
+                    use_indexed_path = indexed_manifest.get("review_status") == "approved"
+                except Exception:
+                    use_indexed_path = False
+            if use_indexed_path:
+                path = indexed_path
 
     if not path.exists():
         return None

@@ -2077,7 +2077,8 @@ function App() {
       setQcWalkthroughs({});
       setQcExpandedId("");
       const deletedCount = (data.results || []).filter((item) => item.status === "deleted").length;
-      setAdminMessage(`QC saved: ${data.processed_count || 0} item(s) updated. Deleted: ${deletedCount}.`);
+      const mergedCount = (data.results || []).filter((item) => item.status === "merged_duplicate").length;
+      setAdminMessage(`QC saved: ${data.processed_count || 0} item(s) updated. Merged duplicates: ${mergedCount}. Deleted: ${deletedCount}.`);
       loadAdminWalkthroughs();
       loadBuildStatus();
     } catch (error) {

@@ -165,11 +165,13 @@ except ImportError:
 
 try:
     from app.walkthrough_index import (
+        find_approved_duplicate_for_manifest,
         rebuild_walkthrough_index_from_storage,
         walkthrough_library,
     )
 except ImportError:
     from walkthrough_index import (
+        find_approved_duplicate_for_manifest,
         rebuild_walkthrough_index_from_storage,
         walkthrough_library,
     )
@@ -2459,6 +2461,64 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
             }
 
         if action == "approve":
+            duplicate_id = find_approved_duplicate_for_manifest(
+                manifest,
+                exclude_walkthrough_id=walkthrough_id
+            )
+            if duplicate_id:
+                canonical_manifest = load_walkthrough_by_id(duplicate_id) or {}
+                for alias_value in [
+                    requested_walkthrough_id,
+                    walkthrough_id,
+                    before_manifest.get("title", ""),
+                    before_manifest.get("query", ""),
+                    manifest.get("title", ""),
+                    manifest.get("query", ""),
+                    *(before_manifest.get("aliases", []) or []),
+                    *(manifest.get("aliases", []) or []),
+                ]:
+                    add_manifest_alias(canonical_manifest, alias_value)
+
+                canonical_manifest["version"] = int(canonical_manifest.get("version", 1)) + 1
+                canonical_manifest["alias_updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                save_walkthrough(duplicate_id, canonical_manifest)
+
+                manifest["review_status"] = "deprecated"
+                manifest["quality_status"] = "merged_with_approved_walkthrough"
+                manifest["duplicate_of_walkthrough_id"] = duplicate_id
+                manifest["deprecated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                manifest["version"] = int(manifest.get("version", 1)) + 1
+                save_walkthrough(walkthrough_id, manifest)
+
+                log_editor_decision({
+                    "action": "qc_merged_duplicate",
+                    "walkthrough_id": walkthrough_id,
+                    "canonical_walkthrough_id": duplicate_id,
+                    "review_status": manifest.get("review_status", ""),
+                    "quality_status": manifest.get("quality_status", ""),
+                    "step_count": len(manifest.get("steps", []) or []),
+                })
+                walkthrough_edit_example(
+                    "qc_merged_duplicate",
+                    before_manifest,
+                    canonical_manifest,
+                    {
+                        "source": "step_order_quality_control",
+                        "requested_walkthrough_id": requested_walkthrough_id,
+                        "canonical_walkthrough_id": duplicate_id,
+                    }
+                )
+                results.append({
+                    "walkthrough_id": duplicate_id,
+                    "deprecated_walkthrough_id": walkthrough_id,
+                    "requested_walkthrough_id": requested_walkthrough_id,
+                    "status": "merged_duplicate",
+                    "review_status": canonical_manifest.get("review_status"),
+                    "quality_status": canonical_manifest.get("quality_status"),
+                    "message": "Matched an existing approved walkthrough; added this phrasing as an alias and deprecated the duplicate draft.",
+                })
+                continue
+
             manifest["review_status"] = "approved"
             manifest["quality_status"] = "approved_for_next_stage"
             manifest["next_stage"] = "product_specific_overlay"
@@ -2553,7 +2613,7 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
 
     return {
         "status": "saved",
-        "processed_count": len([item for item in results if item.get("status") in ["approved", "deleted", "saved"]]),
+        "processed_count": len([item for item in results if item.get("status") in ["approved", "deleted", "saved", "merged_duplicate"]]),
         "results": results,
     }
 
