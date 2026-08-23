@@ -185,7 +185,8 @@ def save_walkthrough(walkthrough_id: str, manifest: dict):
 def delete_walkthrough(walkthrough_id: str) -> dict:
     ensure_storage()
 
-    safe_id = slugify(walkthrough_id or "")
+    requested_id = walkthrough_id or ""
+    safe_id = resolve_walkthrough_storage_id(requested_id)
     folder = WALKTHROUGHS_DIR / safe_id
     root = WALKTHROUGHS_DIR.resolve()
     target = folder.resolve()
@@ -204,18 +205,52 @@ def delete_walkthrough(walkthrough_id: str) -> dict:
         from walkthrough_index import remove_walkthrough_from_index
 
     remove_walkthrough_from_index(safe_id)
+    requested_slug = slugify(requested_id)
+    if requested_slug != safe_id:
+        remove_walkthrough_from_index(requested_slug)
 
     return {
         "walkthrough_id": safe_id,
+        "requested_walkthrough_id": requested_id,
         "deleted": deleted,
         "path": str(target),
     }
 
 
+def resolve_walkthrough_storage_id(walkthrough_id: str) -> str:
+    """Resolve a manifest or display id to the actual on-disk folder id."""
+    ensure_storage()
+    requested_id = str(walkthrough_id or "").strip()
+    safe_id = slugify(requested_id)
+
+    if walkthrough_path(safe_id).exists():
+        return safe_id
+
+    for manifest_path in WALKTHROUGHS_DIR.glob("*/manifest.json"):
+        folder_id = manifest_path.parent.name
+        if folder_id == requested_id or folder_id == safe_id:
+            return folder_id
+
+        try:
+            with manifest_path.open("r", encoding="utf-8") as f:
+                manifest = json.load(f)
+        except Exception:
+            continue
+
+        manifest_id = str(manifest.get("walkthrough_id") or "").strip()
+        title = str(manifest.get("title") or "").strip()
+        if manifest_id == requested_id or slugify(manifest_id) == safe_id:
+            return folder_id
+        if title == requested_id or slugify(title) == safe_id:
+            return folder_id
+
+    return safe_id
+
+
 def load_walkthrough_by_id(walkthrough_id: str):
     """Load a walkthrough manifest directly by its stored walkthrough_id."""
     ensure_storage()
-    safe_id = slugify(walkthrough_id or "")
+    safe_id = resolve_walkthrough_storage_id(walkthrough_id)
     path = walkthrough_path(safe_id)
 
     if not path.exists():
@@ -240,6 +275,7 @@ def list_walkthrough_manifests(limit: int = 250):
 
             items.append({
                 "walkthrough_id": manifest.get("walkthrough_id") or manifest_path.parent.name,
+                "storage_walkthrough_id": manifest_path.parent.name,
                 "title": manifest.get("title", manifest_path.parent.name),
                 "review_status": manifest.get("review_status", "draft"),
                 "quality_status": manifest.get("quality_status", "unvalidated"),
@@ -254,6 +290,7 @@ def list_walkthrough_manifests(limit: int = 250):
         except Exception as e:
             items.append({
                 "walkthrough_id": manifest_path.parent.name,
+                "storage_walkthrough_id": manifest_path.parent.name,
                 "title": manifest_path.parent.name,
                 "step_count": 0,
                 "modified_at": 0,

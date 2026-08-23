@@ -500,7 +500,6 @@ function App() {
 
   async function loadAdminStatus() {
     setAdminLoading(true);
-    setRegeneratingStepId(stepId);
 
     try {
       const response = await fetch(`${API_URL}/admin/status`);
@@ -1368,6 +1367,11 @@ function App() {
   }
 
 
+  function qcItemId(item) {
+    return item?.storage_walkthrough_id || item?.walkthrough_id || "";
+  }
+
+
   function isDraftQcItem(item) {
     const status = reviewStatusFor(item);
     return !["approved", "deleted", "deprecated"].includes(status);
@@ -1376,7 +1380,7 @@ function App() {
 
   function qcListItems() {
     return (walkthroughList || []).filter((item) => {
-      if (qcChanges[item.walkthrough_id]?.action === "delete") {
+      if (qcChanges[qcItemId(item)]?.action === "delete") {
         return false;
       }
 
@@ -1555,7 +1559,10 @@ function App() {
         throw new Error(result.message || `Walkthrough was not deleted. Status: ${result.status || "unknown"}.`);
       }
 
-      setWalkthroughList((previous) => previous.filter((item) => item.walkthrough_id !== walkthroughId));
+      setWalkthroughList((previous) => previous.filter((item) => {
+        const itemId = qcItemId(item);
+        return itemId !== walkthroughId && item.walkthrough_id !== walkthroughId;
+      }));
       setQcChanges((previous) => {
         const next = { ...previous };
         delete next[walkthroughId];
@@ -1982,7 +1989,7 @@ function App() {
 
               <div className="qcList">
                 {qcListItems().map((item) => {
-                  const walkthroughId = item.walkthrough_id;
+                  const walkthroughId = qcItemId(item);
                   const expanded = qcExpandedId === walkthroughId;
                   const draft = qcWalkthroughs[walkthroughId];
                   const staged = qcChanges[walkthroughId]?.action || "";
@@ -2106,14 +2113,14 @@ function App() {
               <div style={{ display: "grid", gap: "8px", alignContent: "start", maxHeight: "720px", overflow: "auto" }}>
                 {(walkthroughList || []).slice(0, 120).map((item) => (
                   <button
-                    key={item.walkthrough_id}
+                    key={qcItemId(item)}
                     className="secondaryButton"
                     style={{
                       textAlign: "left",
                       borderColor: editorDraft?.walkthrough_id === item.walkthrough_id ? "#111827" : undefined,
                       background: editorDraft?.walkthrough_id === item.walkthrough_id ? "#eef2ff" : undefined
                     }}
-                    onClick={() => loadAdminWalkthrough(item.walkthrough_id)}
+                    onClick={() => loadAdminWalkthrough(qcItemId(item))}
                     disabled={adminLoading}
                   >
                     <strong>{displayText(item.title, 70)}</strong>

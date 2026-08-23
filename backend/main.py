@@ -23,6 +23,7 @@ try:
         load_walkthrough,
         save_walkthrough,
         delete_walkthrough,
+        resolve_walkthrough_storage_id,
         load_walkthrough_by_id,
         list_walkthrough_manifests,
         slugify
@@ -34,6 +35,7 @@ except ImportError:
         load_walkthrough,
         save_walkthrough,
         delete_walkthrough,
+        resolve_walkthrough_storage_id,
         load_walkthrough_by_id,
         list_walkthrough_manifests,
         slugify
@@ -2214,11 +2216,13 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
     results = []
 
     for item in request.actions:
-        walkthrough_id = slugify(item.walkthrough_id)
+        requested_walkthrough_id = item.walkthrough_id
+        walkthrough_id = resolve_walkthrough_storage_id(requested_walkthrough_id)
         manifest = load_walkthrough_by_id(walkthrough_id)
         if not manifest:
             results.append({
                 "walkthrough_id": walkthrough_id,
+                "requested_walkthrough_id": requested_walkthrough_id,
                 "status": "not_found",
             })
             continue
@@ -2247,6 +2251,7 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
             if current_status == "approved":
                 results.append({
                     "walkthrough_id": walkthrough_id,
+                    "requested_walkthrough_id": requested_walkthrough_id,
                     "status": "skipped",
                     "message": "Approved walkthroughs cannot be deleted from QC."
                 })
@@ -2262,6 +2267,7 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
             })
             results.append({
                 "walkthrough_id": walkthrough_id,
+                "requested_walkthrough_id": requested_walkthrough_id,
                 "status": "deleted",
                 "deleted": deletion.get("deleted", False),
             })
@@ -2274,6 +2280,7 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
         else:
             results.append({
                 "walkthrough_id": walkthrough_id,
+                "requested_walkthrough_id": requested_walkthrough_id,
                 "status": "skipped",
                 "message": f"Unknown QC action: {item.action}"
             })
@@ -2291,6 +2298,7 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
         })
         results.append({
             "walkthrough_id": walkthrough_id,
+            "requested_walkthrough_id": requested_walkthrough_id,
             "status": result_status,
             "review_status": manifest.get("review_status"),
             "quality_status": manifest.get("quality_status"),
