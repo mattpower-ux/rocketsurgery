@@ -167,6 +167,11 @@ except ImportError:
     from taxonomy_router import classify_taxonomy_query
 
 try:
+    from app.taxonomy_edits import record_query_alias_candidate
+except ImportError:
+    from taxonomy_edits import record_query_alias_candidate
+
+try:
     from app.image_generator import generate_step_image
 except ImportError:
     from image_generator import generate_step_image
@@ -298,6 +303,8 @@ class QcWalkthroughAction(BaseModel):
     walkthrough_id: str
     action: str
     steps: list[dict] = []
+    title: str | None = None
+    query: str | None = None
 
 
 class QcSaveAllRequest(BaseModel):
@@ -448,6 +455,21 @@ def log_editor_decision(payload: dict):
         append_jsonl(EDITOR_DECISIONS_FILE, record)
     except Exception as exc:
         print("Editor decision write failed:", exc)
+
+
+def add_manifest_alias(manifest: dict, alias: str):
+    value = (alias or "").strip()
+    if not value:
+        return
+
+    aliases = manifest.setdefault("aliases", [])
+    normalized_existing = {
+        re.sub(r"\s+", " ", str(item or "").lower()).strip()
+        for item in aliases
+    }
+    normalized_value = re.sub(r"\s+", " ", value.lower()).strip()
+    if normalized_value not in normalized_existing:
+        aliases.append(value)
 
 
 def require_admin_token(x_admin_token: str = Header(default="")):
@@ -2306,6 +2328,13 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
         action = (item.action or "").lower().strip()
         current_status = manifest.get("review_status", "draft")
 
+        if item.title is not None:
+            manifest["title"] = item.title.strip()
+        if item.query is not None:
+            add_manifest_alias(manifest, manifest.get("query", ""))
+            manifest["query"] = item.query.strip()
+            add_manifest_alias(manifest, manifest["query"])
+
         if item.steps:
             manifest["steps"] = item.steps
             for index, step in enumerate(manifest.get("steps", []) or [], start=1):
@@ -2375,12 +2404,21 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
         manifest["version"] = int(manifest.get("version", 1)) + 1
         manifest["qc_updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         save_walkthrough(walkthrough_id, manifest)
+        alias_candidate = None
+        if item.query is not None:
+            alias_candidate = record_query_alias_candidate(
+                walkthrough_id,
+                before_manifest,
+                manifest,
+                "step_order_quality_control",
+            )
         log_editor_decision({
             "action": f"qc_{result_status}",
             "walkthrough_id": walkthrough_id,
             "review_status": manifest.get("review_status", ""),
             "quality_status": manifest.get("quality_status", ""),
             "step_count": len(manifest.get("steps", []) or []),
+            "query_alias_candidate_id": (alias_candidate or {}).get("id", ""),
         })
         walkthrough_edit_example(
             f"qc_{result_status}",
@@ -2390,6 +2428,7 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
                 "source": "step_order_quality_control",
                 "requested_walkthrough_id": requested_walkthrough_id,
                 "submitted_step_count": len(item.steps or []),
+                "query_alias_candidate_id": (alias_candidate or {}).get("id", ""),
             }
         )
         results.append({

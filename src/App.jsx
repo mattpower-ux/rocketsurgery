@@ -1556,6 +1556,38 @@ function App() {
   }
 
 
+  function updateQcMetadata(walkthroughId, field, value) {
+    const draft = qcWalkthroughs[walkthroughId];
+    if (!draft) {
+      return;
+    }
+
+    const updatedDraft = {
+      ...draft,
+      [field]: value
+    };
+
+    setQcWalkthroughs((previous) => ({
+      ...previous,
+      [walkthroughId]: updatedDraft
+    }));
+    setQcChanges((previous) => {
+      const existing = previous[walkthroughId] || {};
+      return {
+        ...previous,
+        [walkthroughId]: {
+          ...existing,
+          action: existing.action || "save",
+          steps: existing.steps || updatedDraft.steps || [],
+          title: field === "title" ? value : existing.title,
+          query: field === "query" ? value : existing.query
+        }
+      };
+    });
+    setAdminMessage(`Metadata edit staged for ${updatedDraft.title || walkthroughId}. Click Save All to apply it.`);
+  }
+
+
   function moveQcStep(walkthroughId, stepId, direction) {
     const draft = qcWalkthroughs[walkthroughId];
     if (!draft?.steps?.length) {
@@ -1669,7 +1701,9 @@ function App() {
       .map(([walkthroughId, change]) => ({
         walkthrough_id: walkthroughId,
         action: change.action,
-        steps: change.steps || qcWalkthroughs[walkthroughId]?.steps || []
+        steps: change.steps || qcWalkthroughs[walkthroughId]?.steps || [],
+        title: change.title ?? qcWalkthroughs[walkthroughId]?.title,
+        query: change.query ?? qcWalkthroughs[walkthroughId]?.query
       }));
 
     if (!actions.length) {
@@ -2258,6 +2292,27 @@ function App() {
                                     </button>
                                   )}
                                 </div>
+                              </div>
+
+                              <div className="qcMetadataEditor">
+                                <label>
+                                  <span>Title shown in admin</span>
+                                  <input
+                                    className="qcStepInput"
+                                    value={draft.title || ""}
+                                    onChange={(event) => updateQcMetadata(walkthroughId, "title", event.target.value)}
+                                    placeholder="Clear walkthrough title"
+                                  />
+                                </label>
+                                <label>
+                                  <span>Query this walkthrough should answer</span>
+                                  <input
+                                    className="qcStepInput"
+                                    value={draft.query || ""}
+                                    onChange={(event) => updateQcMetadata(walkthroughId, "query", event.target.value)}
+                                    placeholder="Example: install a refrigerator icemaker water line"
+                                  />
+                                </label>
                               </div>
 
                               {stagedLabel && (
