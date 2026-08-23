@@ -1,0 +1,1597 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-08-23T02:16:57Z",
+  "source": {
+    "file": "edited_home_project_search_phrases.xlsx",
+    "edited_by_user": true,
+    "rule": "Keep only phrases that directly trigger an actionable how-to walkthrough; group variants under one canonical walkthrough ID."
+  },
+  "walkthroughs": {
+    "add-circuit-to-electrical-panel": {
+      "walkthrough_id": "add-circuit-to-electrical-panel",
+      "canonical_query": "how to add a circuit to an electrical panel",
+      "title": "Add a Circuit to an Electrical Panel",
+      "category": "electrical",
+      "safety_level": "licensed_or_high_risk",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to add a circuit to an electrical panel",
+        "add a circuit to an electrical panel step by step",
+        "best way to add a circuit to an electrical panel",
+        "can I add a circuit to an electrical panel myself",
+        "how to add a circuit to an electrical panel"
+      ],
+      "source_clusters": [
+        "Adding a Panel Circuit"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 9
+    },
+    "apply-spray-foam-insulation": {
+      "walkthrough_id": "apply-spray-foam-insulation",
+      "canonical_query": "how to use spray foam insulation",
+      "title": "Apply Spray Foam Insulation",
+      "category": "insulation_energy",
+      "safety_level": "ppe_required",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to use spray foam insulation",
+        "best way to use spray foam insulation",
+        "can I use spray foam insulation myself",
+        "how to use spray foam insulation",
+        "how to use spray foam insulation for beginners",
+        "use spray foam insulation step by step"
+      ],
+      "source_clusters": [
+        "Using Spray Foam"
+      ],
+      "kept_phrase_count": 6,
+      "removed_phrase_count_from_cluster": 8
+    },
+    "build-patio": {
+      "walkthrough_id": "build-patio",
+      "canonical_query": "how to build a patio",
+      "title": "Build a Patio",
+      "category": "exterior",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "DIY patio construction",
+        "best way to build a patio",
+        "build a patio step by step",
+        "can I build a patio myself",
+        "how to build a patio"
+      ],
+      "source_clusters": [
+        "Patio Construction"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 10
+    },
+    "clean-dryer-vent": {
+      "walkthrough_id": "clean-dryer-vent",
+      "canonical_query": "how to clean a dryer vent",
+      "title": "Clean a Dryer Vent",
+      "category": "hvac",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to clean a dryer vent",
+        "best way to clean a dryer vent",
+        "can I clean a dryer vent myself",
+        "clean a dryer vent step by step",
+        "how to clean a dryer vent",
+        "how to clean a dryer vent for beginners"
+      ],
+      "source_clusters": [
+        "Cleaning a Dryer Vent"
+      ],
+      "kept_phrase_count": 6,
+      "removed_phrase_count_from_cluster": 8
+    },
+    "fix-washing-machine-not-draining": {
+      "walkthrough_id": "fix-washing-machine-not-draining",
+      "canonical_query": "how to fix a washing machine that will not drain",
+      "title": "Fix a Washing Machine That Will Not Drain",
+      "category": "appliances",
+      "safety_level": "electrical_plumbing",
+      "review_status": "draft",
+      "aliases": [
+        "DIY washing machine not draining",
+        "best way to fix a washing machine that will not drain",
+        "can I fix a washing machine that will not drain myself",
+        "fix a washing machine that will not drain step by step",
+        "how to fix a washing machine that will not drain",
+        "temporary fix before washing machine not draining"
+      ],
+      "source_clusters": [
+        "Clogged Washing Machine"
+      ],
+      "kept_phrase_count": 6,
+      "removed_phrase_count_from_cluster": 8
+    },
+    "get-rid-of-mice": {
+      "walkthrough_id": "get-rid-of-mice",
+      "canonical_query": "how to get rid of mice",
+      "title": "Get Rid of Mice in a House",
+      "category": "pest_control",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "best way to get rid of mice",
+        "how to get rid of mice",
+        "how to get rid of mice fast",
+        "how to get rid of mice from attic",
+        "how to get rid of mice home remedies",
+        "how to get rid of mice in the house",
+        "how to get rid of mice naturally",
+        "how to get rid of mice without poison"
+      ],
+      "source_clusters": [
+        "Getting Rid of Mice"
+      ],
+      "kept_phrase_count": 8,
+      "removed_phrase_count_from_cluster": 6
+    },
+    "install-aluminum-deck": {
+      "walkthrough_id": "install-aluminum-deck",
+      "canonical_query": "how to install an aluminum deck",
+      "title": "Install an Aluminum Deck",
+      "category": "exterior",
+      "safety_level": "structural",
+      "review_status": "draft",
+      "aliases": [
+        "DIY aluminum deck installation",
+        "best way to install an aluminum deck",
+        "can I install an aluminum deck myself",
+        "how to install an aluminum deck",
+        "install an aluminum deck step by step"
+      ],
+      "source_clusters": [
+        "Installing an Aluminum Deck"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 10
+    },
+    "install-gfci-outlet": {
+      "walkthrough_id": "install-gfci-outlet",
+      "canonical_query": "how to install a GFCI outlet",
+      "title": "Install a GFCI Outlet",
+      "category": "electrical",
+      "safety_level": "electrical",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to install a GFCI outlet",
+        "best way to install a GFCI outlet",
+        "can I install a GFCI outlet myself",
+        "how to install a GFCI outlet",
+        "install a GFCI outlet step by step"
+      ],
+      "source_clusters": [
+        "Adding a GFCI Outlet"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 9
+    },
+    "install-heat-pump": {
+      "walkthrough_id": "install-heat-pump",
+      "canonical_query": "how to install a heat pump",
+      "title": "Install a Heat Pump",
+      "category": "hvac",
+      "safety_level": "licensed_or_high_risk",
+      "review_status": "draft",
+      "aliases": [
+        "DIY heat pump installation",
+        "best way to install a heat pump",
+        "can I install a heat pump myself",
+        "how to install a heat pump",
+        "install a heat pump step by step"
+      ],
+      "source_clusters": [
+        "Installing a Heat Pump"
+      ],
+      "kept_phrase_count": 4,
+      "removed_phrase_count_from_cluster": 9
+    },
+    "install-reverse-osmosis-water-filter": {
+      "walkthrough_id": "install-reverse-osmosis-water-filter",
+      "canonical_query": "how to install a reverse osmosis water filter",
+      "title": "Install a Reverse Osmosis Water Filter",
+      "category": "plumbing",
+      "safety_level": "plumbing",
+      "review_status": "draft",
+      "aliases": [
+        "DIY reverse osmosis system installation",
+        "best way to install a reverse osmosis water filter",
+        "can I install a reverse osmosis water filter myself",
+        "how to install a reverse osmosis water filter",
+        "install a reverse osmosis water filter step by step"
+      ],
+      "source_clusters": [
+        "Installing an RO Filter"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 10
+    },
+    "install-smart-plug": {
+      "walkthrough_id": "install-smart-plug",
+      "canonical_query": "how to install a smart plug",
+      "title": "Install a Smart Plug",
+      "category": "electrical",
+      "safety_level": "low",
+      "review_status": "draft",
+      "aliases": [
+        "DIY install smart plug",
+        "best way to install a smart plug",
+        "can I install a smart plug myself",
+        "how to install a smart plug",
+        "install a smart plug step by step",
+        "install smart plug"
+      ],
+      "source_clusters": [
+        "Installing Smart Plugs"
+      ],
+      "kept_phrase_count": 6,
+      "removed_phrase_count_from_cluster": 9
+    },
+    "install-solar-panels": {
+      "walkthrough_id": "install-solar-panels",
+      "canonical_query": "how to install solar panels",
+      "title": "Install Solar Panels",
+      "category": "electrical_energy",
+      "safety_level": "licensed_or_high_risk",
+      "review_status": "draft",
+      "aliases": [
+        "DIY solar panel installation",
+        "best way to install solar panels",
+        "can I install solar panels myself",
+        "how to install solar panels",
+        "install solar panels step by step"
+      ],
+      "source_clusters": [
+        "Installing Solar Panels"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 10
+    },
+    "install-transfer-switch": {
+      "walkthrough_id": "install-transfer-switch",
+      "canonical_query": "how to install a generator transfer switch",
+      "title": "Install a Generator Transfer Switch",
+      "category": "electrical",
+      "safety_level": "licensed_or_high_risk",
+      "review_status": "draft",
+      "aliases": [
+        "DIY transfer switch installation",
+        "best way to install a transfer switch",
+        "can I install a transfer switch myself",
+        "how to install a generator transfer switch",
+        "how to install a transfer switch",
+        "install a transfer switch step by step"
+      ],
+      "source_clusters": [
+        "Electrical Transfer Switch"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 10
+    },
+    "install-whole-house-battery": {
+      "walkthrough_id": "install-whole-house-battery",
+      "canonical_query": "how to install a whole house battery",
+      "title": "Install a Whole-House Battery System",
+      "category": "electrical_energy",
+      "safety_level": "licensed_or_high_risk",
+      "review_status": "draft",
+      "aliases": [
+        "DIY whole house battery installation",
+        "best way to install a whole house battery",
+        "can I install a whole house battery myself",
+        "how to install a whole house battery",
+        "install a whole house battery step by step"
+      ],
+      "source_clusters": [
+        "Whole-House Battery"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 10
+    },
+    "insulate-around-window": {
+      "walkthrough_id": "insulate-around-window",
+      "canonical_query": "how to insulate around a window",
+      "title": "Insulate Around a Window",
+      "category": "doors_windows",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to insulate around windows",
+        "best way to insulate around a window",
+        "can I insulate around a window myself",
+        "how to insulate around a window",
+        "how to insulate around windows",
+        "how to insulate around windows for beginners",
+        "insulate around a window step by step"
+      ],
+      "source_clusters": [
+        "Insulating Around a Window"
+      ],
+      "kept_phrase_count": 7,
+      "removed_phrase_count_from_cluster": 8
+    },
+    "paint-wood-deck": {
+      "walkthrough_id": "paint-wood-deck",
+      "canonical_query": "how to paint a wood deck",
+      "title": "Paint a Wood Deck",
+      "category": "exterior",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to paint a wood deck",
+        "best way to paint a wood deck",
+        "can I paint a wood deck myself",
+        "how to paint a wood deck",
+        "how to paint a wood deck for beginners",
+        "paint a wood deck step by step"
+      ],
+      "source_clusters": [
+        "Painting a Wood Deck"
+      ],
+      "kept_phrase_count": 6,
+      "removed_phrase_count_from_cluster": 8
+    },
+    "pour-concrete-anchor-column": {
+      "walkthrough_id": "pour-concrete-anchor-column",
+      "canonical_query": "how to pour a concrete anchor column",
+      "title": "Pour a Concrete Anchor Column",
+      "category": "exterior",
+      "safety_level": "structural",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to pour a concrete anchor column",
+        "best way to pour a concrete anchor column",
+        "can I pour a concrete anchor column myself",
+        "how to pour a concrete anchor column",
+        "pour a concrete anchor column step by step"
+      ],
+      "source_clusters": [
+        "Concrete Anchor Column"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 6
+    },
+    "remove-bats-from-house": {
+      "walkthrough_id": "remove-bats-from-house",
+      "canonical_query": "how to get rid of bats",
+      "title": "Remove Bats From a House",
+      "category": "pest_control",
+      "safety_level": "health_legal",
+      "review_status": "draft",
+      "aliases": [
+        "best way to remove bats from a house",
+        "how to get rid of bats",
+        "how to get rid of bats fast",
+        "how to get rid of bats from attic",
+        "how to get rid of bats home remedies",
+        "how to get rid of bats in the house",
+        "how to get rid of bats naturally",
+        "how to get rid of bats without poison",
+        "how to remove bats from a house"
+      ],
+      "source_clusters": [
+        "Getting Rid of Bats"
+      ],
+      "kept_phrase_count": 9,
+      "removed_phrase_count_from_cluster": 3
+    },
+    "repair-driveway": {
+      "walkthrough_id": "repair-driveway",
+      "canonical_query": "how to repair a driveway",
+      "title": "Repair a Driveway",
+      "category": "landscape_drainage",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "DIY driveway repair",
+        "best way to repair a driveway",
+        "can I repair a driveway myself",
+        "driveway repair",
+        "how to repair a driveway",
+        "repair a driveway step by step",
+        "temporary fix before driveway repair"
+      ],
+      "source_clusters": [
+        "Driveway Repair"
+      ],
+      "kept_phrase_count": 7,
+      "removed_phrase_count_from_cluster": 7
+    },
+    "repair-garbage-disposal": {
+      "walkthrough_id": "repair-garbage-disposal",
+      "canonical_query": "how to repair a garbage disposal",
+      "title": "Repair a Sink Garbage Disposal",
+      "category": "plumbing",
+      "safety_level": "electrical_plumbing",
+      "review_status": "draft",
+      "aliases": [
+        "DIY garbage disposal repair",
+        "best way to fix a garbage disposal",
+        "can I fix a garbage disposal myself",
+        "fix a garbage disposal step by step",
+        "garbage disposal repair",
+        "how to fix a garbage disposal",
+        "how to repair a garbage disposal",
+        "temporary fix before garbage disposal repair"
+      ],
+      "source_clusters": [
+        "Sink Disposal Repair"
+      ],
+      "kept_phrase_count": 7,
+      "removed_phrase_count_from_cluster": 8
+    },
+    "repair-leaking-asphalt-shingle-roof": {
+      "walkthrough_id": "repair-leaking-asphalt-shingle-roof",
+      "canonical_query": "how to repair a leaking asphalt shingle roof",
+      "title": "Repair a Leaking Asphalt Shingle Roof",
+      "category": "roofing_gutters",
+      "safety_level": "high",
+      "review_status": "draft",
+      "aliases": [
+        "DIY fix leaking asphalt roof",
+        "best way to fix a leaking asphalt shingle roof",
+        "can I fix a leaking asphalt shingle roof myself",
+        "fix a leaking asphalt shingle roof step by step",
+        "fix leaking asphalt roof",
+        "how to fix a leaking asphalt shingle roof",
+        "how to repair a leaking asphalt shingle roof",
+        "temporary fix before fix leaking asphalt roof"
+      ],
+      "source_clusters": [
+        "Leaky Asphalt Roof"
+      ],
+      "kept_phrase_count": 7,
+      "removed_phrase_count_from_cluster": 7
+    },
+    "repair-patio": {
+      "walkthrough_id": "repair-patio",
+      "canonical_query": "how to repair a patio",
+      "title": "Repair a Patio",
+      "category": "exterior",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "DIY patio repair",
+        "best way to repair a patio",
+        "can I repair a patio myself",
+        "how to repair a patio",
+        "patio repair",
+        "repair a patio step by step",
+        "temporary fix before patio repair"
+      ],
+      "source_clusters": [
+        "Patio Repair"
+      ],
+      "kept_phrase_count": 7,
+      "removed_phrase_count_from_cluster": 7
+    },
+    "replace-hvac-air-filter": {
+      "walkthrough_id": "replace-hvac-air-filter",
+      "canonical_query": "how to replace an HVAC air filter",
+      "title": "Replace an HVAC Air Filter",
+      "category": "hvac",
+      "safety_level": "low",
+      "review_status": "draft",
+      "aliases": [
+        "DIY replace air filter",
+        "best way to replace an HVAC air filter",
+        "can I replace an HVAC air filter myself",
+        "how to replace an HVAC air filter",
+        "replace air filter",
+        "replace air filter for beginners",
+        "replace an HVAC air filter step by step"
+      ],
+      "source_clusters": [
+        "Replacing an Air Filter"
+      ],
+      "kept_phrase_count": 7,
+      "removed_phrase_count_from_cluster": 8
+    },
+    "replace-light-switch": {
+      "walkthrough_id": "replace-light-switch",
+      "canonical_query": "how to replace a light switch",
+      "title": "Replace a Light Switch",
+      "category": "electrical",
+      "safety_level": "electrical",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to replace a light switch",
+        "best way to replace a light switch",
+        "can I replace a light switch myself",
+        "how to replace a light switch",
+        "replace a light switch step by step"
+      ],
+      "source_clusters": [
+        "Replacing a Light Switch"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 9
+    },
+    "replace-reverse-osmosis-filters": {
+      "walkthrough_id": "replace-reverse-osmosis-filters",
+      "canonical_query": "how to replace reverse osmosis filters",
+      "title": "Replace Reverse Osmosis Filters",
+      "category": "plumbing",
+      "safety_level": "plumbing",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to replace reverse osmosis filters",
+        "best way to replace reverse osmosis filters",
+        "can I replace reverse osmosis filters myself",
+        "how to replace reverse osmosis filters",
+        "how to replace reverse osmosis filters for beginners",
+        "replace reverse osmosis filters step by step"
+      ],
+      "source_clusters": [
+        "Replacing RO Filters"
+      ],
+      "kept_phrase_count": 6,
+      "removed_phrase_count_from_cluster": 8
+    },
+    "replace-storm-window": {
+      "walkthrough_id": "replace-storm-window",
+      "canonical_query": "how to replace a storm window",
+      "title": "Replace a Storm Window",
+      "category": "doors_windows",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "DIY storm window replacement",
+        "best way to replace a storm window",
+        "can I replace a storm window myself",
+        "how to replace a storm window",
+        "replace a storm window step by step"
+      ],
+      "source_clusters": [
+        "Replacing a Storm Window"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 10
+    },
+    "shingle-roof": {
+      "walkthrough_id": "shingle-roof",
+      "canonical_query": "how to shingle a roof",
+      "title": "Shingle an Asphalt Roof",
+      "category": "roofing_gutters",
+      "safety_level": "high",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to shingle a roof",
+        "best way to shingle a roof",
+        "can I shingle a roof myself",
+        "how to shingle a roof",
+        "shingle a roof step by step"
+      ],
+      "source_clusters": [
+        "Shingling a Roof"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 9
+    },
+    "tile-shower": {
+      "walkthrough_id": "tile-shower",
+      "canonical_query": "how to tile a shower",
+      "title": "Tile a Shower",
+      "category": "flooring_tile",
+      "safety_level": "standard",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to tile a shower",
+        "best way to tile a shower",
+        "can I tile a shower myself",
+        "how to tile a shower",
+        "tile a shower step by step"
+      ],
+      "source_clusters": [
+        "Tiling a Shower"
+      ],
+      "kept_phrase_count": 5,
+      "removed_phrase_count_from_cluster": 9
+    },
+    "vacuum-heat-pump-system": {
+      "walkthrough_id": "vacuum-heat-pump-system",
+      "canonical_query": "how to vacuum a heat pump system",
+      "title": "Vacuum a Heat Pump Refrigerant System",
+      "category": "hvac",
+      "safety_level": "licensed_or_high_risk",
+      "review_status": "draft",
+      "aliases": [
+        "DIY how to vacuum a heat pump system",
+        "best way to vacuum a heat pump system",
+        "can I vacuum a heat pump system myself",
+        "how to vacuum a heat pump system",
+        "how to vacuum a heat pump system for beginners",
+        "vacuum a heat pump system step by step"
+      ],
+      "source_clusters": [
+        "Vacuuming a Heat Pump"
+      ],
+      "kept_phrase_count": 6,
+      "removed_phrase_count_from_cluster": 8
+    }
+  },
+  "removed_phrase_examples": [
+    {
+      "search_phrase": "home improvement contractor",
+      "original_rank": 43,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 82,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "home maintenance cost",
+      "original_rank": 44,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 82,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "DIY home maintenance",
+      "original_rank": 47,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 81,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "DIY home repair",
+      "original_rank": 48,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 81,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home repair companies near me",
+      "original_rank": null,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 79.6356382978724,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "how to shingle a roof near me",
+      "original_rank": 51,
+      "source_cluster": "Shingling a Roof",
+      "drop_reason": "local service lookup",
+      "priority_score": 81,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "solar panel installation",
+      "original_rank": 52,
+      "source_cluster": "Installing Solar Panels",
+      "drop_reason": "not phrased as an actionable walkthrough",
+      "priority_score": 81,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "DIY home improvement",
+      "original_rank": 53,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 80,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "heat pump installation near me",
+      "original_rank": 54,
+      "source_cluster": "Installing a Heat Pump",
+      "drop_reason": "local service lookup",
+      "priority_score": 80,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "home improvement cost",
+      "original_rank": 55,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 80,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home repair cost",
+      "original_rank": 56,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 80,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to shingle a roof cost",
+      "original_rank": 59,
+      "source_cluster": "Shingling a Roof",
+      "drop_reason": "cost or buying research",
+      "priority_score": 80,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "maintain a home step by step",
+      "original_rank": 60,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 80,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "replace air filter cost",
+      "original_rank": 61,
+      "source_cluster": "Replacing an Air Filter",
+      "drop_reason": "cost or buying research",
+      "priority_score": 80,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "affordable home repair",
+      "original_rank": 62,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 79,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "best way to maintain a home",
+      "original_rank": 63,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 79,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "heat pump installation cost",
+      "original_rank": 64,
+      "source_cluster": "Installing a Heat Pump",
+      "drop_reason": "cost or buying research",
+      "priority_score": 79,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "home repair tips",
+      "original_rank": 65,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 79,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "how to replace a light switch near me",
+      "original_rank": 69,
+      "source_cluster": "Replacing a Light Switch",
+      "drop_reason": "local service lookup",
+      "priority_score": 79,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "affordable home improvement",
+      "original_rank": 70,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 78,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "best home repair companies near me",
+      "original_rank": 71,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 78,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home improvement tips",
+      "original_rank": 77,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 78,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "how to install a GFCI outlet near me",
+      "original_rank": 79,
+      "source_cluster": "Adding a GFCI Outlet",
+      "drop_reason": "local service lookup",
+      "priority_score": 78,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "how to replace a light switch cost",
+      "original_rank": 80,
+      "source_cluster": "Replacing a Light Switch",
+      "drop_reason": "cost or buying research",
+      "priority_score": 78,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "tools needed to maintain a home",
+      "original_rank": 82,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 78,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "best home improvement companies near me",
+      "original_rank": 83,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 77,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home repair and maintenance services",
+      "original_rank": 85,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 77,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "home repair estimates",
+      "original_rank": 86,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 77,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home repair ideas",
+      "original_rank": 87,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 77,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to install a GFCI outlet cost",
+      "original_rank": 89,
+      "source_cluster": "Adding a GFCI Outlet",
+      "drop_reason": "cost or buying research",
+      "priority_score": 77,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "how to prevent pests from coming back",
+      "original_rank": 90,
+      "source_cluster": "Getting Rid of Mice",
+      "drop_reason": "diagnostic or prevention intent",
+      "priority_score": 77,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "how to tile a shower near me",
+      "original_rank": 91,
+      "source_cluster": "Tiling a Shower",
+      "drop_reason": "local service lookup",
+      "priority_score": 77,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "professional home maintenance",
+      "original_rank": 93,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 77,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "solar panel installation near me",
+      "original_rank": 95,
+      "source_cluster": "Installing Solar Panels",
+      "drop_reason": "local service lookup",
+      "priority_score": 77,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "washing machine not draining",
+      "original_rank": 96,
+      "source_cluster": "Clogged Washing Machine",
+      "drop_reason": "not phrased as an actionable walkthrough",
+      "priority_score": 77,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home improvement estimates",
+      "original_rank": 101,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 76,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home maintenance for beginners",
+      "original_rank": 102,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 76,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "how often should you maintain a home",
+      "original_rank": 103,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 76,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to shingle a roof contractor",
+      "original_rank": 106,
+      "source_cluster": "Shingling a Roof",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 76,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "how to use spray foam insulation cost",
+      "original_rank": 107,
+      "source_cluster": "Using Spray Foam",
+      "drop_reason": "cost or buying research",
+      "priority_score": 76,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "solar panel installation cost",
+      "original_rank": 109,
+      "source_cluster": "Installing Solar Panels",
+      "drop_reason": "cost or buying research",
+      "priority_score": 76,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "can I maintain a home myself",
+      "original_rank": 112,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 75,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "garbage disposal repair near me",
+      "original_rank": 116,
+      "source_cluster": "Sink Disposal Repair",
+      "drop_reason": "local service lookup",
+      "priority_score": 75,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "heat pump installation contractor",
+      "original_rank": 117,
+      "source_cluster": "Installing a Heat Pump",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 75,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "home improvement financing",
+      "original_rank": 118,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 75,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home repair checklist",
+      "original_rank": 119,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 75,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home repair financing",
+      "original_rank": 120,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 75,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to clean a dryer vent cost",
+      "original_rank": 121,
+      "source_cluster": "Cleaning a Dryer Vent",
+      "drop_reason": "cost or buying research",
+      "priority_score": 75,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "how to get rid of mice near me",
+      "original_rank": 123,
+      "source_cluster": "Getting Rid of Mice",
+      "drop_reason": "local service lookup",
+      "priority_score": 75,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to improve a home",
+      "original_rank": 124,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 75,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to repair a home",
+      "original_rank": 125,
+      "source_cluster": "Home Repair",
+      "drop_reason": "broad home repair intent",
+      "priority_score": 75,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to tile a shower cost",
+      "original_rank": 126,
+      "source_cluster": "Tiling a Shower",
+      "drop_reason": "cost or buying research",
+      "priority_score": 75,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "tools needed to replace an HVAC air filter",
+      "original_rank": 128,
+      "source_cluster": "Replacing an Air Filter",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 75,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "tools needed to shingle a roof",
+      "original_rank": 129,
+      "source_cluster": "Shingling a Roof",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 75,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "when to call pest control",
+      "original_rank": 130,
+      "source_cluster": "Getting Rid of Mice",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 75,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "common home maintenance mistakes",
+      "original_rank": 133,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 74,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "home improvement checklist",
+      "original_rank": 137,
+      "source_cluster": "Home Improvement",
+      "drop_reason": "broad home improvement intent",
+      "priority_score": 74,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how long does it take to shingle a roof",
+      "original_rank": 138,
+      "source_cluster": "Shingling a Roof",
+      "drop_reason": "time estimate rather than walkthrough",
+      "priority_score": 74,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to replace a light switch contractor",
+      "original_rank": 141,
+      "source_cluster": "Replacing a Light Switch",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 74,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "professional how to get rid of mice",
+      "original_rank": 142,
+      "source_cluster": "Getting Rid of Mice",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 74,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "professional replace air filter",
+      "original_rank": 143,
+      "source_cluster": "Replacing an Air Filter",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 74,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "tools needed to install a heat pump",
+      "original_rank": 145,
+      "source_cluster": "Installing a Heat Pump",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 74,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "washing machine not draining near me",
+      "original_rank": 146,
+      "source_cluster": "Clogged Washing Machine",
+      "drop_reason": "local service lookup",
+      "priority_score": 74,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "when to hire a professional for heat pump installation",
+      "original_rank": 147,
+      "source_cluster": "Installing a Heat Pump",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 74,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "when to hire a professional for how to shingle a roof",
+      "original_rank": 148,
+      "source_cluster": "Shingling a Roof",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 74,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "when to maintain a home",
+      "original_rank": 149,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 74,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "fix leaking asphalt roof near me",
+      "original_rank": 154,
+      "source_cluster": "Leaky Asphalt Roof",
+      "drop_reason": "local service lookup",
+      "priority_score": 73,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "garbage disposal repair cost",
+      "original_rank": 155,
+      "source_cluster": "Sink Disposal Repair",
+      "drop_reason": "cost or buying research",
+      "priority_score": 73,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "home maintenance tips",
+      "original_rank": 156,
+      "source_cluster": "Home Maintenance",
+      "drop_reason": "broad maintenance intent",
+      "priority_score": 73,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how long does it take to install a heat pump",
+      "original_rank": 157,
+      "source_cluster": "Installing a Heat Pump",
+      "drop_reason": "time estimate rather than walkthrough",
+      "priority_score": 73,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how often should you replace an HVAC air filter",
+      "original_rank": 158,
+      "source_cluster": "Replacing an Air Filter",
+      "drop_reason": "diagnostic or prevention intent",
+      "priority_score": 73,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to get rid of mice cost",
+      "original_rank": 159,
+      "source_cluster": "Getting Rid of Mice",
+      "drop_reason": "cost or buying research",
+      "priority_score": 73,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to install a GFCI outlet contractor",
+      "original_rank": 161,
+      "source_cluster": "Adding a GFCI Outlet",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 73,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "how to shingle a roof requirements",
+      "original_rank": 163,
+      "source_cluster": "Shingling a Roof",
+      "drop_reason": "permit, requirement, or code research",
+      "priority_score": 73,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "replace air filter checklist",
+      "original_rank": 166,
+      "source_cluster": "Replacing an Air Filter",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 73,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "signs of pests in a house",
+      "original_rank": 168,
+      "source_cluster": "Getting Rid of Mice",
+      "drop_reason": "diagnostic or prevention intent",
+      "priority_score": 73,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "tools needed to replace a light switch",
+      "original_rank": 169,
+      "source_cluster": "Replacing a Light Switch",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 73,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "washing machine not draining cost",
+      "original_rank": 171,
+      "source_cluster": "Clogged Washing Machine",
+      "drop_reason": "cost or buying research",
+      "priority_score": 73,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "common how to shingle a roof mistakes",
+      "original_rank": 176,
+      "source_cluster": "Shingling a Roof",
+      "drop_reason": "advice or inspiration rather than walkthrough",
+      "priority_score": 72,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "do I need a permit to install a heat pump",
+      "original_rank": 177,
+      "source_cluster": "Installing a Heat Pump",
+      "drop_reason": "permit, requirement, or code research",
+      "priority_score": 72,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "do I need a permit to shingle a roof",
+      "original_rank": 178,
+      "source_cluster": "Shingling a Roof",
+      "drop_reason": "permit, requirement, or code research",
+      "priority_score": 72,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "fix leaking asphalt roof cost",
+      "original_rank": 179,
+      "source_cluster": "Leaky Asphalt Roof",
+      "drop_reason": "cost or buying research",
+      "priority_score": 72,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "heat pump installation requirements",
+      "original_rank": 180,
+      "source_cluster": "Installing a Heat Pump",
+      "drop_reason": "permit, requirement, or code research",
+      "priority_score": 72,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how long does it take to replace a light switch",
+      "original_rank": 181,
+      "source_cluster": "Replacing a Light Switch",
+      "drop_reason": "time estimate rather than walkthrough",
+      "priority_score": 72,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to paint a wood deck cost",
+      "original_rank": 182,
+      "source_cluster": "Painting a Wood Deck",
+      "drop_reason": "cost or buying research",
+      "priority_score": 72,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "solar panel installation contractor",
+      "original_rank": 184,
+      "source_cluster": "Installing Solar Panels",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 72,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "tools needed to install a GFCI outlet",
+      "original_rank": 186,
+      "source_cluster": "Adding a GFCI Outlet",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 72,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "when to hire a professional for how to replace a light switch",
+      "original_rank": 187,
+      "source_cluster": "Replacing a Light Switch",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 72,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "appliance installation",
+      "original_rank": 188,
+      "source_cluster": "Appliance Installation",
+      "drop_reason": "generic appliance category, no specific install target",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "common heat pump installation mistakes",
+      "original_rank": 192,
+      "source_cluster": "Installing a Heat Pump",
+      "drop_reason": "advice or inspiration rather than walkthrough",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "common replace air filter mistakes",
+      "original_rank": 193,
+      "source_cluster": "Replacing an Air Filter",
+      "drop_reason": "advice or inspiration rather than walkthrough",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "driveway repair near me",
+      "original_rank": 195,
+      "source_cluster": "Driveway Repair",
+      "drop_reason": "local service lookup",
+      "priority_score": 71,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "how long does it take to install a GFCI outlet",
+      "original_rank": 196,
+      "source_cluster": "Adding a GFCI Outlet",
+      "drop_reason": "time estimate rather than walkthrough",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to tile a shower contractor",
+      "original_rank": 198,
+      "source_cluster": "Tiling a Shower",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 71,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "professional how to use spray foam insulation",
+      "original_rank": 199,
+      "source_cluster": "Using Spray Foam",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 71,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "replace air filter tips",
+      "original_rank": 200,
+      "source_cluster": "Replacing an Air Filter",
+      "drop_reason": "advice or inspiration rather than walkthrough",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "tools needed to install solar panels",
+      "original_rank": 201,
+      "source_cluster": "Installing Solar Panels",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "tools needed to tile a shower",
+      "original_rank": 202,
+      "source_cluster": "Tiling a Shower",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "tools needed to use spray foam insulation",
+      "original_rank": 203,
+      "source_cluster": "Using Spray Foam",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "when to hire a professional for how to install a GFCI outlet",
+      "original_rank": 204,
+      "source_cluster": "Adding a GFCI Outlet",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 71,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "when to hire a professional for solar panel installation",
+      "original_rank": 205,
+      "source_cluster": "Installing Solar Panels",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 71,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "when to replace an HVAC air filter",
+      "original_rank": 206,
+      "source_cluster": "Replacing an Air Filter",
+      "drop_reason": "diagnostic or prevention intent",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "whole house battery installation",
+      "original_rank": 207,
+      "source_cluster": "Whole-House Battery",
+      "drop_reason": "not phrased as an actionable walkthrough",
+      "priority_score": 71,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "common how to replace a light switch mistakes",
+      "original_rank": 210,
+      "source_cluster": "Replacing a Light Switch",
+      "drop_reason": "advice or inspiration rather than walkthrough",
+      "priority_score": 70,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "do I need a permit to install a GFCI outlet",
+      "original_rank": 214,
+      "source_cluster": "Adding a GFCI Outlet",
+      "drop_reason": "permit, requirement, or code research",
+      "priority_score": 70,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "do I need a permit to replace a light switch",
+      "original_rank": 215,
+      "source_cluster": "Replacing a Light Switch",
+      "drop_reason": "permit, requirement, or code research",
+      "priority_score": 70,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "driveway repair cost",
+      "original_rank": 216,
+      "source_cluster": "Driveway Repair",
+      "drop_reason": "cost or buying research",
+      "priority_score": 70,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "how long does it take to install solar panels",
+      "original_rank": 218,
+      "source_cluster": "Installing Solar Panels",
+      "drop_reason": "time estimate rather than walkthrough",
+      "priority_score": 70,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how often should you use spray foam insulation",
+      "original_rank": 219,
+      "source_cluster": "Using Spray Foam",
+      "drop_reason": "diagnostic or prevention intent",
+      "priority_score": 70,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to install a GFCI outlet requirements",
+      "original_rank": 220,
+      "source_cluster": "Adding a GFCI Outlet",
+      "drop_reason": "permit, requirement, or code research",
+      "priority_score": 70,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how to insulate around windows cost",
+      "original_rank": 221,
+      "source_cluster": "Insulating Around a Window",
+      "drop_reason": "cost or buying research",
+      "priority_score": 70,
+      "search_intent": "Local/Transactional"
+    },
+    {
+      "search_phrase": "how to replace a light switch requirements",
+      "original_rank": 222,
+      "source_cluster": "Replacing a Light Switch",
+      "drop_reason": "permit, requirement, or code research",
+      "priority_score": 70,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "professional how to clean a dryer vent",
+      "original_rank": 223,
+      "source_cluster": "Cleaning a Dryer Vent",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 70,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "tools needed to clean a dryer vent",
+      "original_rank": 224,
+      "source_cluster": "Cleaning a Dryer Vent",
+      "drop_reason": "prep list rather than walkthrough",
+      "priority_score": 70,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "when to hire a professional for how to tile a shower",
+      "original_rank": 225,
+      "source_cluster": "Tiling a Shower",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 70,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "common how to install a GFCI outlet mistakes",
+      "original_rank": 227,
+      "source_cluster": "Adding a GFCI Outlet",
+      "drop_reason": "advice or inspiration rather than walkthrough",
+      "priority_score": 69,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "do I need a permit to install solar panels",
+      "original_rank": 229,
+      "source_cluster": "Installing Solar Panels",
+      "drop_reason": "permit, requirement, or code research",
+      "priority_score": 69,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "garbage disposal repair contractor",
+      "original_rank": 231,
+      "source_cluster": "Sink Disposal Repair",
+      "drop_reason": "hire-a-pro or service lookup",
+      "priority_score": 69,
+      "search_intent": "Commercial"
+    },
+    {
+      "search_phrase": "how long does it take to tile a shower",
+      "original_rank": 232,
+      "source_cluster": "Tiling a Shower",
+      "drop_reason": "time estimate rather than walkthrough",
+      "priority_score": 69,
+      "search_intent": "Informational"
+    },
+    {
+      "search_phrase": "how often should you clean a dryer vent",
+      "original_rank": 233,
+      "source_cluster": "Cleaning a Dryer Vent",
+      "drop_reason": "diagnostic or prevention intent",
+      "priority_score": 69,
+      "search_intent": "Informational"
+    }
+  ],
+  "drop_reason_counts": {
+    "broad home improvement intent": 11,
+    "broad maintenance intent": 12,
+    "broad home repair intent": 11,
+    "local service lookup": 22,
+    "not phrased as an actionable walkthrough": 8,
+    "cost or buying research": 29,
+    "diagnostic or prevention intent": 22,
+    "hire-a-pro or service lookup": 45,
+    "prep list rather than walkthrough": 34,
+    "time estimate rather than walkthrough": 20,
+    "permit, requirement, or code research": 28,
+    "advice or inspiration rather than walkthrough": 33,
+    "generic appliance category, no specific install target": 15
+  }
+}
