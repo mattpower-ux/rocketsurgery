@@ -83,6 +83,43 @@ function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommi
   );
 }
 
+function QcDraftField({ as = "input", className = "", value = "", onCommit, placeholder = "" }) {
+  const [draftValue, setDraftValue] = useState(value || "");
+  const editingRef = useRef(false);
+  const Field = as;
+
+  useEffect(() => {
+    if (!editingRef.current) {
+      setDraftValue(value || "");
+    }
+  }, [value]);
+
+  function stopEditorShortcut(event) {
+    event.stopPropagation();
+  }
+
+  return (
+    <Field
+      className={className}
+      value={draftValue}
+      onFocus={() => {
+        editingRef.current = true;
+      }}
+      onChange={(event) => setDraftValue(event.target.value)}
+      onBlur={() => {
+        editingRef.current = false;
+        onCommit?.(draftValue);
+      }}
+      onKeyDown={stopEditorShortcut}
+      onKeyUp={stopEditorShortcut}
+      onInput={stopEditorShortcut}
+      onClick={stopEditorShortcut}
+      onMouseDown={(event) => event.stopPropagation()}
+      placeholder={placeholder}
+    />
+  );
+}
+
 function StepImageReview({ step }) {
   const hasPending = Boolean(step.pendingImageUrl);
 
@@ -1559,11 +1596,6 @@ function App() {
   }
 
 
-  function stopQcEditorEvent(event) {
-    event.stopPropagation();
-  }
-
-
   function updateQcMetadata(walkthroughId, field, value) {
     const draft = qcWalkthroughs[walkthroughId];
     if (!draft) {
@@ -2380,27 +2412,19 @@ function App() {
                               <div className="qcMetadataEditor">
                                 <label>
                                   <span>Title shown in admin</span>
-                                  <input
+                                  <QcDraftField
                                     className="qcStepInput"
                                     value={draft.title || ""}
-                                    onChange={(event) => updateQcMetadata(walkthroughId, "title", event.target.value)}
-                                    onKeyDown={stopQcEditorEvent}
-                                    onKeyUp={stopQcEditorEvent}
-                                    onClick={stopQcEditorEvent}
-                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onCommit={(value) => updateQcMetadata(walkthroughId, "title", value)}
                                     placeholder="Clear walkthrough title"
                                   />
                                 </label>
                                 <label>
                                   <span>Query this walkthrough should answer</span>
-                                  <input
+                                  <QcDraftField
                                     className="qcStepInput"
                                     value={draft.query || ""}
-                                    onChange={(event) => updateQcMetadata(walkthroughId, "query", event.target.value)}
-                                    onKeyDown={stopQcEditorEvent}
-                                    onKeyUp={stopQcEditorEvent}
-                                    onClick={stopQcEditorEvent}
-                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onCommit={(value) => updateQcMetadata(walkthroughId, "query", value)}
                                     placeholder="Example: install a refrigerator icemaker water line"
                                   />
                                 </label>
@@ -2429,44 +2453,30 @@ function App() {
                                   <div key={`qc-step-${walkthroughId}-${step.id}-${index}`} className="qcStep">
                                     <div className="qcStepNumber">{index + 1}</div>
                                     <div className="qcStepEditor">
-                                      <input
+                                      <QcDraftField
                                         className="qcStepInput"
                                         value={step.imageLabel || ""}
-                                        onChange={(event) => updateQcStep(walkthroughId, step.id, "imageLabel", event.target.value)}
-                                        onKeyDown={stopQcEditorEvent}
-                                        onKeyUp={stopQcEditorEvent}
-                                        onClick={stopQcEditorEvent}
-                                        onMouseDown={(event) => event.stopPropagation()}
+                                        onCommit={(value) => updateQcStep(walkthroughId, step.id, "imageLabel", value)}
                                         placeholder="Step label"
                                       />
-                                      <input
+                                      <QcDraftField
                                         className="qcStepInput"
                                         value={step.instruction || ""}
-                                        onChange={(event) => updateQcStep(walkthroughId, step.id, "instruction", event.target.value)}
-                                        onKeyDown={stopQcEditorEvent}
-                                        onKeyUp={stopQcEditorEvent}
-                                        onClick={stopQcEditorEvent}
-                                        onMouseDown={(event) => event.stopPropagation()}
+                                        onCommit={(value) => updateQcStep(walkthroughId, step.id, "instruction", value)}
                                         placeholder="Instruction"
                                       />
-                                      <textarea
+                                      <QcDraftField
+                                        as="textarea"
                                         className="qcStepTextarea"
                                         value={step.detail || ""}
-                                        onChange={(event) => updateQcStep(walkthroughId, step.id, "detail", event.target.value)}
-                                        onKeyDown={stopQcEditorEvent}
-                                        onKeyUp={stopQcEditorEvent}
-                                        onClick={stopQcEditorEvent}
-                                        onMouseDown={(event) => event.stopPropagation()}
+                                        onCommit={(value) => updateQcStep(walkthroughId, step.id, "detail", value)}
                                         placeholder="Step detail"
                                       />
-                                      <textarea
+                                      <QcDraftField
+                                        as="textarea"
                                         className="qcStepTextarea qcImageDirection"
                                         value={step.imageDirection || ""}
-                                        onChange={(event) => updateQcStep(walkthroughId, step.id, "imageDirection", event.target.value)}
-                                        onKeyDown={stopQcEditorEvent}
-                                        onKeyUp={stopQcEditorEvent}
-                                        onClick={stopQcEditorEvent}
-                                        onMouseDown={(event) => event.stopPropagation()}
+                                        onCommit={(value) => updateQcStep(walkthroughId, step.id, "imageDirection", value)}
                                         placeholder="Image direction: clarify what the new image should show, avoid, or emphasize."
                                       />
                                       {step.imageUrl && (
