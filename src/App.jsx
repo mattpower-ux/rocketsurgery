@@ -1851,23 +1851,27 @@ function App() {
   }
 
 
-  function moveQcStep(walkthroughId, stepId, direction) {
+  function renumberQcSteps(steps) {
+    return (steps || []).map((step, idx) => ({ ...step, id: idx + 1 }));
+  }
+
+
+  function moveQcStep(walkthroughId, stepIndex, direction) {
     const draft = qcWalkthroughs[walkthroughId];
     if (!draft?.steps?.length) {
       return;
     }
 
     const steps = [...draft.steps];
-    const index = steps.findIndex((step) => Number(step.id) === Number(stepId));
-    const nextIndex = index + direction;
+    const nextIndex = stepIndex + direction;
 
-    if (index < 0 || nextIndex < 0 || nextIndex >= steps.length) {
+    if (stepIndex < 0 || nextIndex < 0 || nextIndex >= steps.length) {
       return;
     }
 
-    const [removed] = steps.splice(index, 1);
+    const [removed] = steps.splice(stepIndex, 1);
     steps.splice(nextIndex, 0, removed);
-    const renumbered = steps.map((step, idx) => ({ ...step, id: idx + 1 }));
+    const renumbered = renumberQcSteps(steps);
 
     setQcWalkthroughs((previous) => ({
       ...previous,
@@ -1880,14 +1884,14 @@ function App() {
   }
 
 
-  function updateQcStep(walkthroughId, stepId, field, value) {
+  function updateQcStep(walkthroughId, stepIndex, field, value) {
     const draft = qcWalkthroughs[walkthroughId];
     if (!draft?.steps?.length) {
       return;
     }
 
-    const updatedSteps = (draft.steps || []).map((step) => (
-      Number(step.id) === Number(stepId)
+    const updatedSteps = (draft.steps || []).map((step, index) => (
+      index === stepIndex
         ? { ...step, [field]: value, imageStale: true }
         : step
     ));
@@ -1903,17 +1907,14 @@ function App() {
   }
 
 
-  function addQcStepAfter(walkthroughId, stepId = null) {
+  function addQcStepAfter(walkthroughId, stepIndex = null) {
     const draft = qcWalkthroughs[walkthroughId];
     if (!draft) {
       return;
     }
 
     const steps = [...(draft.steps || [])];
-    const foundIndex = stepId == null
-      ? -1
-      : steps.findIndex((step) => Number(step.id) === Number(stepId));
-    const insertIndex = foundIndex < 0 ? steps.length : foundIndex + 1;
+    const insertIndex = stepIndex == null ? steps.length : stepIndex + 1;
     const templateNumber = insertIndex + 1;
     const newStep = {
       id: templateNumber,
@@ -1925,7 +1926,7 @@ function App() {
     };
 
     steps.splice(insertIndex, 0, newStep);
-    const renumbered = steps.map((step, idx) => ({ ...step, id: idx + 1 }));
+    const renumbered = renumberQcSteps(steps);
 
     setQcWalkthroughs((previous) => ({
       ...previous,
@@ -1938,14 +1939,14 @@ function App() {
   }
 
 
-  function deleteQcStep(walkthroughId, stepId) {
+  function deleteQcStep(walkthroughId, stepIndex) {
     const draft = qcWalkthroughs[walkthroughId];
     if (!draft?.steps?.length) {
       return;
     }
 
     const renumbered = (draft.steps || [])
-      .filter((step) => Number(step.id) !== Number(stepId))
+      .filter((_, index) => index !== stepIndex)
       .map((step, idx) => ({ ...step, id: idx + 1 }));
 
     setQcWalkthroughs((previous) => ({
@@ -1959,9 +1960,9 @@ function App() {
   }
 
 
-  async function generateQcStepImage(walkthroughId, stepId) {
+  async function generateQcStepImage(walkthroughId, stepIndex) {
     const draft = qcWalkthroughs[walkthroughId];
-    const step = (draft?.steps || []).find((item) => Number(item.id) === Number(stepId));
+    const step = draft?.steps?.[stepIndex];
     if (!draft || !step) {
       return;
     }
@@ -1972,9 +1973,9 @@ function App() {
       return;
     }
 
-    const key = `${walkthroughId}-${stepId}`;
+    const key = `${walkthroughId}-${stepIndex}`;
     setQcImageGenerating((previous) => ({ ...previous, [key]: true }));
-    setAdminMessage(`Generating image for step ${stepId}...`);
+    setAdminMessage(`Generating image for step ${stepIndex + 1}...`);
 
     try {
       const response = await fetch(`${API_URL}/admin/qc/generate-step-image`, {
@@ -2000,8 +2001,8 @@ function App() {
         throw new Error(data.detail || data.error || "Image generation failed.");
       }
 
-      const updatedSteps = (draft.steps || []).map((item) => (
-        Number(item.id) === Number(stepId)
+      const updatedSteps = (draft.steps || []).map((item, index) => (
+        index === stepIndex
           ? {
               ...item,
               imageUrl: data.image_url,
@@ -2019,7 +2020,7 @@ function App() {
         }
       }));
       stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", updatedSteps, draft.title || walkthroughId, false);
-      setAdminMessage(`Generated a new image for step ${stepId}. Click Save All to keep it.`);
+      setAdminMessage(`Generated a new image for step ${stepIndex + 1}. Click Save All to keep it.`);
     } catch (error) {
       console.error(error);
       setAdminMessage(`Image generation failed: ${error.message}`);
@@ -2709,37 +2710,37 @@ function App() {
 
                               <div className="qcStepList">
                                 {(draft.steps || []).map((step, index) => (
-                                  <div key={`qc-step-${walkthroughId}-${step.id}-${index}`} className="qcStep">
+                                  <div key={`qc-step-${walkthroughId}-${index}`} className="qcStep">
                                     <div className="qcStepNumber">{index + 1}</div>
                                     <div className="qcStepEditor">
                                       <QcDraftField
                                         className="qcStepInput"
-                                        fieldKey={`${walkthroughId}-${step.id}-imageLabel`}
+                                        fieldKey={`${walkthroughId}-${index}-imageLabel`}
                                         value={step.imageLabel || ""}
-                                        onCommit={(value) => updateQcStep(walkthroughId, step.id, "imageLabel", value)}
+                                        onCommit={(value) => updateQcStep(walkthroughId, index, "imageLabel", value)}
                                         placeholder="Step label"
                                       />
                                       <QcDraftField
                                         className="qcStepInput"
-                                        fieldKey={`${walkthroughId}-${step.id}-instruction`}
+                                        fieldKey={`${walkthroughId}-${index}-instruction`}
                                         value={step.instruction || ""}
-                                        onCommit={(value) => updateQcStep(walkthroughId, step.id, "instruction", value)}
+                                        onCommit={(value) => updateQcStep(walkthroughId, index, "instruction", value)}
                                         placeholder="Instruction"
                                       />
                                       <QcDraftField
                                         as="textarea"
                                         className="qcStepTextarea"
-                                        fieldKey={`${walkthroughId}-${step.id}-detail`}
+                                        fieldKey={`${walkthroughId}-${index}-detail`}
                                         value={step.detail || ""}
-                                        onCommit={(value) => updateQcStep(walkthroughId, step.id, "detail", value)}
+                                        onCommit={(value) => updateQcStep(walkthroughId, index, "detail", value)}
                                         placeholder="Step detail"
                                       />
                                       <QcDraftField
                                         as="textarea"
                                         className="qcStepTextarea qcImageDirection"
-                                        fieldKey={`${walkthroughId}-${step.id}-imageDirection`}
+                                        fieldKey={`${walkthroughId}-${index}-imageDirection`}
                                         value={step.imageDirection || ""}
-                                        onCommit={(value) => updateQcStep(walkthroughId, step.id, "imageDirection", value)}
+                                        onCommit={(value) => updateQcStep(walkthroughId, index, "imageDirection", value)}
                                         placeholder="Image direction: clarify what the new image should show, avoid, or emphasize."
                                       />
                                       {step.imageUrl && (
@@ -2749,15 +2750,15 @@ function App() {
                                     <div className="qcStepActions">
                                       <button
                                         className={step.imageStale ? "startButton compactButton" : "secondaryButton"}
-                                        onClick={() => generateQcStepImage(walkthroughId, step.id)}
-                                        disabled={!!qcImageGenerating[`${walkthroughId}-${step.id}`]}
+                                        onClick={() => generateQcStepImage(walkthroughId, index)}
+                                        disabled={!!qcImageGenerating[`${walkthroughId}-${index}`]}
                                       >
-                                        {qcImageGenerating[`${walkthroughId}-${step.id}`] ? "Generating..." : "Generate New Image"}
+                                        {qcImageGenerating[`${walkthroughId}-${index}`] ? "Generating..." : "Generate New Image"}
                                       </button>
-                                      <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, step.id, -1)} disabled={index === 0}>↑</button>
-                                      <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, step.id, 1)} disabled={index === (draft.steps || []).length - 1}>↓</button>
-                                      <button className="secondaryButton" onClick={() => addQcStepAfter(walkthroughId, step.id)}>+ Step</button>
-                                      <button className="secondaryButton dangerButton" onClick={() => deleteQcStep(walkthroughId, step.id)} disabled={(draft.steps || []).length <= 1}>Delete</button>
+                                      <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, index, -1)} disabled={index === 0}>↑</button>
+                                      <button className="secondaryButton" onClick={() => moveQcStep(walkthroughId, index, 1)} disabled={index === (draft.steps || []).length - 1}>↓</button>
+                                      <button className="secondaryButton" onClick={() => addQcStepAfter(walkthroughId, index)}>+ Step</button>
+                                      <button className="secondaryButton dangerButton" onClick={() => deleteQcStep(walkthroughId, index)} disabled={(draft.steps || []).length <= 1}>Delete</button>
                                     </div>
                                   </div>
                                 ))}
