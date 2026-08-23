@@ -1514,6 +1514,70 @@ function App() {
   }
 
 
+  async function deleteQcWalkthroughNow(walkthroughId, title = "") {
+    const token = getAdminToken("delete walkthroughs");
+    if (!token) {
+      setAdminMessage("Delete cancelled. No admin token was entered.");
+      return;
+    }
+
+    setQcSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/admin/qc/save-all`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        body: JSON.stringify({
+          actions: [{
+            walkthrough_id: walkthroughId,
+            action: "delete",
+            steps: []
+          }]
+        })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        clearAdminToken();
+        throw new Error(data.detail || data.error || "Delete failed.");
+      }
+
+      const deleted = (data.results || []).some((item) => (
+        item.walkthrough_id === walkthroughId && item.status === "deleted"
+      ));
+
+      if (!deleted) {
+        const skipped = (data.results || []).find((item) => item.walkthrough_id === walkthroughId);
+        throw new Error(skipped?.message || "Walkthrough was not deleted.");
+      }
+
+      setWalkthroughList((previous) => previous.filter((item) => item.walkthrough_id !== walkthroughId));
+      setQcChanges((previous) => {
+        const next = { ...previous };
+        delete next[walkthroughId];
+        return next;
+      });
+      setQcWalkthroughs((previous) => {
+        const next = { ...previous };
+        delete next[walkthroughId];
+        return next;
+      });
+      if (qcExpandedId === walkthroughId) {
+        setQcExpandedId("");
+      }
+      setAdminMessage(`Deleted ${title || walkthroughId}.`);
+      loadBuildStatus();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Delete failed: ${error.message}`);
+    } finally {
+      setQcSaving(false);
+    }
+  }
+
+
   async function markAllWalkthroughsAsDrafts() {
     const token = getAdminToken("mark all current walkthroughs as DRAFT");
     if (!token) {
@@ -1909,7 +1973,7 @@ function App() {
                   <span>{qcListItems().length} item(s)</span>
                 </div>
                 <p className="adminHelp">
-                  Expand a draft, adjust step order, then stage Approve or Delete. Save All pushes approved walkthroughs to the next stage.
+                  Delete draft rows directly from the list, or expand a draft to adjust step order and stage approval.
                 </p>
               </div>
 
@@ -1933,11 +1997,11 @@ function App() {
                         {status !== "approved" && (
                           <button
                             className="qcDeleteButton"
-                            onClick={() => stageQcChange(walkthroughId, "delete", draft?.steps || [])}
-                            disabled={staged === "delete"}
-                            title="Stage this walkthrough for deletion"
+                            onClick={() => deleteQcWalkthroughNow(walkthroughId, item.title)}
+                            disabled={qcSaving}
+                            title="Delete this walkthrough"
                           >
-                            Delete
+                            {qcSaving ? "Deleting" : "Delete"}
                           </button>
                         )}
                       </div>
