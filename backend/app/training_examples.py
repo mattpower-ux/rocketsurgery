@@ -56,6 +56,76 @@ def image_repair_example(
     )
 
 
+def _step_signature(step: dict) -> dict:
+    return {
+        "id": step.get("id"),
+        "image_label": step.get("imageLabel", ""),
+        "instruction": step.get("instruction", ""),
+        "detail": step.get("detail", ""),
+    }
+
+
+def _step_key(step: dict) -> str:
+    return " | ".join([
+        str(step.get("imageLabel", "")),
+        str(step.get("instruction", "")),
+        str(step.get("detail", "")),
+    ]).strip().lower()
+
+
+def compare_walkthrough_steps(before_steps: list[dict], after_steps: list[dict]) -> dict:
+    before_order = [_step_key(step) for step in before_steps or []]
+    after_order = [_step_key(step) for step in after_steps or []]
+    changed_steps = []
+
+    for index, after_step in enumerate(after_steps or []):
+        before_step = (before_steps or [])[index] if index < len(before_steps or []) else {}
+        changed_fields = [
+            field for field in ["imageLabel", "instruction", "detail", "imagePrompt"]
+            if str(before_step.get(field, "")) != str(after_step.get(field, ""))
+        ]
+        if changed_fields:
+            changed_steps.append({
+                "position": index + 1,
+                "step_id": after_step.get("id"),
+                "changed_fields": changed_fields,
+                "before": _step_signature(before_step),
+                "after": _step_signature(after_step),
+            })
+
+    return {
+        "before_step_count": len(before_steps or []),
+        "after_step_count": len(after_steps or []),
+        "step_order_changed": before_order != after_order,
+        "before_step_order": [_step_signature(step) for step in before_steps or []],
+        "after_step_order": [_step_signature(step) for step in after_steps or []],
+        "changed_steps": changed_steps,
+    }
+
+
+def walkthrough_edit_example(action: str, before: dict, after: dict, context: dict | None = None) -> dict:
+    before = before or {}
+    after = after or {}
+    context = context or {}
+    step_delta = compare_walkthrough_steps(before.get("steps", []) or [], after.get("steps", []) or [])
+
+    return append_training_example(
+        "walkthrough_edit",
+        {
+            "action": action,
+            "walkthrough_id": after.get("walkthrough_id") or before.get("walkthrough_id", ""),
+            "query": after.get("query") or before.get("query", ""),
+            "title": after.get("title") or before.get("title", ""),
+            "before_review_status": before.get("review_status", ""),
+            "after_review_status": after.get("review_status", ""),
+            "before_quality_status": before.get("quality_status", ""),
+            "after_quality_status": after.get("quality_status", ""),
+            **step_delta,
+            "context": context,
+        },
+    )
+
+
 def product_photo_example(action: str, category: str, brand: str, model: str, payload: dict) -> dict:
     return append_training_example(
         "product_photo",

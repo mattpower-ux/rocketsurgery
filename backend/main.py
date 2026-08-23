@@ -177,9 +177,17 @@ except ImportError:
     from image_quality import assess_and_record_image_quality
 
 try:
-    from app.training_examples import image_repair_example, product_photo_example
+    from app.training_examples import (
+        image_repair_example,
+        product_photo_example,
+        walkthrough_edit_example,
+    )
 except ImportError:
-    from training_examples import image_repair_example, product_photo_example
+    from training_examples import (
+        image_repair_example,
+        product_photo_example,
+        walkthrough_edit_example,
+    )
 
 try:
     from app.product_packages import save_product_package_manifest
@@ -294,6 +302,10 @@ class QcWalkthroughAction(BaseModel):
 
 class QcSaveAllRequest(BaseModel):
     actions: list[QcWalkthroughAction]
+
+
+class SaveWalkthroughRequest(BaseModel):
+    walkthrough: dict
 
 
 class OverlayRequest(BaseModel):
@@ -2222,6 +2234,58 @@ def get_admin_walkthrough(walkthrough_id: str):
     return {"status": "loaded", "walkthrough": manifest}
 
 
+@app.post("/admin/save-walkthrough")
+def post_save_admin_walkthrough(request: SaveWalkthroughRequest, _: None = Depends(require_admin_token)):
+    manifest = dict(request.walkthrough or {})
+    requested_id = (
+        manifest.get("storage_walkthrough_id")
+        or manifest.get("walkthrough_id")
+        or manifest.get("title")
+        or manifest.get("query")
+        or ""
+    )
+    walkthrough_id = resolve_walkthrough_storage_id(requested_id)
+    before_manifest = load_walkthrough_by_id(walkthrough_id) or {}
+
+    if not requested_id:
+        return {"status": "error", "error": "Missing walkthrough id, title, or query."}
+
+    manifest["walkthrough_id"] = manifest.get("walkthrough_id") or walkthrough_id
+    manifest["quality_status"] = manifest.get("quality_status") or "editor_reviewed"
+    if manifest.get("review_status", "draft") not in ["approved", "deleted", "deprecated"]:
+        manifest["review_status"] = manifest.get("review_status") or "edited"
+
+    for index, step in enumerate(manifest.get("steps", []) or [], start=1):
+        step["id"] = index
+
+    manifest["version"] = int(manifest.get("version", 1)) + 1
+    manifest["editor_saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    save_walkthrough(walkthrough_id, manifest)
+    log_editor_decision({
+        "action": "repair_editor_saved",
+        "walkthrough_id": walkthrough_id,
+        "review_status": manifest.get("review_status", ""),
+        "quality_status": manifest.get("quality_status", ""),
+        "step_count": len(manifest.get("steps", []) or []),
+    })
+    walkthrough_edit_example(
+        "repair_editor_saved",
+        before_manifest,
+        manifest,
+        {
+            "source": "walkthrough_repair_editor",
+            "requested_walkthrough_id": requested_id,
+        }
+    )
+
+    return {
+        "status": "saved",
+        "walkthrough_id": walkthrough_id,
+        "walkthrough": manifest,
+    }
+
+
 @app.post("/admin/qc/save-all")
 def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_token)):
     results = []
@@ -2238,6 +2302,7 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
             })
             continue
 
+        before_manifest = json.loads(json.dumps(manifest))
         action = (item.action or "").lower().strip()
         current_status = manifest.get("review_status", "draft")
 
@@ -2276,6 +2341,16 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
                 "step_count": len(manifest.get("steps", []) or []),
                 "deleted": deletion.get("deleted", False),
             })
+            walkthrough_edit_example(
+                "qc_deleted",
+                before_manifest,
+                {},
+                {
+                    "source": "step_order_quality_control",
+                    "requested_walkthrough_id": requested_walkthrough_id,
+                    "deleted": deletion.get("deleted", False),
+                }
+            )
             results.append({
                 "walkthrough_id": walkthrough_id,
                 "requested_walkthrough_id": requested_walkthrough_id,
@@ -2307,6 +2382,16 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
             "quality_status": manifest.get("quality_status", ""),
             "step_count": len(manifest.get("steps", []) or []),
         })
+        walkthrough_edit_example(
+            f"qc_{result_status}",
+            before_manifest,
+            manifest,
+            {
+                "source": "step_order_quality_control",
+                "requested_walkthrough_id": requested_walkthrough_id,
+                "submitted_step_count": len(item.steps or []),
+            }
+        )
         results.append({
             "walkthrough_id": walkthrough_id,
             "requested_walkthrough_id": requested_walkthrough_id,

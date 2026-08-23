@@ -1913,6 +1913,12 @@ function App() {
       return;
     }
 
+    const token = getAdminToken("save edited walkthroughs");
+    if (!token) {
+      setAdminMessage("Save cancelled. No admin token was entered.");
+      return;
+    }
+
     setEditorSaving(true);
     setAdminMessage("Saving walkthrough...");
 
@@ -1920,7 +1926,8 @@ function App() {
       const response = await fetch(`${API_URL}/admin/save-walkthrough`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
         },
         body: JSON.stringify({
           walkthrough: editorDraft
@@ -1930,6 +1937,9 @@ function App() {
       const data = await response.json();
 
       if (!response.ok || data.status === "error") {
+        if (response.status === 401) {
+          clearAdminToken();
+        }
         throw new Error(data.error || data.detail || "Save failed.");
       }
 
