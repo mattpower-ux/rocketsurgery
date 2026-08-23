@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
 const API_URL = (import.meta.env.VITE_API_URL || "https://rocketsurgery-api.onrender.com").replace(/\/$/, "");
+const ADMIN_TOKEN_STORAGE_KEY = "rocketsurgery_admin_token";
 
 function displayText(value, max = 140) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -247,6 +248,23 @@ function App() {
   );
   const availableModels = selectedBrandRecord?.models || [];
   const currentModelTips = overlayData?.installation_tips || overlayData?.overlays || [];
+
+  function getAdminToken(promptLabel = "continue") {
+    const cached = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+    if (cached) {
+      return cached;
+    }
+
+    const token = window.prompt(`Enter admin token to ${promptLabel}:`);
+    if (token) {
+      window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+    }
+    return token || "";
+  }
+
+  function clearAdminToken() {
+    window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+  }
 
   async function fetchProductOptions(finalQuery) {
     const response = await fetch(
@@ -1117,7 +1135,7 @@ function App() {
 
 
   async function rebuildWalkthroughIndex() {
-    const token = window.prompt("Enter admin token to sift existing walkthroughs:");
+    const token = getAdminToken("sift existing walkthroughs");
     if (!token) {
       setAdminMessage("Walkthrough indexing cancelled. No token was entered.");
       return;
@@ -1139,6 +1157,7 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
+        clearAdminToken();
         throw new Error(data.detail || data.error || "Walkthrough index rebuild failed.");
       }
 
@@ -1456,7 +1475,7 @@ function App() {
       return;
     }
 
-    const token = window.prompt("Enter admin token to save QC changes:");
+    const token = getAdminToken("save QC changes");
     if (!token) {
       setAdminMessage("QC save cancelled. No token was entered.");
       return;
@@ -1475,6 +1494,7 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
+        clearAdminToken();
         throw new Error(data.detail || data.error || "QC save failed.");
       }
 
@@ -1495,7 +1515,7 @@ function App() {
 
 
   async function markAllWalkthroughsAsDrafts() {
-    const token = window.prompt("Enter admin token to mark all current walkthroughs as DRAFT:");
+    const token = getAdminToken("mark all current walkthroughs as DRAFT");
     if (!token) {
       setAdminMessage("Draft migration cancelled. No token was entered.");
       return;
@@ -1512,6 +1532,7 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
+        clearAdminToken();
         throw new Error(data.detail || data.error || "Draft migration failed.");
       }
 
