@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "./App.css";
 
 const API_URL = (import.meta.env.VITE_API_URL || "https://rocketsurgery-api.onrender.com").replace(/\/$/, "");
 const ADMIN_TOKEN_STORAGE_KEY = "rocketsurgery_admin_token";
+const qcDraftValueCache = new Map();
+let activeQcDraftFieldKey = "";
+let activeQcDraftSelection = null;
 
 function displayText(value, max = 140) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -101,43 +104,95 @@ function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommi
   );
 }
 
-function QcDraftField({ as = "input", className = "", value = "", onCommit, placeholder = "" }) {
-  const [draftValue, setDraftValue] = useState(value || "");
+function QcDraftField({ as = "input", className = "", value = "", onCommit, placeholder = "", fieldKey = "" }) {
+  const cacheKey = fieldKey || `${className}-${placeholder}`;
+  const [draftValue, setDraftValue] = useState(
+    qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || ""
+  );
   const editingRef = useRef(false);
+  const fieldRef = useRef(null);
   const Field = as;
 
   useEffect(() => {
     if (!editingRef.current) {
-      setDraftValue(value || "");
+      const nextValue = value || "";
+      qcDraftValueCache.set(cacheKey, nextValue);
+      setDraftValue(nextValue);
     }
-  }, [value]);
+  }, [cacheKey, value]);
+
+  useLayoutEffect(() => {
+    if (activeQcDraftFieldKey !== cacheKey || !fieldRef.current) {
+      return;
+    }
+
+    const field = fieldRef.current;
+    if (document.activeElement !== field) {
+      field.focus({ preventScroll: true });
+    }
+
+    if (
+      activeQcDraftSelection &&
+      typeof field.setSelectionRange === "function"
+    ) {
+      const start = Math.min(activeQcDraftSelection.start, field.value.length);
+      const end = Math.min(activeQcDraftSelection.end, field.value.length);
+      field.setSelectionRange(start, end);
+    }
+  });
+
+  function rememberSelection(event) {
+    activeQcDraftFieldKey = cacheKey;
+    activeQcDraftSelection = {
+      start: event.currentTarget.selectionStart || 0,
+      end: event.currentTarget.selectionEnd || 0
+    };
+  }
+
+  function commitCurrentValue(target) {
+    editingRef.current = false;
+    activeQcDraftFieldKey = "";
+    activeQcDraftSelection = null;
+    qcDraftValueCache.delete(cacheKey);
+    onCommit?.(target?.value ?? draftValue);
+  }
 
   function stopEditorShortcut(event) {
     event.stopPropagation();
+    rememberSelection(event);
     if (as !== "textarea" && event.key === "Enter") {
       event.preventDefault();
-      editingRef.current = false;
-      onCommit?.(draftValue);
+      commitCurrentValue(event.currentTarget);
       event.currentTarget.blur();
     }
   }
 
   return (
     <Field
+      ref={fieldRef}
       className={className}
       value={draftValue}
-      onFocus={() => {
+      onFocus={(event) => {
         editingRef.current = true;
+        rememberSelection(event);
       }}
-      onChange={(event) => setDraftValue(event.target.value)}
-      onBlur={() => {
-        editingRef.current = false;
-        onCommit?.(draftValue);
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        qcDraftValueCache.set(cacheKey, nextValue);
+        setDraftValue(nextValue);
+        rememberSelection(event);
       }}
+      onBlur={(event) => commitCurrentValue(event.currentTarget)}
+      onSelect={rememberSelection}
+      onKeyDownCapture={stopEditorShortcut}
       onKeyDown={stopEditorShortcut}
+      onKeyUpCapture={rememberSelection}
       onKeyUp={stopEditorShortcut}
+      onInputCapture={rememberSelection}
       onInput={stopEditorShortcut}
-      onClick={stopEditorShortcut}
+      onClickCapture={stopEditorShortcut}
+      onClick={rememberSelection}
+      onMouseDownCapture={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       placeholder={placeholder}
     />
@@ -2616,6 +2671,7 @@ function App() {
                                   <span>Title shown in admin</span>
                                   <QcDraftField
                                     className="qcStepInput"
+                                    fieldKey={`${walkthroughId}-title`}
                                     value={draft.title || ""}
                                     onCommit={(value) => updateQcMetadata(walkthroughId, "title", value)}
                                     placeholder="Clear walkthrough title"
@@ -2625,6 +2681,7 @@ function App() {
                                   <span>Query this walkthrough should answer</span>
                                   <QcDraftField
                                     className="qcStepInput"
+                                    fieldKey={`${walkthroughId}-query`}
                                     value={draft.query || ""}
                                     onCommit={(value) => updateQcMetadata(walkthroughId, "query", value)}
                                     placeholder="Example: install a refrigerator icemaker water line"
@@ -2657,12 +2714,14 @@ function App() {
                                     <div className="qcStepEditor">
                                       <QcDraftField
                                         className="qcStepInput"
+                                        fieldKey={`${walkthroughId}-${step.id}-imageLabel`}
                                         value={step.imageLabel || ""}
                                         onCommit={(value) => updateQcStep(walkthroughId, step.id, "imageLabel", value)}
                                         placeholder="Step label"
                                       />
                                       <QcDraftField
                                         className="qcStepInput"
+                                        fieldKey={`${walkthroughId}-${step.id}-instruction`}
                                         value={step.instruction || ""}
                                         onCommit={(value) => updateQcStep(walkthroughId, step.id, "instruction", value)}
                                         placeholder="Instruction"
@@ -2670,6 +2729,7 @@ function App() {
                                       <QcDraftField
                                         as="textarea"
                                         className="qcStepTextarea"
+                                        fieldKey={`${walkthroughId}-${step.id}-detail`}
                                         value={step.detail || ""}
                                         onCommit={(value) => updateQcStep(walkthroughId, step.id, "detail", value)}
                                         placeholder="Step detail"
@@ -2677,6 +2737,7 @@ function App() {
                                       <QcDraftField
                                         as="textarea"
                                         className="qcStepTextarea qcImageDirection"
+                                        fieldKey={`${walkthroughId}-${step.id}-imageDirection`}
                                         value={step.imageDirection || ""}
                                         onCommit={(value) => updateQcStep(walkthroughId, step.id, "imageDirection", value)}
                                         placeholder="Image direction: clarify what the new image should show, avoid, or emphasize."
