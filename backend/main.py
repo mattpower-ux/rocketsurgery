@@ -1,9 +1,12 @@
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from pathlib import Path
 import json
+import csv
+import io
 
 try:
     from app.canonical_images import (
@@ -146,9 +149,19 @@ except ImportError:
     from build_status import get_build_status
 
 try:
-    from app.query_logger import log_query_event
+    from app.query_logger import (
+        list_visitor_events,
+        log_query_event,
+        log_visitor_event,
+        visitor_events_csv,
+    )
 except ImportError:
-    from query_logger import log_query_event
+    from query_logger import (
+        list_visitor_events,
+        log_query_event,
+        log_visitor_event,
+        visitor_events_csv,
+    )
 
 try:
     from app.walkthrough_index import (
@@ -273,6 +286,15 @@ app.add_middleware(
 
 class WalkthroughRequest(BaseModel):
     query: str
+
+
+class VisitorEventRequest(BaseModel):
+    event: str = "client_event"
+    query: str = ""
+    walkthrough_id: str = ""
+    path: str = ""
+    time_spent_seconds: float = 0
+    metadata: dict = Field(default_factory=dict)
 
 
 class ManualExtractRequest(BaseModel):
@@ -489,6 +511,88 @@ def require_admin_token(x_admin_token: str = Header(default="")):
         )
     if x_admin_token != expected:
         raise HTTPException(status_code=401, detail="Invalid admin token.")
+
+
+def client_ip_from_request(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+
+    real_ip = request.headers.get("x-real-ip", "")
+    if real_ip:
+        return real_ip.strip()
+
+    return request.client.host if request.client else ""
+
+
+def user_agent_from_request(request: Request) -> str:
+    return request.headers.get("user-agent", "")
+
+
+@app.post("/visitor/event")
+def post_visitor_event(payload: VisitorEventRequest, http_request: Request):
+    return log_visitor_event(
+        event=payload.event,
+        query=payload.query,
+        walkthrough_id=payload.walkthrough_id,
+        path=payload.path,
+        time_spent_seconds=payload.time_spent_seconds,
+        ip_address=client_ip_from_request(http_request),
+        user_agent=user_agent_from_request(http_request),
+        metadata=payload.metadata,
+    )
+
+
+@app.get("/admin/visitors")
+def get_admin_visitors(
+    limit: int = 250,
+    start_date: str = "",
+    end_date: str = "",
+    _: None = Depends(require_admin_token)
+):
+    return list_visitor_events(
+        limit=limit,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+
+@app.get("/admin/visitors.csv")
+def export_admin_visitors_csv(
+    start_date: str = "",
+    end_date: str = "",
+    _: None = Depends(require_admin_token)
+):
+    output = io.StringIO()
+    fieldnames = [
+        "timestamp",
+        "event",
+        "query",
+        "walkthrough_id",
+        "path",
+        "time_spent_seconds",
+        "ip_address",
+        "user_agent",
+        "metadata",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+
+    for row in visitor_events_csv(start_date=start_date, end_date=end_date):
+        writer.writerow({field: row.get(field, "") for field in fieldnames})
+
+    filename = "rocketsurgery-visitors"
+    if start_date or end_date:
+        filename += f"-{start_date or 'begin'}-to-{end_date or 'latest'}"
+    filename += ".csv"
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
 
 
 
@@ -2831,12 +2935,8 @@ def get_walkthrough(
 
     cached = load_walkthrough(request.query)
 
-    client_ip = (
-        http_request.headers.get("x-forwarded-for")
-        or (http_request.client.host if http_request.client else "")
-    )
-
-    user_agent = http_request.headers.get("user-agent", "")
+    client_ip = client_ip_from_request(http_request)
+    user_agent = user_agent_from_request(http_request)
 
     if cached:
         elapsed_ms = int((time.time() - start_time) * 1000)
@@ -2849,6 +2949,16 @@ def get_walkthrough(
                 response_time_ms=elapsed_ms,
                 ip_address=client_ip,
                 user_agent=user_agent
+            )
+            log_visitor_event(
+                event="walkthrough_cache_hit",
+                query=request.query,
+                walkthrough_id=cached.get("walkthrough_id", ""),
+                path="/walkthrough",
+                time_spent_seconds=round(elapsed_ms / 1000, 2),
+                ip_address=client_ip,
+                user_agent=user_agent,
+                metadata={"cache_hit": True}
             )
         except Exception as e:
             print("Query logging failed:", e)
@@ -2869,6 +2979,16 @@ def get_walkthrough(
             response_time_ms=elapsed_ms,
             ip_address=client_ip,
             user_agent=user_agent
+        )
+        log_visitor_event(
+            event="walkthrough_generated",
+            query=request.query,
+            walkthrough_id=generated.get("walkthrough_id", ""),
+            path="/walkthrough",
+            time_spent_seconds=round(elapsed_ms / 1000, 2),
+            ip_address=client_ip,
+            user_agent=user_agent,
+            metadata={"cache_hit": False}
         )
     except Exception as e:
         print("Query logging failed:", e)

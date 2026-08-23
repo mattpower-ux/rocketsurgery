@@ -718,6 +718,112 @@ body {
   background: #fef2f2;
 }
 
+.visitorWorkspace {
+  display: grid;
+  gap: 12px;
+}
+
+.visitorControls {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.visitorControls label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #4b5563;
+  text-transform: uppercase;
+}
+
+.visitorControls input {
+  min-width: 160px;
+  border: 2px solid #d1d5db;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 800;
+}
+
+.visitorStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.visitorStats div {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.visitorStats strong,
+.visitorStats span {
+  display: block;
+}
+
+.visitorStats strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.visitorStats span {
+  margin-top: 5px;
+  color: #555;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.visitorList {
+  display: grid;
+  gap: 5px;
+}
+
+.visitorRow {
+  display: grid;
+  grid-template-columns: minmax(170px, auto) minmax(150px, auto) minmax(260px, 1fr) minmax(70px, auto) minmax(120px, auto);
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: white;
+  font-size: 13px;
+}
+
+.visitorDate,
+.visitorDuration,
+.visitorIp {
+  color: #555;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.visitorEvent {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: #111827;
+  font-weight: 900;
+  white-space: nowrap;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.visitorQuery {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 900;
+}
+
 .compactButton {
   padding: 8px 10px;
   border-radius: 12px;
@@ -1078,15 +1184,22 @@ body {
   }
 
   .libraryStats,
+  .visitorStats,
   .libraryControls,
   .libraryRow,
+  .visitorRow,
   .prospectiveRow,
   .qcMetadataEditor {
     grid-template-columns: 1fr;
   }
 
-  .libraryRow {
+  .libraryRow,
+  .visitorRow {
     align-items: stretch;
+  }
+
+  .visitorRow {
+    gap: 4px;
   }
 
   .adminScreen,

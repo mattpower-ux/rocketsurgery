@@ -19,6 +19,24 @@ function apiAssetUrl(url) {
   return value;
 }
 
+function todayDateInputValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatVisitorDate(value) {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function formatDuration(seconds) {
+  const value = Number(seconds || 0);
+  if (!Number.isFinite(value) || value <= 0) return "0s";
+  if (value < 60) return `${Math.round(value)}s`;
+  return `${Math.floor(value / 60)}m ${Math.round(value % 60)}s`;
+}
+
 function buildSpecificQuery(query, brand, model) {
   const baseQuery = query.trim() || "installation walkthrough";
 
@@ -254,6 +272,13 @@ function App() {
   const [libraryMessage, setLibraryMessage] = useState("");
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryRebuilding, setLibraryRebuilding] = useState(false);
+  const [visitorLog, setVisitorLog] = useState(null);
+  const [visitorLoading, setVisitorLoading] = useState(false);
+  const [visitorStartDate, setVisitorStartDate] = useState("");
+  const [visitorEndDate, setVisitorEndDate] = useState(todayDateInputValue());
+  const sessionStartedAtRef = useRef(Date.now());
+  const lastVisitorQueryRef = useRef("");
+  const lastVisitorWalkthroughIdRef = useRef("");
 
   const [bulkJobList, setBulkJobList] = useState(null);
   const [walkthroughList, setWalkthroughList] = useState([]);
@@ -266,10 +291,8 @@ function App() {
   const [adminPanels, setAdminPanels] = useState({
     qc: true,
     library: true,
-    repair: false,
+    visitors: true,
     catalog: false,
-    reports: false,
-    queue: false,
     status: false,
     activity: false,
     advanced: false
@@ -318,6 +341,116 @@ function App() {
     window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
   }
 
+  function logVisitorEvent(event, overrides = {}) {
+    const payload = {
+      event,
+      query: overrides.query ?? lastVisitorQueryRef.current,
+      walkthrough_id: overrides.walkthrough_id ?? lastVisitorWalkthroughIdRef.current,
+      path: window.location.pathname,
+      time_spent_seconds: overrides.time_spent_seconds ?? 0,
+      metadata: overrides.metadata || {}
+    };
+    const body = JSON.stringify(payload);
+
+    try {
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: "application/json" });
+        navigator.sendBeacon(`${API_URL}/visitor/event`, blob);
+        return;
+      }
+    } catch (error) {
+      console.error(error);
+    }
+
+    fetch(`${API_URL}/visitor/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true
+    }).catch((error) => console.error(error));
+  }
+
+  async function loadVisitors(tokenOverride = "") {
+    const token = tokenOverride || getAdminToken("load visitor logs");
+    if (!token) {
+      setAdminMessage("Visitor log load cancelled. No admin token was entered.");
+      return;
+    }
+
+    const params = new URLSearchParams({
+      limit: "500"
+    });
+    if (visitorStartDate) params.set("start_date", visitorStartDate);
+    if (visitorEndDate) params.set("end_date", visitorEndDate);
+
+    setVisitorLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/visitors?${params.toString()}`, {
+        headers: { "X-Admin-Token": token },
+        cache: "no-store"
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        clearAdminToken();
+        throw new Error(data.detail || data.error || "Visitor log failed.");
+      }
+
+      setVisitorLog(data);
+      setAdminMessage(`Visitor log loaded: ${data.summary?.event_count || 0} event(s).`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Could not load visitor log: ${error.message}`);
+    } finally {
+      setVisitorLoading(false);
+    }
+  }
+
+  async function exportVisitorsCsv() {
+    const token = getAdminToken("export visitor logs");
+    if (!token) {
+      setAdminMessage("Visitor export cancelled. No admin token was entered.");
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (visitorStartDate) params.set("start_date", visitorStartDate);
+    if (visitorEndDate) params.set("end_date", visitorEndDate);
+
+    setVisitorLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/visitors.csv?${params.toString()}`, {
+        headers: { "X-Admin-Token": token },
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        clearAdminToken();
+        throw new Error(text || "Visitor export failed.");
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const dateLabel = `${visitorStartDate || "begin"}-to-${visitorEndDate || "latest"}`;
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `rocketsurgery-visitors-${dateLabel}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+      setAdminMessage(`Visitor CSV exported for ${dateLabel}.`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Could not export visitor CSV: ${error.message}`);
+    } finally {
+      setVisitorLoading(false);
+    }
+  }
+
   async function fetchProductOptions(finalQuery) {
     const response = await fetch(
       `${API_URL}/product-options?query=${encodeURIComponent(finalQuery)}`
@@ -331,6 +464,8 @@ function App() {
   }
 
   async function fetchWalkthrough(finalQuery) {
+    const resolvedQuery = finalQuery || "James Hardie siding nailing schedule";
+    lastVisitorQueryRef.current = resolvedQuery;
     setLoading(true);
     setActiveHotspot(null);
     setComplete(false);
@@ -343,15 +478,24 @@ function App() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          query: finalQuery || "James Hardie siding nailing schedule"
+          query: resolvedQuery
         })
       });
 
       const data = await response.json();
 
       setWalkthrough(data);
+      lastVisitorWalkthroughIdRef.current = data?.walkthrough_id || "";
 
-      await fetchOverlay(finalQuery);
+      logVisitorEvent("walkthrough_loaded", {
+        query: resolvedQuery,
+        walkthrough_id: data?.walkthrough_id || "",
+        metadata: {
+          step_count: data?.steps?.length || 0
+        }
+      });
+
+      await fetchOverlay(resolvedQuery);
 
       setStarted(true);
       setClarifying(false);
@@ -468,6 +612,9 @@ function App() {
 
   function newJob() {
     window.speechSynthesis.cancel();
+    logVisitorEvent("new_job", {
+      time_spent_seconds: Math.round((Date.now() - sessionStartedAtRef.current) / 1000)
+    });
     setScreen("home");
     setQuery("");
     setWalkthrough(null);
@@ -497,10 +644,13 @@ function App() {
     setComplete(false);
     setActiveHotspot(null);
     loadAdminStatus();
-    loadBulkJobList();
     loadAdminWalkthroughs();
     loadWalkthroughLibrary();
     loadCatalogPipelineStatus();
+    const cachedToken = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+    if (cachedToken) {
+      loadVisitors(cachedToken);
+    }
   }
 
   function nextStep() {
@@ -530,6 +680,9 @@ function App() {
 
   function backToHome() {
     window.speechSynthesis.cancel();
+    logVisitorEvent("back_to_home", {
+      time_spent_seconds: Math.round((Date.now() - sessionStartedAtRef.current) / 1000)
+    });
     setScreen("home");
     setClarifying(false);
     setStarted(false);
@@ -2284,6 +2437,39 @@ function App() {
 
 
   useEffect(() => {
+    logVisitorEvent("session_start", {
+      metadata: {
+        initial_path: window.location.pathname
+      }
+    });
+
+    const handlePageHide = () => {
+      logVisitorEvent("session_end", {
+        time_spent_seconds: Math.round((Date.now() - sessionStartedAtRef.current) / 1000),
+        metadata: {
+          final_screen: screen
+        }
+      });
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    return () => window.removeEventListener("pagehide", handlePageHide);
+  }, []);
+
+
+  useEffect(() => {
+    if (!visitorLog) {
+      return;
+    }
+
+    const cachedToken = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+    if (cachedToken) {
+      loadVisitors(cachedToken);
+    }
+  }, [visitorStartDate, visitorEndDate]);
+
+
+  useEffect(() => {
     if (screen !== "admin") {
       return;
     }
@@ -2633,179 +2819,59 @@ function App() {
           </AdminSection>
 
           <AdminSection
-            panelId="repair"
-            title="Walkthrough Repair Editor"
+            panelId="visitors"
+            title="VISITORS"
             actions={
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                <span className="adminHelp" style={{ margin: 0 }}>
-                  {editorDirty ? "● Unsaved changes" : editorDraft ? "✓ All changes saved" : "Select a walkthrough"}
-                </span>
-                <button className="secondaryButton" onClick={loadAdminWalkthroughs} disabled={adminLoading}>
-                  Refresh Walkthroughs
+              <div className="adminActionRow">
+                <button className="secondaryButton" onClick={() => loadVisitors()} disabled={visitorLoading}>
+                  {visitorLoading ? "Loading..." : "Refresh Visitors"}
                 </button>
-                <button className="startButton" onClick={saveEditorWalkthrough} disabled={!editorDraft || !editorDirty || editorSaving}>
-                  {editorSaving ? "Saving..." : "Save Walkthrough"}
-                </button>
-                <button className="secondaryButton" onClick={previewEditorWalkthrough} disabled={!editorDraft}>
-                  Preview Walkthrough
+                <button className="startButton" onClick={exportVisitorsCsv} disabled={visitorLoading}>
+                  Export CSV
                 </button>
               </div>
             }
           >
-            <p className="adminHelp">
-              Production workspace: select a walkthrough, reorder small thumbnail cards, rewrite step text, regenerate weak images, then save the edited manifest.
-            </p>
+            <div className="visitorWorkspace">
+              <div className="visitorControls">
+                <label>
+                  <span>Start date</span>
+                  <input type="date" value={visitorStartDate} onChange={(event) => setVisitorStartDate(event.target.value)} />
+                </label>
+                <label>
+                  <span>End date</span>
+                  <input type="date" value={visitorEndDate} onChange={(event) => setVisitorEndDate(event.target.value)} />
+                </label>
+                <button className="secondaryButton" onClick={() => { setVisitorStartDate(""); setVisitorEndDate(todayDateInputValue()); }}>
+                  Reset Dates
+                </button>
+              </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 300px) 1fr", gap: "16px" }}>
-              <div style={{ display: "grid", gap: "8px", alignContent: "start", maxHeight: "720px", overflow: "auto" }}>
-                {(walkthroughList || []).slice(0, 120).map((item) => (
-                  <button
-                    key={qcItemId(item)}
-                    className="secondaryButton"
-                    style={{
-                      textAlign: "left",
-                      borderColor: editorDraft?.walkthrough_id === item.walkthrough_id ? "#111827" : undefined,
-                      background: editorDraft?.walkthrough_id === item.walkthrough_id ? "#eef2ff" : undefined
-                    }}
-                    onClick={() => loadAdminWalkthrough(qcItemId(item))}
-                    disabled={adminLoading}
-                  >
-                    <strong>{displayText(item.title, 70)}</strong>
-                    <br />
-                    <span style={{ fontSize: "12px", opacity: 0.75 }}>
-                      {item.walkthrough_id} · {item.step_count} steps
-                    </span>
-                  </button>
+              <div className="visitorStats">
+                <div><strong>{visitorLog?.summary?.event_count || 0}</strong><span>Events</span></div>
+                <div><strong>{visitorLog?.summary?.walkthrough_event_count || 0}</strong><span>Query events</span></div>
+                <div><strong>{visitorLog?.summary?.unique_ip_count || 0}</strong><span>Unique IPs</span></div>
+                <div><strong>{formatDuration(visitorLog?.summary?.total_time_spent_seconds || 0)}</strong><span>Total time</span></div>
+              </div>
+
+              <div className="visitorList">
+                {(visitorLog?.visitors || []).map((event, index) => (
+                  <div className="visitorRow" key={`visitor-${event.timestamp}-${index}`}>
+                    <span className="visitorDate">{formatVisitorDate(event.timestamp)}</span>
+                    <span className="visitorEvent">{event.event || "event"}</span>
+                    <span className="visitorQuery">{displayText(event.query || event.walkthrough_id || event.path || "No query", 110)}</span>
+                    <span className="visitorDuration">{formatDuration(event.time_spent_seconds)}</span>
+                    <span className="visitorIp">{event.ip_address || "IP unavailable"}</span>
+                  </div>
                 ))}
               </div>
 
-              <div>
-                {editorDraft ? (
-                  <>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px", marginBottom: "14px" }}>
-                      <label className="fieldLabel">
-                        Walkthrough title
-                        <input key={`title-${selectedAdminWalkthrough?.walkthrough_id || "draft"}`} defaultValue={editorDraft.title || ""} onBlur={(event) => updateEditorField("title", event.target.value)} />
-                      </label>
-                      <label className="fieldLabel">
-                        Disclaimer
-                        <textarea key={`disclaimer-${selectedAdminWalkthrough?.walkthrough_id || "draft"}`} className="adminTextArea small" defaultValue={editorDraft.disclaimer || ""} onBlur={(event) => updateEditorField("disclaimer", event.target.value)} />
-                      </label>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" }}>
-                      {(editorDraft.steps || []).map((step, index) => (
-                        <div
-                          key={`editor-step-${step.id}`}
-                          style={{
-                            border: "1px solid rgba(0,0,0,0.14)",
-                            borderRadius: "16px",
-                            padding: "12px",
-                            background: "rgba(255,255,255,0.88)",
-                            display: "grid",
-                            gap: "8px"
-                          }}
-                        >
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                            <strong>Step {index + 1}</strong>
-                            <div style={{ display: "flex", gap: "6px" }}>
-                              <button className="secondaryButton" onClick={() => moveEditorStep(step.id, -1)} disabled={index === 0}>↑</button>
-                              <button className="secondaryButton" onClick={() => moveEditorStep(step.id, 1)} disabled={index === (editorDraft.steps || []).length - 1}>↓</button>
-                            </div>
-                          </div>
-
-                          <StepImageReview step={step} />
-
-                          {step.pendingImageUrl && (
-                            <div
-                              style={{
-                                background: "rgba(37,99,235,0.08)",
-                                border: "1px solid rgba(37,99,235,0.18)",
-                                borderRadius: "14px",
-                                padding: "10px",
-                                marginBottom: "10px",
-                                fontWeight: 800,
-                                fontSize: "0.86rem"
-                              }}
-                            >
-                              New image ready for review. Click <strong>Accept New Image</strong> to replace the current image, or <strong>Discard Candidate</strong> to keep the current one.
-                            </div>
-                          )}
-
-                          <label className="fieldLabel">
-                            Step title / caption
-                            <input defaultValue={step.imageLabel || ""} onBlur={(event) => updateEditorStep(step.id, "imageLabel", event.target.value)} />
-                          </label>
-
-                          <label className="fieldLabel">
-                            Instruction text
-                            <textarea className="adminTextArea small" defaultValue={step.instruction || ""} onBlur={(event) => updateEditorStep(step.id, "instruction", event.target.value)} />
-                          </label>
-
-                          <label className="fieldLabel">
-                            Detail text
-                            <textarea className="adminTextArea small" defaultValue={step.detail || ""} onBlur={(event) => updateEditorStep(step.id, "detail", event.target.value)} />
-                          </label>
-
-                          <StepRepairPromptBox
-                            stepId={step.id}
-                            initialValue={repairCorrections[step.id] || repairCorrectionRefs.current[step.id] || ""}
-                            onDraftChange={(stepId, value) => {
-                              repairCorrectionRefs.current[stepId] = value;
-                            }}
-                            onCommit={(stepId, value) => {
-                              repairCorrectionRefs.current[stepId] = value;
-                              setRepairCorrections((previous) => ({ ...previous, [stepId]: value }));
-                            }}
-                          />
-
-                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                            <button
-                              className="startButton"
-                              onClick={() => regenerateStepImage(step.id)}
-                              disabled={adminLoading || regeneratingStepId === step.id}
-                              style={{
-                                opacity: regeneratingStepId === step.id ? 0.78 : 1,
-                                transform: regeneratingStepId === step.id ? "scale(0.98)" : "scale(1)",
-                                transition: "transform 120ms ease, opacity 120ms ease",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "8px",
-                                justifyContent: "center"
-                              }}
-                            >
-                              {regeneratingStepId === step.id && (
-                                <span
-                                  style={{
-                                    width: "16px",
-                                    height: "16px",
-                                    border: "2px solid rgba(255,255,255,0.45)",
-                                    borderTopColor: "#fff",
-                                    borderRadius: "999px",
-                                    display: "inline-block",
-                                    animation: "rsSpin 0.8s linear infinite"
-                                  }}
-                                />
-                              )}
-                              {regeneratingStepId === step.id ? "Generating…" : (step.pendingImageUrl ? "Generate Another" : "Regenerate Image")}
-                            </button>
-                            {step.pendingImageUrl && (
-                              <button className="doneButton" onClick={() => acceptStepImage(step.id)} disabled={adminLoading}>
-                                Accept New Image
-                              </button>
-                            )}
-                            <button className="secondaryButton" onClick={() => revertStepImage(step.id)} disabled={adminLoading}>
-                              {step.pendingImageUrl ? "Discard Candidate" : "Revert / Discard"}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <p className="adminHelp">Select a walkthrough to start editing. Click Refresh Walkthroughs if the list is empty.</p>
-                )}
-              </div>
+              {visitorLog && !(visitorLog.visitors || []).length && (
+                <p className="adminHelp">No visitor events match this date range yet.</p>
+              )}
+              {!visitorLog && (
+                <p className="adminHelp">Click Refresh Visitors to load usage events, queries, time spent, IP addresses when available, and timestamps.</p>
+              )}
             </div>
           </AdminSection>
 
@@ -2955,72 +3021,6 @@ function App() {
               </div>
             ) : (
               <p className="adminHelp">Click Refresh Catalog to load available packages and starter models.</p>
-            )}
-          </AdminSection>
-
-          <AdminSection panelId="reports" title="Package Report Panel">
-            {productPackageResult ? (
-              <div style={{ display: "grid", gap: "12px" }}>
-                <h3 style={{ margin: 0 }}>{productPackageResult.product?.brand || productPackageBrand} {productPackageResult.product?.model || productPackageModel}</h3>
-                <div className="adminStats">
-                  <div><strong>{productPackageResult.product?.photo_url ? "YES" : "NO"}</strong><span>Photo Found</span></div>
-                  <div><strong>{productPackageResult.product?.manual_url ? "YES" : "NO"}</strong><span>Manual Found</span></div>
-                  <div><strong>{productPackageResult.discovery?.pdfs?.length || 0}</strong><span>PDF candidates</span></div>
-                  <div><strong>{productPackageResult.overlays?.length || productPackageResult.discovery?.overlays?.length || "—"}</strong><span>Overlays</span></div>
-                  <div><strong>{productPackageResult.product?.confidence || "UNKNOWN"}</strong><span>Confidence</span></div>
-                </div>
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  {productPackageResult.product?.photo_url && <a className="secondaryButton" href={apiAssetUrl(productPackageResult.product.photo_url)} target="_blank" rel="noreferrer">View Photo</a>}
-                  {productPackageResult.product?.manual_url && <a className="secondaryButton" href={apiAssetUrl(productPackageResult.product.manual_url)} target="_blank" rel="noreferrer">View Manual</a>}
-                  {productPackageResult.overlays_json_url && <a className="secondaryButton" href={apiAssetUrl(productPackageResult.overlays_json_url)} target="_blank" rel="noreferrer">View Overlays</a>}
-                  {productPackageResult.discovery_json_url && <a className="secondaryButton" href={apiAssetUrl(productPackageResult.discovery_json_url)} target="_blank" rel="noreferrer">View Discovery JSON</a>}
-                </div>
-              </div>
-            ) : (
-              <p className="adminHelp">Build or test a product package to see its quality-control report here.</p>
-            )}
-          </AdminSection>
-
-          <AdminSection
-            panelId="queue"
-            title="Queue / Worker Controls"
-            actions={<button className="secondaryButton" onClick={loadBulkJobList} disabled={adminLoading}>Refresh Queue</button>}
-          >
-            <div className="adminStats">
-              <div><strong>{bulkJobList?.counts?.queued || 0}</strong><span>Queued</span></div>
-              <div><strong>{bulkJobList?.counts?.completed || 0}</strong><span>Completed</span></div>
-              <div><strong>{bulkJobList?.counts?.failed || 0}</strong><span>Failed</span></div>
-              <div><strong>{buildStatus?.activity_state?.toUpperCase() || "UNKNOWN"}</strong><span>Worker activity</span></div>
-            </div>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
-              <button className="startButton" onClick={() => runQueueLimit(5)} disabled={adminLoading}>Run Next 5</button>
-              <button className="startButton" onClick={() => runQueueLimit(20)} disabled={adminLoading}>Run Next 20</button>
-              <button className="secondaryButton" onClick={() => runQueueLimit(999)} disabled={adminLoading}>Run All</button>
-            </div>
-            {bulkJobList ? (
-              <div style={{ display: "grid", gap: "10px" }}>
-                {["failed", "queued", "completed", "ignored"].map((group) => (
-                  <details key={group}>
-                    <summary><strong>{group.toUpperCase()}</strong> ({bulkJobList[group]?.length || 0})</summary>
-                    <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
-                      {(bulkJobList[group] || []).slice(0, 30).map((job) => (
-                        <div key={`${group}-${job.query_slug || job.query}`} style={{ border: "1px solid rgba(0,0,0,0.12)", borderRadius: "12px", padding: "10px", background: "#fff" }}>
-                          <strong>{displayText(job.query, 100)}</strong>
-                          {job.error && <div style={{ fontSize: "12px", color: "#8a1f11", overflowWrap: "anywhere" }}>Error: {displayText(job.error, 180)}</div>}
-                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
-                            <button className="secondaryButton" onClick={() => updateBulkJob(job.query_slug, "retry")} disabled={adminLoading}>Retry</button>
-                            <button className="secondaryButton" onClick={() => updateBulkJob(job.query_slug, "ignore")} disabled={adminLoading}>Ignore</button>
-                            <button className="secondaryButton" onClick={() => updateBulkJob(job.query_slug, "delete")} disabled={adminLoading}>Delete</button>
-                            {job.walkthrough_id && <button className="secondaryButton" onClick={() => loadAdminWalkthrough(job.walkthrough_id)} disabled={adminLoading}>Edit</button>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                ))}
-              </div>
-            ) : (
-              <p className="adminHelp">Click Refresh Queue to load queue records.</p>
             )}
           </AdminSection>
 
