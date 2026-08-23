@@ -1,11 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
 const API_URL = (import.meta.env.VITE_API_URL || "https://rocketsurgery-api.onrender.com").replace(/\/$/, "");
 const ADMIN_TOKEN_STORAGE_KEY = "rocketsurgery_admin_token";
 const qcDraftValueCache = new Map();
-let activeQcDraftFieldKey = "";
-let activeQcDraftSelection = null;
 
 function displayText(value, max = 140) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -110,7 +108,6 @@ function QcDraftField({ as = "input", className = "", value = "", onCommit, plac
     qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || ""
   );
   const editingRef = useRef(false);
-  const fieldRef = useRef(null);
   const Field = as;
 
   useEffect(() => {
@@ -121,45 +118,14 @@ function QcDraftField({ as = "input", className = "", value = "", onCommit, plac
     }
   }, [cacheKey, value]);
 
-  useLayoutEffect(() => {
-    if (activeQcDraftFieldKey !== cacheKey || !fieldRef.current) {
-      return;
-    }
-
-    const field = fieldRef.current;
-    if (document.activeElement !== field) {
-      field.focus({ preventScroll: true });
-    }
-
-    if (
-      activeQcDraftSelection &&
-      typeof field.setSelectionRange === "function"
-    ) {
-      const start = Math.min(activeQcDraftSelection.start, field.value.length);
-      const end = Math.min(activeQcDraftSelection.end, field.value.length);
-      field.setSelectionRange(start, end);
-    }
-  });
-
-  function rememberSelection(event) {
-    activeQcDraftFieldKey = cacheKey;
-    activeQcDraftSelection = {
-      start: event.currentTarget.selectionStart || 0,
-      end: event.currentTarget.selectionEnd || 0
-    };
-  }
-
   function commitCurrentValue(target) {
     editingRef.current = false;
-    activeQcDraftFieldKey = "";
-    activeQcDraftSelection = null;
     qcDraftValueCache.delete(cacheKey);
     onCommit?.(target?.value ?? draftValue);
   }
 
   function stopEditorShortcut(event) {
     event.stopPropagation();
-    rememberSelection(event);
     if (as !== "textarea" && event.key === "Enter") {
       event.preventDefault();
       commitCurrentValue(event.currentTarget);
@@ -169,29 +135,23 @@ function QcDraftField({ as = "input", className = "", value = "", onCommit, plac
 
   return (
     <Field
-      ref={fieldRef}
       className={className}
       value={draftValue}
-      onFocus={(event) => {
+      onFocus={() => {
         editingRef.current = true;
-        rememberSelection(event);
       }}
       onChange={(event) => {
         const nextValue = event.target.value;
         qcDraftValueCache.set(cacheKey, nextValue);
         setDraftValue(nextValue);
-        rememberSelection(event);
       }}
       onBlur={(event) => commitCurrentValue(event.currentTarget)}
-      onSelect={rememberSelection}
       onKeyDownCapture={stopEditorShortcut}
       onKeyDown={stopEditorShortcut}
-      onKeyUpCapture={rememberSelection}
       onKeyUp={stopEditorShortcut}
-      onInputCapture={rememberSelection}
       onInput={stopEditorShortcut}
       onClickCapture={stopEditorShortcut}
-      onClick={rememberSelection}
+      onClick={(event) => event.stopPropagation()}
       onMouseDownCapture={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       placeholder={placeholder}
