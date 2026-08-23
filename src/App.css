@@ -1010,6 +1010,12 @@ body {
   line-height: 1.3;
 }
 
+.qcImageDirection {
+  min-height: 64px;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
 .qcStepImagePreview {
   width: min(180px, 100%);
   aspect-ratio: 4 / 3;

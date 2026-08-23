@@ -344,6 +344,7 @@ class GenerateQcStepImageRequest(BaseModel):
     title: str = ""
     query: str = ""
     step: dict
+    image_direction: str = ""
 
 
 class AcceptStepImageRequest(BaseModel):
@@ -2587,11 +2588,13 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
     label = step.get("imageLabel") or step.get("instruction") or f"Step {step_id}"
     instruction = step.get("instruction", "")
     detail = step.get("detail", "")
+    image_direction = (request.image_direction or step.get("imageDirection") or "").strip()
 
     image_prompt = " ".join((
         f"{request.title or request.query or request.walkthrough_id}. "
         f"Step {step_id}: {label}. "
         f"Instruction: {instruction}. Detail: {detail}. "
+        f"Editor image direction: {image_direction}. " if image_direction else ""
         f"{category_rule_prompt} "
         "Professional residential construction training illustration. "
         "Use the established RocketSurgery walkthrough style: high-quality rendered illustration, clean neutral jobsite background, realistic residential materials, clear single-step composition, consistent perspective, crisp tool and material placement, no decorative clutter. "
@@ -2610,6 +2613,7 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "step_instruction": instruction,
         "step_detail": detail,
         "image_label": label,
+        "image_direction": image_direction,
         "image_prompt": image_prompt,
         "image_url": image_url,
     })

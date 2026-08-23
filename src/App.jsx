@@ -1732,7 +1732,8 @@ function App() {
           walkthrough_id: walkthroughId,
           title: draft.title || "",
           query: draft.query || "",
-          step
+          step,
+          image_direction: step.imageDirection || ""
         })
       });
       const data = await response.json();
@@ -1750,6 +1751,7 @@ function App() {
               ...item,
               imageUrl: data.image_url,
               imagePrompt: data.image_prompt,
+              imageDirection: step.imageDirection || "",
               imageStale: false
             }
           : item
@@ -2456,6 +2458,16 @@ function App() {
                                         onClick={stopQcEditorEvent}
                                         onMouseDown={(event) => event.stopPropagation()}
                                         placeholder="Step detail"
+                                      />
+                                      <textarea
+                                        className="qcStepTextarea qcImageDirection"
+                                        value={step.imageDirection || ""}
+                                        onChange={(event) => updateQcStep(walkthroughId, step.id, "imageDirection", event.target.value)}
+                                        onKeyDown={stopQcEditorEvent}
+                                        onKeyUp={stopQcEditorEvent}
+                                        onClick={stopQcEditorEvent}
+                                        onMouseDown={(event) => event.stopPropagation()}
+                                        placeholder="Image direction: clarify what the new image should show, avoid, or emphasize."
                                       />
                                       {step.imageUrl && (
                                         <img className="qcStepImagePreview" src={apiAssetUrl(step.imageUrl)} alt={step.imageLabel || `Step ${step.id}`} />
