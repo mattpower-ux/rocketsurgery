@@ -200,6 +200,7 @@ function App() {
   const [promoteStepNumber, setPromoteStepNumber] = useState(1);
 
   const [buildStatus, setBuildStatus] = useState(null);
+  const [taxonomyIndexStatus, setTaxonomyIndexStatus] = useState(null);
 
   const [bulkJobList, setBulkJobList] = useState(null);
   const [walkthroughList, setWalkthroughList] = useState([]);
@@ -1102,6 +1103,49 @@ function App() {
     } catch (error) {
       console.error(error);
       setAdminMessage("Could not rebuild image registry.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+
+  async function rebuildWalkthroughIndex() {
+    const token = window.prompt("Enter admin token to sift existing walkthroughs:");
+    if (!token) {
+      setAdminMessage("Walkthrough indexing cancelled. No token was entered.");
+      return;
+    }
+
+    setAdminLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/admin/rebuild-walkthrough-index`,
+        {
+          method: "POST",
+          headers: {
+            "X-Admin-Token": token
+          }
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || "Walkthrough index rebuild failed.");
+      }
+
+      setTaxonomyIndexStatus(data);
+      setAdminMessage(
+        `Sifted ${data.stored_walkthrough_count || 0} stored walkthroughs. ` +
+        `${data.taxonomy_entries_with_existing_walkthroughs || 0} taxonomy entries now have existing walkthrough matches; ` +
+        `${data.prospective_taxonomy_entries_without_existing_walkthroughs || 0} remain prospective.`
+      );
+      loadBuildStatus();
+      loadAdminWalkthroughs();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Could not rebuild walkthrough index: ${error.message}`);
     } finally {
       setAdminLoading(false);
     }
@@ -2350,6 +2394,18 @@ function App() {
                 <h3>Bulk Query Seeder</h3>
                 <textarea className="adminTextArea" value={bulkQueries} onChange={(e) => setBulkQueries(e.target.value)} placeholder="One walkthrough query per line" />
                 <button className="startButton" onClick={submitBulkQueries} disabled={adminLoading || !bulkQueries.trim()}>SAVE BULK QUERIES</button>
+              </div>
+              <div>
+                <h3>Walkthrough Taxonomy Index</h3>
+                <button className="secondaryButton" onClick={rebuildWalkthroughIndex} disabled={adminLoading}>Sift Existing Walkthroughs</button>
+                {taxonomyIndexStatus && (
+                  <div className="adminStats compactStats">
+                    <div><strong>{taxonomyIndexStatus.stored_walkthrough_count || 0}</strong><span>Stored</span></div>
+                    <div><strong>{taxonomyIndexStatus.taxonomy_entries_with_existing_walkthroughs || 0}</strong><span>Matched</span></div>
+                    <div><strong>{taxonomyIndexStatus.prospective_taxonomy_entries_without_existing_walkthroughs || 0}</strong><span>Prospective</span></div>
+                    <div><strong>{taxonomyIndexStatus.unmatched_existing_walkthrough_count || 0}</strong><span>Unmatched</span></div>
+                  </div>
+                )}
               </div>
               <div>
                 <h3>Bulk Brand Ingestion</h3>

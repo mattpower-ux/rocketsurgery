@@ -147,6 +147,11 @@ except ImportError:
     from query_logger import log_query_event
 
 try:
+    from app.walkthrough_index import rebuild_walkthrough_index_from_storage
+except ImportError:
+    from walkthrough_index import rebuild_walkthrough_index_from_storage
+
+try:
     from app.image_generator import generate_step_image
 except ImportError:
     from image_generator import generate_step_image
@@ -2129,6 +2134,11 @@ def promote_image(request: PromoteImageRequest):
 @app.get("/admin/walkthrough-build-status")
 def walkthrough_build_status():
     return get_build_status()
+
+
+@app.post("/admin/rebuild-walkthrough-index")
+def post_rebuild_walkthrough_index(_: None = Depends(require_admin_token)):
+    return rebuild_walkthrough_index_from_storage()
 
 
 @app.get("/admin/bulk-query-list")

@@ -419,6 +419,10 @@ body {
   margin-top: 12px;
 }
 
+.compactStats {
+  grid-template-columns: repeat(4, minmax(96px, 1fr));
+}
+
 .adminStats div {
   background: #f4f5f7;
   border-radius: 18px;
