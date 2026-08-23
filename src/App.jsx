@@ -210,7 +210,7 @@ function App() {
   const [editorDirty, setEditorDirty] = useState(false);
   const [editorSaving, setEditorSaving] = useState(false);
   const [adminPanels, setAdminPanels] = useState({
-    repair: true,
+    repair: false,
     catalog: false,
     reports: false,
     queue: false,
