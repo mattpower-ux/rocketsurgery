@@ -80,6 +80,44 @@ def normalize_query_text(query: str) -> str:
     return q
 
 
+def clean_manifest_query_text(value: str) -> str:
+    query = " ".join(str(value or "").split()).strip()
+    query = re.sub(r"^planned walkthrough:\s*", "", query, flags=re.IGNORECASE)
+    return query
+
+
+def manifest_query_value(manifest: dict) -> str:
+    for key in (
+        "query",
+        "answer_query",
+        "answerQuery",
+        "canonical_query",
+        "canonicalQuery",
+        "query_to_answer",
+        "queryToAnswer",
+        "search_query",
+        "searchQuery"
+    ):
+        value = clean_manifest_query_text(manifest.get(key, ""))
+        if value:
+            return value
+
+    return clean_manifest_query_text(manifest.get("title", ""))
+
+
+def normalize_walkthrough_manifest(manifest: dict, walkthrough_id: str = "") -> dict:
+    if not isinstance(manifest, dict):
+        return {}
+
+    manifest["walkthrough_id"] = manifest.get("walkthrough_id") or walkthrough_id
+    query = manifest_query_value(manifest)
+
+    if query:
+        manifest["query"] = query
+
+    return manifest
+
+
 def query_to_walkthrough_id(query: str) -> str:
     q = normalize_query_text(query)
 
@@ -168,6 +206,7 @@ def load_walkthrough(query: str):
 
 def save_walkthrough(walkthrough_id: str, manifest: dict):
     ensure_storage()
+    manifest = normalize_walkthrough_manifest(manifest, walkthrough_id)
 
     manifest.setdefault("walkthrough_id", walkthrough_id)
     manifest.setdefault("review_status", "draft")

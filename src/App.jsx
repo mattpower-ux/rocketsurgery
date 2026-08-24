@@ -119,9 +119,11 @@ function QcDraftField({ as = "input", className = "", value = "", onCommit, plac
   }, [cacheKey, value]);
 
   function commitCurrentValue(target) {
+    const nextValue = target?.value ?? draftValue;
     editingRef.current = false;
-    qcDraftValueCache.delete(cacheKey);
-    onCommit?.(target?.value ?? draftValue);
+    qcDraftValueCache.set(cacheKey, nextValue);
+    setDraftValue(nextValue);
+    onCommit?.(nextValue);
   }
 
   function stopEditorShortcut(event) {
@@ -149,11 +151,11 @@ function QcDraftField({ as = "input", className = "", value = "", onCommit, plac
       onKeyDownCapture={stopEditorShortcut}
       onKeyDown={stopEditorShortcut}
       onKeyUp={stopEditorShortcut}
-      onInput={stopEditorShortcut}
       onClickCapture={stopEditorShortcut}
       onClick={(event) => event.stopPropagation()}
       onMouseDownCapture={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
       spellCheck={as === "textarea"}
       wrap={as === "textarea" ? "soft" : undefined}
       placeholder={placeholder}
