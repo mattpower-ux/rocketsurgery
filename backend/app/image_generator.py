@@ -1,6 +1,8 @@
 import base64
 import os
 from pathlib import Path
+import time
+from urllib.parse import urlparse
 
 from openai import OpenAI
 
@@ -121,6 +123,32 @@ def write_generated_image(prompt: str, filename: str, context: dict) -> str:
     return image_url
 
 
+def write_image_response(result, filename: str, context: dict) -> str:
+    ensure_storage()
+    output_path = IMAGES_DIR / filename
+    image_base64 = result.data[0].b64_json
+    image_bytes = base64.b64decode(image_base64)
+    output_path.write_bytes(image_bytes)
+
+    image_url = f"{API_BASE_URL}/static/images/{filename}"
+    assess_and_record_image_quality(
+        image_url=image_url,
+        local_path=output_path,
+        context=context,
+    )
+    return image_url
+
+
+def local_static_image_path(url: str) -> Path | None:
+    parsed_path = urlparse(url or "").path
+    prefix = "/static/images/"
+    if not parsed_path.startswith(prefix):
+        return None
+    relative = parsed_path[len(prefix):].lstrip("/")
+    path = IMAGES_DIR / relative
+    return path if path.exists() else None
+
+
 def generate_visual_asset_sheet(description: str, asset_key: str = "visual-assets") -> str:
     safe_key = slugify(asset_key) or "visual-assets"
     filename = f"{safe_key}-asset-sheet.png"
@@ -136,14 +164,15 @@ def generate_visual_asset_sheet(description: str, asset_key: str = "visual-asset
     )
 
 
-def generate_step_image(query: str, step_number: int = 1) -> str:
+def generate_step_image(query: str, step_number: int = 1, cache_key_suffix: str = "") -> str:
     ensure_storage()
 
     safe_query = slugify(query) or "walkthrough"
-    filename = f"{safe_query}-step-{step_number:03d}.png"
+    suffix = f"-{slugify(cache_key_suffix)}" if cache_key_suffix else ""
+    filename = f"{safe_query}{suffix}-step-{step_number:03d}.png"
     output_path = IMAGES_DIR / filename
 
-    if output_path.exists():
+    if output_path.exists() and not cache_key_suffix:
         image_url = f"{API_BASE_URL}/static/images/{filename}"
         assess_and_record_image_quality(
             image_url=image_url,
@@ -164,5 +193,51 @@ def generate_step_image(query: str, step_number: int = 1) -> str:
             "source": "generated_step_image",
             "image_prompt": query,
             "step_number": step_number,
+            "cache_key_suffix": cache_key_suffix,
+        },
+    )
+
+
+def generate_step_image_from_asset_sheet(query: str, step_number: int = 1, asset_sheet_url: str = "", cache_key_suffix: str = "") -> str:
+    reference_path = local_static_image_path(asset_sheet_url)
+    if not reference_path:
+        return generate_step_image(query, step_number, cache_key_suffix=cache_key_suffix)
+
+    ensure_storage()
+    safe_query = slugify(query) or "walkthrough"
+    suffix = slugify(cache_key_suffix) or str(int(time.time()))
+    filename = f"{safe_query}-asset-ref-{suffix}-step-{step_number:03d}.png"
+    output_path = IMAGES_DIR / filename
+
+    if output_path.exists():
+        return f"{API_BASE_URL}/static/images/{filename}"
+
+    prompt = build_image_prompt(
+        (
+            f"{query}\n\n"
+            "Use the provided asset sheet image as the reference source for the product/object, environment, worker, tools, material colors, and proportions. "
+            "Do not redesign the assets from the reference sheet. Create only the requested step panel, changing pose, tool placement, action highlight, and composition as needed."
+        ),
+        f"Step {step_number}",
+    )
+    with reference_path.open("rb") as reference_image:
+        result = client.images.edit(
+            model="gpt-image-1",
+            image=[reference_image],
+            prompt=prompt,
+            size="1024x1024",
+            input_fidelity="high",
+            response_format="b64_json",
+        )
+
+    return write_image_response(
+        result,
+        filename,
+        {
+            "source": "generated_step_image_from_asset_sheet",
+            "image_prompt": query,
+            "step_number": step_number,
+            "asset_sheet_url": asset_sheet_url,
+            "cache_key_suffix": cache_key_suffix,
         },
     )

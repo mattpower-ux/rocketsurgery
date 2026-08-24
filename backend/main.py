@@ -191,9 +191,9 @@ except ImportError:
     from taxonomy_edits import record_query_alias_candidate
 
 try:
-    from app.image_generator import generate_step_image
+    from app.image_generator import generate_step_image, generate_step_image_from_asset_sheet
 except ImportError:
-    from image_generator import generate_step_image
+    from image_generator import generate_step_image, generate_step_image_from_asset_sheet
 
 try:
     from app.image_quality import assess_and_record_image_quality
@@ -390,6 +390,15 @@ class GenerateQcStepImageRequest(BaseModel):
     query: str = ""
     step: dict
     image_direction: str = ""
+    visual_template: str = ""
+    visual_assets: dict = Field(default_factory=dict)
+
+
+class RegenerateAllQcImagesRequest(BaseModel):
+    walkthrough_id: str
+    title: str = ""
+    query: str = ""
+    steps: list[dict] = Field(default_factory=list)
     visual_template: str = ""
     visual_assets: dict = Field(default_factory=dict)
 
@@ -2939,22 +2948,21 @@ def post_regenerate_step_image(request: RegenerateStepImageRequest):
     }
 
 
-@app.post("/admin/qc/generate-step-image")
-def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = Depends(require_admin_token)):
-    step = dict(request.step or {})
-    step_id = int(step.get("id") or 1)
-    inferred_category = infer_construction_category(
-        walkthrough_id=request.walkthrough_id,
-        title=request.title,
-        query=request.query,
-    )
-    category_rule_prompt = format_rules_for_prompt(inferred_category)
-    label = step.get("imageLabel") or step.get("instruction") or f"Step {step_id}"
-    instruction = step.get("instruction", "")
-    detail = step.get("detail", "")
-    image_direction = (request.image_direction or step.get("imageDirection") or "").strip()
-    visual_template = (request.visual_template or "").strip()
-    visual_assets = request.visual_assets or {}
+def build_qc_step_image_prompt(
+    walkthrough_id: str,
+    title: str,
+    query: str,
+    step_id: int,
+    label: str,
+    instruction: str,
+    detail: str,
+    image_direction: str = "",
+    category_rule_prompt: str = "",
+    visual_template: str = "",
+    visual_assets: dict | None = None,
+) -> str:
+    visual_assets = visual_assets or {}
+    visual_template = (visual_template or "").strip()
     continuity_prompt = (
         "Walkthrough visual continuity contract: "
         "All steps in this walkthrough must depict the same primary object, same fixture/product shape, same surrounding installation setting, and same recurring worker/character style unless the step explicitly replaces or removes that object. "
@@ -2977,7 +2985,7 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         continuity_prompt += " ".join(" ".join(asset_parts).split()) + " "
 
     image_prompt_parts = [
-        f"{request.title or request.query or request.walkthrough_id}.",
+        f"{title or query or walkthrough_id}.",
         continuity_prompt,
         f"Step {step_id}: {label}.",
         f"Instruction: {instruction}. Detail: {detail}.",
@@ -2990,12 +2998,48 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "Use the established RocketSurgery walkthrough style: high-quality rendered illustration, clean neutral jobsite background, realistic residential materials, clear single-step composition, consistent perspective, crisp tool and material placement, no decorative clutter.",
         "Show accurate tool placement, safe work positioning, no injuries, no weapons, no illegal activity.",
     ])
-    image_prompt = " ".join(" ".join(image_prompt_parts).split())
+    return " ".join(" ".join(image_prompt_parts).split())
+
+
+@app.post("/admin/qc/generate-step-image")
+def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = Depends(require_admin_token)):
+    step = dict(request.step or {})
+    step_id = int(step.get("id") or 1)
+    inferred_category = infer_construction_category(
+        walkthrough_id=request.walkthrough_id,
+        title=request.title,
+        query=request.query,
+    )
+    category_rule_prompt = format_rules_for_prompt(inferred_category)
+    label = step.get("imageLabel") or step.get("instruction") or f"Step {step_id}"
+    instruction = step.get("instruction", "")
+    detail = step.get("detail", "")
+    image_direction = (request.image_direction or step.get("imageDirection") or "").strip()
+    image_prompt = build_qc_step_image_prompt(
+        walkthrough_id=request.walkthrough_id,
+        title=request.title,
+        query=request.query,
+        step_id=step_id,
+        label=label,
+        instruction=instruction,
+        detail=detail,
+        image_direction=image_direction,
+        category_rule_prompt=category_rule_prompt,
+        visual_template=request.visual_template,
+        visual_assets=request.visual_assets,
+    )
     image_prompt = image_prompt.replace("house wrap", "weather-resistive wall barrier")
     image_prompt = image_prompt.replace("House wrap", "weather-resistive wall barrier")
     image_prompt = image_prompt[:1400].rstrip(" ,;:-")
 
-    image_url = generate_step_image(image_prompt, step_id)
+    visual_assets = request.visual_assets or {}
+    visual_template = (request.visual_template or "").strip()
+    image_url = generate_step_image_from_asset_sheet(
+        image_prompt,
+        step_id,
+        asset_sheet_url=visual_assets.get("asset_sheet_url", ""),
+        cache_key_suffix=f"qc-{request.walkthrough_id}-{step_id}-{int(time.time())}",
+    )
     log_correction_memory({
         "action": "qc_step_image_generated",
         "walkthrough_id": request.walkthrough_id,
@@ -3018,6 +3062,76 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "visual_template": visual_template,
         "visual_assets": visual_assets,
         "image_prompt": image_prompt,
+    }
+
+
+@app.post("/admin/qc/regenerate-all-images")
+def post_regenerate_all_qc_images(request: RegenerateAllQcImagesRequest, _: None = Depends(require_admin_token)):
+    inferred_category = infer_construction_category(
+        walkthrough_id=request.walkthrough_id,
+        title=request.title,
+        query=request.query,
+    )
+    category_rule_prompt = format_rules_for_prompt(inferred_category)
+    visual_assets = request.visual_assets or {}
+    visual_template = (request.visual_template or "").strip()
+    revision_key = f"qc-all-{request.walkthrough_id}-{int(time.time())}"
+    updated_steps = []
+
+    for index, original_step in enumerate(request.steps or [], start=1):
+        step = dict(original_step or {})
+        step_id = int(step.get("id") or index)
+        label = step.get("imageLabel") or step.get("instruction") or f"Step {step_id}"
+        instruction = step.get("instruction", "")
+        detail = step.get("detail", "")
+        image_direction = str(step.get("imageDirection") or "").strip()
+        image_prompt = build_qc_step_image_prompt(
+            walkthrough_id=request.walkthrough_id,
+            title=request.title,
+            query=request.query,
+            step_id=step_id,
+            label=label,
+            instruction=instruction,
+            detail=detail,
+            image_direction=image_direction,
+            category_rule_prompt=category_rule_prompt,
+            visual_template=visual_template,
+            visual_assets=visual_assets,
+        )
+        image_prompt = image_prompt.replace("house wrap", "weather-resistive wall barrier")
+        image_prompt = image_prompt.replace("House wrap", "weather-resistive wall barrier")
+        image_prompt = image_prompt[:1400].rstrip(" ,;:-")
+        image_url = generate_step_image_from_asset_sheet(
+            image_prompt,
+            step_id,
+            asset_sheet_url=visual_assets.get("asset_sheet_url", ""),
+            cache_key_suffix=f"{revision_key}-{step_id}",
+        )
+        updated_steps.append({
+            **step,
+            "imageUrl": image_url,
+            "imagePrompt": image_prompt,
+            "imageStale": False,
+        })
+
+    log_correction_memory({
+        "action": "qc_all_step_images_generated",
+        "walkthrough_id": request.walkthrough_id,
+        "category": inferred_category,
+        "step_count": len(updated_steps),
+        "visual_template": visual_template,
+        "visual_assets": visual_assets,
+        "revision_key": revision_key,
+    })
+
+    return {
+        "status": "generated",
+        "walkthrough_id": request.walkthrough_id,
+        "step_count": len(updated_steps),
+        "steps": updated_steps,
+        "visual_template": visual_template,
+        "visual_assets": visual_assets,
+        "revision_key": revision_key,
     }
 
 

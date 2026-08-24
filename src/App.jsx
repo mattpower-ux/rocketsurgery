@@ -396,6 +396,7 @@ function App() {
   const [qcChanges, setQcChanges] = useState({});
   const [qcSaving, setQcSaving] = useState(false);
   const [qcImageGenerating, setQcImageGenerating] = useState({});
+  const [qcAllImagesGenerating, setQcAllImagesGenerating] = useState({});
   const [imageDirectionEditor, setImageDirectionEditor] = useState(null);
   const [catalogPipelineStatus, setCatalogPipelineStatus] = useState(null);
   const [catalogPipelineRunning, setCatalogPipelineRunning] = useState("");
@@ -2208,6 +2209,69 @@ function App() {
     }
   }
 
+  async function regenerateAllQcImages(walkthroughId) {
+    const draft = qcWalkthroughs[walkthroughId];
+    if (!draft?.steps?.length) {
+      setAdminMessage("Open a walkthrough with steps before regenerating images.");
+      return;
+    }
+
+    const token = getAdminToken("regenerate all images for this walkthrough");
+    if (!token) {
+      setAdminMessage("Image regeneration cancelled. No admin token was entered.");
+      return;
+    }
+
+    setQcAllImagesGenerating((previous) => ({ ...previous, [walkthroughId]: true }));
+    setAdminMessage(`Regenerating all images for ${draft.title || walkthroughId}...`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/qc/regenerate-all-images`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        body: JSON.stringify({
+          walkthrough_id: walkthroughId,
+          title: draft.title || "",
+          query: draft.query || "",
+          steps: draft.steps || [],
+          visual_template: draft.visual_template || "",
+          visual_assets: draft.visual_assets || {}
+        })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          clearAdminToken();
+        }
+        throw new Error(data.detail || data.error || "Image regeneration failed.");
+      }
+
+      const updatedSteps = data.steps || draft.steps || [];
+      setQcWalkthroughs((previous) => ({
+        ...previous,
+        [walkthroughId]: {
+          ...draft,
+          steps: updatedSteps
+        }
+      }));
+      stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", updatedSteps, draft.title || walkthroughId, false);
+      setAdminMessage(`Generated ${data.step_count || updatedSteps.length} image(s) for ${draft.title || walkthroughId}. Click Save All to keep them.`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Image regeneration failed: ${error.message}`);
+    } finally {
+      setQcAllImagesGenerating((previous) => {
+        const next = { ...previous };
+        delete next[walkthroughId];
+        return next;
+      });
+    }
+  }
+
 
   async function saveAllQcChanges() {
     const actions = Object.entries(qcChanges)
@@ -2832,6 +2896,13 @@ function App() {
                                   )}
                                   <button
                                     className="secondaryButton"
+                                    onClick={() => regenerateAllQcImages(walkthroughId)}
+                                    disabled={!!qcAllImagesGenerating[walkthroughId]}
+                                  >
+                                    {qcAllImagesGenerating[walkthroughId] ? "Regenerating Images..." : "Regenerate All Images"}
+                                  </button>
+                                  <button
+                                    className="secondaryButton"
                                     onClick={() => stageQcChange(walkthroughId, "save", draft.steps || [], item.title)}
                                   >
                                     {staged === "save" ? "Save Staged" : "Stage Save"}
@@ -2971,7 +3042,7 @@ function App() {
                                         className={step.imageStale ? "startButton compactButton" : "secondaryButton"}
                                         onMouseDown={(event) => event.preventDefault()}
                                         onClick={() => generateQcStepImage(walkthroughId, index)}
-                                        disabled={!!qcImageGenerating[`${walkthroughId}-${index}`]}
+                                        disabled={!!qcImageGenerating[`${walkthroughId}-${index}`] || !!qcAllImagesGenerating[walkthroughId]}
                                       >
                                         {qcImageGenerating[`${walkthroughId}-${index}`] ? "Generating..." : "Generate New Image"}
                                       </button>
