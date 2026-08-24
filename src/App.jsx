@@ -169,6 +169,50 @@ function QcDraftField({ as = "input", className = "", value = "", onDraftChange,
   );
 }
 
+function QcImageDirectionField({ className = "", value = "", onCommit, placeholder = "", fieldKey = "" }) {
+  const cacheKey = fieldKey || `${className}-${placeholder}`;
+  const fieldRef = useRef(null);
+  const cacheKeyRef = useRef(cacheKey);
+  const initialDraftValue = qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || "";
+
+  useEffect(() => {
+    if (cacheKeyRef.current === cacheKey) {
+      return;
+    }
+
+    cacheKeyRef.current = cacheKey;
+    const nextValue = qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || "";
+    qcDraftValueCache.set(cacheKey, nextValue);
+    if (fieldRef.current) {
+      fieldRef.current.value = nextValue;
+    }
+  }, [cacheKey, value]);
+
+  function commitCurrentValue(target) {
+    const nextValue = target?.value ?? qcDraftValueCache.get(cacheKey) ?? "";
+    qcDraftValueCache.set(cacheKey, nextValue);
+    onCommit?.(nextValue);
+  }
+
+  return (
+    <textarea
+      ref={fieldRef}
+      className={className}
+      defaultValue={initialDraftValue}
+      onChange={(event) => {
+        qcDraftValueCache.set(cacheKey, event.target.value);
+      }}
+      onBlur={(event) => commitCurrentValue(event.currentTarget)}
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      spellCheck
+      wrap="soft"
+      placeholder={placeholder}
+    />
+  );
+}
+
 function StepImageReview({ step }) {
   const hasPending = Boolean(step.pendingImageUrl);
 
@@ -2809,8 +2853,7 @@ function App() {
                                         onCommit={(value) => updateQcStep(walkthroughId, index, "detail", value)}
                                         placeholder="Step detail"
                                       />
-                                      <QcDraftField
-                                        as="textarea"
+                                      <QcImageDirectionField
                                         className="qcStepTextarea qcImageDirection"
                                         fieldKey={`${walkthroughId}-${index}-imageDirection`}
                                         value={step.imageDirection || ""}
