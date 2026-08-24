@@ -4,6 +4,11 @@ import "./App.css";
 const API_URL = (import.meta.env.VITE_API_URL || "https://rocketsurgery-api.onrender.com").replace(/\/$/, "");
 const ADMIN_TOKEN_STORAGE_KEY = "rocketsurgery_admin_token";
 const qcDraftValueCache = new Map();
+const IMAGE_DIRECTION_PLACEHOLDER = "Image direction: clarify what the new image should show, avoid, or emphasize.";
+
+function qcImageDirectionCacheKey(walkthroughId, stepIndex) {
+  return `${walkthroughId}-${stepIndex}-imageDirection`;
+}
 
 function displayText(value, max = 140) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -169,66 +174,46 @@ function QcDraftField({ as = "input", className = "", value = "", onDraftChange,
   );
 }
 
-function QcImageDirectionField({ className = "", value = "", onCommit, placeholder = "", fieldKey = "" }) {
-  const cacheKey = fieldKey || `${className}-${placeholder}`;
-  const fieldRef = useRef(null);
-  const cacheKeyRef = useRef(cacheKey);
-  const onCommitRef = useRef(onCommit);
-  const initialDraftValue = qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || "";
-
-  useEffect(() => {
-    onCommitRef.current = onCommit;
-  }, [onCommit]);
-
-  useEffect(() => {
-    if (cacheKeyRef.current === cacheKey) {
-      return;
-    }
-
-    cacheKeyRef.current = cacheKey;
-    const nextValue = qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || "";
-    qcDraftValueCache.set(cacheKey, nextValue);
-    if (fieldRef.current) {
-      fieldRef.current.value = nextValue;
-    }
-  }, [cacheKey, value]);
-
-  useEffect(() => {
-    const field = fieldRef.current;
-    if (!field) {
-      return undefined;
-    }
-
-    function handleInput() {
-      qcDraftValueCache.set(cacheKey, field.value);
-    }
-
-    function handleBlur() {
-      qcDraftValueCache.set(cacheKey, field.value);
-      onCommitRef.current?.(field.value);
-    }
-
-    field.addEventListener("input", handleInput);
-    field.addEventListener("blur", handleBlur);
-
-    return () => {
-      field.removeEventListener("input", handleInput);
-      field.removeEventListener("blur", handleBlur);
-    };
-  }, [cacheKey]);
+function QcImageDirectionModal({ editor, step, generating, onClose, onApply, onApplyAndGenerate }) {
+  const [value, setValue] = useState(editor.value || "");
 
   return (
-    <textarea
-      ref={fieldRef}
-      className={className}
-      defaultValue={initialDraftValue}
-      onClick={(event) => event.stopPropagation()}
-      onMouseDown={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-      spellCheck
-      wrap="soft"
-      placeholder={placeholder}
-    />
+    <div className="qcDirectionOverlay" role="dialog" aria-modal="true" aria-label="Edit image direction">
+      <div className="qcDirectionDialog">
+        <div className="qcDirectionHeader">
+          <div>
+            <strong>{step?.imageLabel || `Step ${editor.stepIndex + 1}`}</strong>
+            <span>{step?.instruction || "Image direction"}</span>
+          </div>
+          <button className="secondaryButton compactButton" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <textarea
+          className="qcDirectionModalTextarea"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder={IMAGE_DIRECTION_PLACEHOLDER}
+          autoFocus
+          spellCheck
+        />
+        <div className="qcDirectionActions">
+          <button className="secondaryButton" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="secondaryButton" onClick={() => onApply(value)}>
+            Apply
+          </button>
+          <button
+            className="startButton"
+            onClick={() => onApplyAndGenerate(value)}
+            disabled={generating}
+          >
+            Apply + Generate
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -391,6 +376,7 @@ function App() {
   const [qcChanges, setQcChanges] = useState({});
   const [qcSaving, setQcSaving] = useState(false);
   const [qcImageGenerating, setQcImageGenerating] = useState({});
+  const [imageDirectionEditor, setImageDirectionEditor] = useState(null);
   const [catalogPipelineStatus, setCatalogPipelineStatus] = useState(null);
   const [catalogPipelineRunning, setCatalogPipelineRunning] = useState("");
   const [productPackageBrand, setProductPackageBrand] = useState("Niagara");
@@ -2077,6 +2063,45 @@ function App() {
     stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", renumbered, "", false);
   }
 
+  function openImageDirectionEditor(walkthroughId, stepIndex) {
+    const step = qcWalkthroughs[walkthroughId]?.steps?.[stepIndex];
+    if (!step) {
+      return;
+    }
+
+    const cacheKey = qcImageDirectionCacheKey(walkthroughId, stepIndex);
+    setImageDirectionEditor({
+      walkthroughId,
+      stepIndex,
+      cacheKey,
+      value: qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : step.imageDirection || ""
+    });
+  }
+
+  function commitImageDirectionEditorValue(value) {
+    if (!imageDirectionEditor) {
+      return null;
+    }
+
+    const { walkthroughId, stepIndex, cacheKey } = imageDirectionEditor;
+    qcDraftValueCache.set(cacheKey, value);
+    updateQcStep(walkthroughId, stepIndex, "imageDirection", value);
+    return { walkthroughId, stepIndex };
+  }
+
+  function applyImageDirectionEditor(value) {
+    commitImageDirectionEditorValue(value);
+    setImageDirectionEditor(null);
+  }
+
+  function applyAndGenerateImageDirection(value) {
+    const target = commitImageDirectionEditorValue(value);
+    setImageDirectionEditor(null);
+    if (target) {
+      window.setTimeout(() => generateQcStepImage(target.walkthroughId, target.stepIndex), 0);
+    }
+  }
+
 
   async function generateQcStepImage(walkthroughId, stepIndex) {
     const draft = qcWalkthroughs[walkthroughId];
@@ -2084,7 +2109,7 @@ function App() {
     if (!draft || !step) {
       return;
     }
-    const imageDirectionKey = `${walkthroughId}-${stepIndex}-imageDirection`;
+    const imageDirectionKey = qcImageDirectionCacheKey(walkthroughId, stepIndex);
     const latestImageDirection = qcDraftValueCache.has(imageDirectionKey)
       ? qcDraftValueCache.get(imageDirectionKey)
       : step.imageDirection || "";
@@ -2846,7 +2871,13 @@ function App() {
                               ) : null}
 
                               <div className="qcStepList">
-                                {(draft.steps || []).map((step, index) => (
+                                {(draft.steps || []).map((step, index) => {
+                                  const imageDirectionKey = qcImageDirectionCacheKey(walkthroughId, index);
+                                  const imageDirectionValue = qcDraftValueCache.has(imageDirectionKey)
+                                    ? qcDraftValueCache.get(imageDirectionKey)
+                                    : step.imageDirection || "";
+
+                                  return (
                                   <div key={`qc-step-${walkthroughId}-${index}`} className="qcStep">
                                     <div className="qcStepNumber">{index + 1}</div>
                                     <div className="qcStepEditor">
@@ -2872,13 +2903,14 @@ function App() {
                                         onCommit={(value) => updateQcStep(walkthroughId, index, "detail", value)}
                                         placeholder="Step detail"
                                       />
-                                      <QcImageDirectionField
-                                        className="qcStepTextarea qcImageDirection"
-                                        fieldKey={`${walkthroughId}-${index}-imageDirection`}
-                                        value={step.imageDirection || ""}
-                                        onCommit={(value) => updateQcStep(walkthroughId, index, "imageDirection", value)}
-                                        placeholder="Image direction: clarify what the new image should show, avoid, or emphasize."
-                                      />
+                                      <button
+                                        type="button"
+                                        className={`qcImageDirectionButton ${imageDirectionValue ? "hasDirection" : ""}`}
+                                        onClick={() => openImageDirectionEditor(walkthroughId, index)}
+                                      >
+                                        <strong>{imageDirectionValue ? "Edit image direction" : "Add image direction"}</strong>
+                                        <span>{imageDirectionValue || IMAGE_DIRECTION_PLACEHOLDER}</span>
+                                      </button>
                                       {step.imageUrl && (
                                         <img className="qcStepImagePreview" src={apiAssetUrl(step.imageUrl)} alt={step.imageLabel || `Step ${step.id}`} />
                                       )}
@@ -2898,7 +2930,8 @@ function App() {
                                       <button className="secondaryButton dangerButton" onClick={() => deleteQcStep(walkthroughId, index)} disabled={(draft.steps || []).length <= 1}>Delete</button>
                                     </div>
                                   </div>
-                                ))}
+                                  );
+                                })}
                                 <button className="secondaryButton qcAddStepButton" onClick={() => addQcStepAfter(walkthroughId)}>
                                   + Add Step At End
                                 </button>
@@ -3290,6 +3323,18 @@ function App() {
               </div>
             </div>
           </AdminSection>
+
+          {imageDirectionEditor && (
+            <QcImageDirectionModal
+              key={imageDirectionEditor.cacheKey}
+              editor={imageDirectionEditor}
+              step={qcWalkthroughs[imageDirectionEditor.walkthroughId]?.steps?.[imageDirectionEditor.stepIndex]}
+              generating={!!qcImageGenerating[`${imageDirectionEditor.walkthroughId}-${imageDirectionEditor.stepIndex}`]}
+              onClose={() => setImageDirectionEditor(null)}
+              onApply={applyImageDirectionEditor}
+              onApplyAndGenerate={applyAndGenerateImageDirection}
+            />
+          )}
 
           {adminMessage && (
             <p className="adminMessage">{adminMessage}</p>
