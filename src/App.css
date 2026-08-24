@@ -1015,6 +1015,16 @@ body {
   text-transform: uppercase;
 }
 
+.qcVisualTemplateField {
+  grid-column: 1 / -1;
+}
+
+.qcVisualTemplateField .qcStepTextarea {
+  min-height: 72px;
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+
 .qcActions,
 .qcStepActions {
   display: flex;

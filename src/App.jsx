@@ -1863,7 +1863,8 @@ function App() {
           action: existing.action || "save",
           steps: existing.steps || updatedDraft.steps || [],
           title: field === "title" ? value : existing.title,
-          query: field === "query" ? value : existing.query
+          query: field === "query" ? value : existing.query,
+          visual_template: field === "visual_template" ? value : existing.visual_template
         }
       };
     });
@@ -2141,7 +2142,8 @@ function App() {
           title: draft.title || "",
           query: draft.query || "",
           step: stepForGeneration,
-          image_direction: latestImageDirection
+          image_direction: latestImageDirection,
+          visual_template: draft.visual_template || ""
         })
       });
       const data = await response.json();
@@ -2194,7 +2196,8 @@ function App() {
         action: change.action,
         steps: change.steps || qcWalkthroughs[walkthroughId]?.steps || [],
         title: change.title ?? qcWalkthroughs[walkthroughId]?.title,
-        query: change.query ?? qcWalkthroughs[walkthroughId]?.query
+        query: change.query ?? qcWalkthroughs[walkthroughId]?.query,
+        visual_template: change.visual_template ?? qcWalkthroughs[walkthroughId]?.visual_template ?? ""
       }));
 
     if (!actions.length) {
@@ -2848,6 +2851,17 @@ function App() {
                                     value={draft.query || ""}
                                     onCommit={(value) => updateQcMetadata(walkthroughId, "query", value)}
                                     placeholder="Example: install a refrigerator icemaker water line"
+                                  />
+                                </label>
+                                <label className="qcVisualTemplateField">
+                                  <span>Visual template for consistent images</span>
+                                  <QcDraftField
+                                    as="textarea"
+                                    className="qcStepTextarea"
+                                    fieldKey={`${walkthroughId}-visual-template`}
+                                    value={draft.visual_template || ""}
+                                    onCommit={(value) => updateQcMetadata(walkthroughId, "visual_template", value)}
+                                    placeholder="Example: same white drop-in bathroom sink set into a beige laminate countertop, chrome two-handle faucet, white vanity cabinet, same worker in tan shirt and gloves."
                                   />
                                 </label>
                               </div>

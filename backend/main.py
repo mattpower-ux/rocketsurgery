@@ -348,6 +348,7 @@ class QcWalkthroughAction(BaseModel):
     steps: list[dict] = []
     title: str | None = None
     query: str | None = None
+    visual_template: str | None = None
 
 
 class QcSaveAllRequest(BaseModel):
@@ -388,6 +389,7 @@ class GenerateQcStepImageRequest(BaseModel):
     query: str = ""
     step: dict
     image_direction: str = ""
+    visual_template: str = ""
 
 
 class AdoptApprovedMatchRequest(BaseModel):
@@ -2558,6 +2560,8 @@ def post_qc_save_all(request: QcSaveAllRequest, _: None = Depends(require_admin_
             add_manifest_alias(manifest, manifest.get("query", ""))
             manifest["query"] = item.query.strip()
             add_manifest_alias(manifest, manifest["query"])
+        if item.visual_template is not None:
+            manifest["visual_template"] = item.visual_template.strip()
 
         if item.steps:
             previous_validation = manifest.get("step_sequence_validation") or {}
@@ -2947,20 +2951,33 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
     instruction = step.get("instruction", "")
     detail = step.get("detail", "")
     image_direction = (request.image_direction or step.get("imageDirection") or "").strip()
+    visual_template = (request.visual_template or "").strip()
+    continuity_prompt = (
+        "Walkthrough visual continuity contract: "
+        "All steps in this walkthrough must depict the same primary object, same fixture/product shape, same surrounding installation setting, and same recurring worker/character style unless the step explicitly replaces or removes that object. "
+        "Do not switch product variants between steps, such as changing a countertop drop-in sink into a wall-hung sink. "
+    )
+    if visual_template:
+        continuity_prompt += f"Locked walkthrough visual template: {visual_template}. "
 
-    image_prompt = " ".join((
-        f"{request.title or request.query or request.walkthrough_id}. "
-        f"Step {step_id}: {label}. "
-        f"Instruction: {instruction}. Detail: {detail}. "
-        f"Editor image direction: {image_direction}. " if image_direction else ""
-        f"{category_rule_prompt} "
-        "Professional residential construction training illustration. "
-        "Use the established RocketSurgery walkthrough style: high-quality rendered illustration, clean neutral jobsite background, realistic residential materials, clear single-step composition, consistent perspective, crisp tool and material placement, no decorative clutter. "
-        "Show accurate tool placement, safe work positioning, no injuries, no weapons, no illegal activity."
-    ).split())
+    image_prompt_parts = [
+        f"{request.title or request.query or request.walkthrough_id}.",
+        continuity_prompt,
+        f"Step {step_id}: {label}.",
+        f"Instruction: {instruction}. Detail: {detail}.",
+    ]
+    if image_direction:
+        image_prompt_parts.append(f"Editor image direction: {image_direction}.")
+    image_prompt_parts.extend([
+        category_rule_prompt,
+        "Professional residential construction training illustration.",
+        "Use the established RocketSurgery walkthrough style: high-quality rendered illustration, clean neutral jobsite background, realistic residential materials, clear single-step composition, consistent perspective, crisp tool and material placement, no decorative clutter.",
+        "Show accurate tool placement, safe work positioning, no injuries, no weapons, no illegal activity.",
+    ])
+    image_prompt = " ".join(" ".join(image_prompt_parts).split())
     image_prompt = image_prompt.replace("house wrap", "weather-resistive wall barrier")
     image_prompt = image_prompt.replace("House wrap", "weather-resistive wall barrier")
-    image_prompt = image_prompt[:900].rstrip(" ,;:-")
+    image_prompt = image_prompt[:1400].rstrip(" ,;:-")
 
     image_url = generate_step_image(image_prompt, step_id)
     log_correction_memory({
@@ -2972,6 +2989,7 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "step_detail": detail,
         "image_label": label,
         "image_direction": image_direction,
+        "visual_template": visual_template,
         "image_prompt": image_prompt,
         "image_url": image_url,
     })
@@ -2980,6 +2998,7 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "status": "generated",
         "step_id": step_id,
         "image_url": image_url,
+        "visual_template": visual_template,
         "image_prompt": image_prompt,
     }
 
