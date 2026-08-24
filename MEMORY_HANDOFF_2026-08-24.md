@@ -1,0 +1,241 @@
+# RocketSurgery Memory Handoff - 2026-08-24
+
+## Project Location
+
+Current local working folder:
+
+`C:\Users\mattp\Documents\ChatGPT\Rocket Surgery`
+
+GitHub repository:
+
+`https://github.com/mattpower-ux/rocketsurgery`
+
+Live Render URLs:
+
+- Frontend: `https://rocketsurgery.onrender.com`
+- API: `https://rocketsurgery-api.onrender.com`
+
+Current branch:
+
+`main`, tracking `origin/main`
+
+## Latest Pushed Commits
+
+- `9f53391` - `Regenerate walkthrough images from asset sheet`
+- `1d66948` - `Isolate image direction modal keystrokes`
+- `1ef96a1` - `Add walkthrough visual asset sheets`
+- `92db2fc` - `Rebuild stale drafts with chimney cap scaffold`
+- `e74ceaf` - `Apply visual continuity to initial generation`
+- `aec245c` - `Add QC visual consistency templates`
+- `e3ff273` - `Move QC image directions into modal editor`
+- Earlier related stabilization commits: `0116f29`, `8f4cfac`, `4fe43aa`, `901a16a`, `6de8f37`
+
+All listed work was pushed to `origin/main`.
+
+## Main Strategic Change
+
+Walkthrough image generation is moving from independent one-off step images toward a pre-production visual asset workflow.
+
+The desired pipeline is now:
+
+`query -> classify/taxonomy -> plan steps -> create visual asset sheet -> generate step images using that asset sheet -> QC review -> save/approve`
+
+The asset sheet is intended to function as the walkthrough's visual bible. It defines the product/object, environment, worker, tools, materials, and key views before step images are generated.
+
+## Visual Asset Sheet Workflow
+
+Added in `1ef96a1` and expanded in `9f53391`.
+
+New walkthrough generation now creates:
+
+- `visual_template`
+- `visual_assets`
+- `visual_assets.asset_sheet_url`
+- `visual_assets.asset_key`
+- `visual_assets.primary_object`
+- `visual_assets.product`
+- `visual_assets.environment`
+- `visual_assets.worker`
+- `visual_assets.tools`
+- `visual_assets.views`
+- `visual_assets.asset_sheet_prompt`
+
+For chimney cap walkthroughs, the asset key is:
+
+`taxonomy-chimney-cap-single-flue-brick-chimney`
+
+The generated asset sheet is cached by taxonomy-style asset key so future compatible walkthroughs can reuse the visual component sheet.
+
+## Reference-Based Step Regeneration
+
+Before `9f53391`, step image prompts only said "use the asset sheet as the visual bible." That helped, but it was still prompt-only.
+
+Now:
+
+- `backend/app/image_generator.py` includes `generate_step_image_from_asset_sheet`.
+- It locates a local `/static/images/...` asset sheet.
+- It calls `client.images.edit(...)` with the asset sheet as a reference image.
+- It uses `input_fidelity="high"` when generating the new step panel.
+- It falls back to normal `generate_step_image` if the asset sheet file is unavailable.
+
+This should make step images follow the approved asset sheet more tightly than text prompting alone.
+
+## Admin: Regenerate All Images
+
+Added in `9f53391`.
+
+New backend endpoint:
+
+`POST /admin/qc/regenerate-all-images`
+
+New frontend button:
+
+`Regenerate All Images`
+
+Scope:
+
+- It affects only the currently expanded walkthrough in Admin QC.
+- It does not batch-regenerate existing walkthroughs globally.
+- It stages regenerated images in the QC draft.
+- The user must click `Save All` to persist the regenerated images.
+
+Individual `Generate New Image` also now uses the asset sheet reference path when available.
+
+## QC Image Direction UX Fixes
+
+The inline "Image direction" textarea caused page jumping, cursor jumps, vanished text, and row rerenders.
+
+Fixes:
+
+- Replaced inline image-direction textarea with an `Add/Edit image direction` button.
+- Editing now happens in a fixed modal: `QcImageDirectionModal`.
+- Modal has `Apply` and `Apply + Generate`.
+- Text state is owned locally inside the modal, not the whole Admin page.
+- Keystrokes and pointer events are stopped from bubbling out of the modal.
+- Commit `1d66948` specifically fixed Return/Enter causing the Admin page to jump while editing in the popup.
+
+Known expectation:
+
+- After deployment, hard refresh Admin if old JS is still loaded.
+
+## QC Metadata And Persistence
+
+Added/stabilized:
+
+- `visual_template` field in the QC metadata editor.
+- `visual_template` is sent through Save All.
+- `visual_assets` is displayed in QC when present.
+- QC shows the asset sheet image preview if `visual_assets.asset_sheet_url` exists.
+- Step text corrections and image directions are staged and persisted through Save All.
+
+Important: staged image regenerations are not final until `Save All` is clicked.
+
+## Chimney Cap Test
+
+The first chimney cap prototype exposed problems:
+
+- Images had inconsistent chimneys.
+- Step order was unclear.
+- Initial image prompting did not use the asset sheet process yet.
+- The first generated draft was cached, so old bad results stayed visible until deleted or force-refreshed.
+
+Fixes made:
+
+- Added `chimney_cap` category detection.
+- Added a deterministic chimney-cap scaffold instead of relying fully on LLM step ordering.
+- Added generator schema versioning.
+- Old non-approved drafts rebuild when the generator schema version changes.
+- `/walkthrough` now supports `force_refresh`.
+
+Current chimney cap scaffold:
+
+1. Confirm Cap Fit and Gather Tools
+2. Access Chimney Safely
+3. Inspect Crown and Flue
+4. Clean Chimney Crown
+5. Dry-Fit Chimney Cap
+6. Mark and Drill Fastener Points
+7. Secure Chimney Cap
+8. Seal and Inspect Installation
+
+The regenerated chimney cap walkthrough returned:
+
+- `generator_schema_version: 5`
+- `visual_assets.asset_status: generated`
+- `step_sequence_validation.category: chimney_cap`
+- `step_sequence_validation.status: passed`
+- latency around 366 seconds for asset sheet plus 8 images
+
+## YouTube Research / Transcript Status
+
+Current code does not yet parse YouTube transcripts.
+
+Existing module:
+
+`backend/app/source_research.py`
+
+Current behavior:
+
+- Uses YouTube API metadata if `YOUTUBE_API_KEY` or `GOOGLE_YOUTUBE_API_KEY` exists.
+- Synthesizes planning/image guidance from public video titles/descriptions.
+- Stores derived research lessons, not transcripts.
+
+Important limitation:
+
+- True transcript ingestion is not implemented yet.
+- For chimney cap, source research reported `skipped_no_youtube_api_key`.
+
+Recommended future work:
+
+- Add transcript fetching/parsing when a suitable video source is selected.
+- Store derived sequence/visual guidance, not raw transcript text.
+- Feed transcript-derived step order and visual cues into the planner and asset sheet brief.
+
+## Known Limitations
+
+Image generation is still expensive:
+
+- Chimney cap full generation took roughly 5-6 minutes.
+- Asset sheet workflow adds one image generation up front, then step panels.
+
+Asset sheet reference use is new:
+
+- It now uses `images.edit` with the asset sheet as an image reference.
+- Needs real-world QA on whether consistency improves enough.
+- If step images still drift, next step is a stronger component library / cutout reuse / reference set per object angle.
+
+Existing walkthroughs are not automatically regenerated:
+
+- This was intentional.
+- Use Admin QC's per-walkthrough `Regenerate All Images` button when you want to upgrade a specific walkthrough.
+
+## Useful Commands
+
+Build frontend:
+
+```powershell
+npm run build
+```
+
+Compile backend files with installed Python:
+
+```powershell
+& 'C:\Users\mattp\AppData\Local\Programs\Python\Python314\python.exe' -m py_compile backend\main.py backend\app\image_generator.py backend\app\generator.py backend\app\step_sequence_validator.py
+```
+
+Create a walkthrough through deployed API:
+
+```powershell
+$body = @{ query = 'How do I install a chimney cap?'; force_refresh = $true } | ConvertTo-Json
+Invoke-RestMethod -Uri 'https://rocketsurgery-api.onrender.com/walkthrough' -Method Post -ContentType 'application/json' -Body $body
+```
+
+## Next Best Steps
+
+1. Wait for Render deploy of `9f53391`.
+2. Open Admin QC and hard refresh.
+3. Inspect the regenerated chimney cap walkthrough and its asset sheet.
+4. Use `Regenerate All Images` on that one walkthrough to test reference-based regeneration from the asset sheet.
+5. Compare visual consistency before/after reference-based regeneration.
+6. Add YouTube transcript parsing if narration/sequence quality still needs stronger external grounding.
+7. Generalize deterministic scaffolds for other taxonomy families where step order should not be left to open-ended planning.
