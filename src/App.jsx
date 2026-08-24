@@ -107,15 +107,20 @@ function QcDraftField({ as = "input", className = "", value = "", onDraftChange,
   const initialDraftValue = qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || "";
   const editingRef = useRef(false);
   const fieldRef = useRef(null);
+  const cacheKeyRef = useRef(cacheKey);
   const Field = as;
 
   useEffect(() => {
-    if (!editingRef.current) {
-      const nextValue = value || "";
-      qcDraftValueCache.set(cacheKey, nextValue);
-      if (fieldRef.current) {
-        fieldRef.current.value = nextValue;
-      }
+    if (cacheKeyRef.current === cacheKey) {
+      return;
+    }
+
+    cacheKeyRef.current = cacheKey;
+    editingRef.current = false;
+    const nextValue = qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || "";
+    qcDraftValueCache.set(cacheKey, nextValue);
+    if (fieldRef.current) {
+      fieldRef.current.value = nextValue;
     }
   }, [cacheKey, value]);
 
