@@ -391,6 +391,7 @@ class GenerateQcStepImageRequest(BaseModel):
     step: dict
     image_direction: str = ""
     visual_template: str = ""
+    visual_assets: dict = Field(default_factory=dict)
 
 
 class AdoptApprovedMatchRequest(BaseModel):
@@ -2953,6 +2954,7 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
     detail = step.get("detail", "")
     image_direction = (request.image_direction or step.get("imageDirection") or "").strip()
     visual_template = (request.visual_template or "").strip()
+    visual_assets = request.visual_assets or {}
     continuity_prompt = (
         "Walkthrough visual continuity contract: "
         "All steps in this walkthrough must depict the same primary object, same fixture/product shape, same surrounding installation setting, and same recurring worker/character style unless the step explicitly replaces or removes that object. "
@@ -2960,6 +2962,19 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
     )
     if visual_template:
         continuity_prompt += f"Locked walkthrough visual template: {visual_template}. "
+    if visual_assets:
+        asset_parts = [
+            "Use the approved walkthrough asset sheet as the visual bible.",
+            f"Primary object: {visual_assets.get('primary_object', '')}.",
+            f"Product: {visual_assets.get('product', '')}.",
+            f"Environment: {visual_assets.get('environment', '')}.",
+            f"Worker: {visual_assets.get('worker', '')}.",
+            "Do not redesign these assets between regenerated step images.",
+        ]
+        tools = visual_assets.get("tools", []) or []
+        if tools:
+            asset_parts.append("Tools/materials: " + "; ".join(map(str, tools)) + ".")
+        continuity_prompt += " ".join(" ".join(asset_parts).split()) + " "
 
     image_prompt_parts = [
         f"{request.title or request.query or request.walkthrough_id}.",
@@ -2991,6 +3006,7 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "image_label": label,
         "image_direction": image_direction,
         "visual_template": visual_template,
+        "visual_assets": visual_assets,
         "image_prompt": image_prompt,
         "image_url": image_url,
     })
@@ -3000,6 +3016,7 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "step_id": step_id,
         "image_url": image_url,
         "visual_template": visual_template,
+        "visual_assets": visual_assets,
         "image_prompt": image_prompt,
     }
 

@@ -62,6 +62,80 @@ A crisp, clear, contractor-friendly instructional panel that could appear inside
 """
 
 
+def build_asset_sheet_prompt(description: str) -> str:
+    return f"""
+Create a RocketSurgery visual asset reference sheet for a contractor walkthrough.
+
+Asset brief:
+{description}
+
+The sheet must show the reusable visual components before any step narration:
+- primary product/object from front, side, and top/three-quarter angles
+- important subparts and fasteners as separate callouts
+- surrounding installation environment
+- recurring worker/character design
+- tools and materials lineup
+
+Visual style:
+- clean semi-realistic technical illustration
+- consistent proportions across all views
+- crisp black outlines with subtle shading
+- neutral background, no decorative clutter
+- no brand logos, no tiny unreadable labels
+- mobile-app-ready construction training style
+
+Output goal:
+A single approved asset sheet that later step images can use as the locked visual bible.
+"""
+
+
+def write_generated_image(prompt: str, filename: str, context: dict) -> str:
+    ensure_storage()
+    output_path = IMAGES_DIR / filename
+
+    if output_path.exists():
+        image_url = f"{API_BASE_URL}/static/images/{filename}"
+        assess_and_record_image_quality(
+            image_url=image_url,
+            local_path=output_path,
+            context={**context, "source": f"{context.get('source', 'generated_image')}_cache_hit"},
+        )
+        return image_url
+
+    result = client.images.generate(
+        model="gpt-image-1",
+        prompt=prompt,
+        size="1024x1024"
+    )
+
+    image_base64 = result.data[0].b64_json
+    image_bytes = base64.b64decode(image_base64)
+    output_path.write_bytes(image_bytes)
+
+    image_url = f"{API_BASE_URL}/static/images/{filename}"
+    assess_and_record_image_quality(
+        image_url=image_url,
+        local_path=output_path,
+        context=context,
+    )
+    return image_url
+
+
+def generate_visual_asset_sheet(description: str, asset_key: str = "visual-assets") -> str:
+    safe_key = slugify(asset_key) or "visual-assets"
+    filename = f"{safe_key}-asset-sheet.png"
+    prompt = build_asset_sheet_prompt(description)
+    return write_generated_image(
+        prompt,
+        filename,
+        {
+            "source": "generated_visual_asset_sheet",
+            "asset_key": safe_key,
+            "asset_prompt": description,
+        },
+    )
+
+
 def generate_step_image(query: str, step_number: int = 1) -> str:
     ensure_storage()
 
@@ -83,27 +157,12 @@ def generate_step_image(query: str, step_number: int = 1) -> str:
         return image_url
 
     prompt = build_image_prompt(query, f"Step {step_number}")
-
-    result = client.images.generate(
-        model="gpt-image-1",
-        prompt=prompt,
-        size="1024x1024"
-    )
-
-    image_base64 = result.data[0].b64_json
-    image_bytes = base64.b64decode(image_base64)
-
-    output_path.write_bytes(image_bytes)
-
-    image_url = f"{API_BASE_URL}/static/images/{filename}"
-    assess_and_record_image_quality(
-        image_url=image_url,
-        local_path=output_path,
-        context={
+    return write_generated_image(
+        prompt,
+        filename,
+        {
             "source": "generated_step_image",
             "image_prompt": query,
             "step_number": step_number,
         },
     )
-
-    return image_url

@@ -1025,6 +1025,42 @@ body {
   background: #eef2ff;
 }
 
+.qcVisualAssetsPanel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 180px);
+  gap: 12px;
+  align-items: start;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8faff;
+}
+
+.qcVisualAssetsPanel strong {
+  display: block;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: none;
+}
+
+.qcVisualAssetsPanel p {
+  margin: 4px 0 0;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.qcVisualAssetsPanel img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+}
+
 .qcActions,
 .qcStepActions {
   display: flex;

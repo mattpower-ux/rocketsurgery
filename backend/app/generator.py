@@ -4,9 +4,9 @@ except ImportError:
     from storage import query_to_walkthrough_id
 
 try:
-    from app.image_generator import generate_step_image
+    from app.image_generator import generate_step_image, generate_visual_asset_sheet
 except ImportError:
-    from image_generator import generate_step_image
+    from image_generator import generate_step_image, generate_visual_asset_sheet
 
 try:
     from app.step_planner import generate_installation_steps_with_research
@@ -53,8 +53,8 @@ except ImportError:
 
 
 MAX_GENERATION_QUERY_LENGTH = 160
-MAX_IMAGE_PROMPT_LENGTH = 900
-GENERATOR_SCHEMA_VERSION = 4
+MAX_IMAGE_PROMPT_LENGTH = 1400
+GENERATOR_SCHEMA_VERSION = 5
 
 
 CHIMNEY_CAP_STEPS = [
@@ -141,6 +141,65 @@ def build_visual_template(query: str, category: str = "") -> str:
     )
 
 
+def build_visual_assets(query: str, category: str, visual_template: str) -> dict:
+    if category == "chimney_cap":
+        return {
+            "schema_version": 1,
+            "category": category,
+            "asset_key": "taxonomy-chimney-cap-single-flue-brick-chimney",
+            "primary_object": "single-flue residential brick chimney with rectangular clay flue tile and concrete crown",
+            "product": "stainless steel chimney cap with square mesh sides, flat overhanging lid, and screw/clamp base",
+            "environment": "gray asphalt shingle roof with neutral residential siding in the background",
+            "worker": "same worker in tan work shirt, blue jeans, gloves, and roof-safe footwear; face not emphasized",
+            "tools": ["extension ladder", "tape measure", "drill", "masonry bit", "screwdriver", "fasteners", "exterior-rated sealant"],
+            "views": ["front elevation", "side elevation", "top-down crown/flue view", "three-quarter roof context", "tool lineup"],
+            "locked_prompt": visual_template,
+        }
+    return {
+        "schema_version": 1,
+        "category": category,
+        "asset_key": f"taxonomy-{category or 'generic'}",
+        "primary_object": "primary product or fixture for the walkthrough",
+        "product": "same product shape and material details across steps",
+        "environment": "same installation setting and surrounding materials across steps",
+        "worker": "same recurring worker character style across steps",
+        "tools": [],
+        "views": ["front view", "side view", "top or three-quarter view", "environment view", "tools/materials lineup"],
+        "locked_prompt": visual_template,
+    }
+
+
+def format_asset_sheet_brief(visual_assets: dict) -> str:
+    parts = [
+        f"Category: {visual_assets.get('category', 'generic')}.",
+        f"Primary object: {visual_assets.get('primary_object', '')}.",
+        f"Product: {visual_assets.get('product', '')}.",
+        f"Environment: {visual_assets.get('environment', '')}.",
+        f"Worker: {visual_assets.get('worker', '')}.",
+        "Required views: " + "; ".join(visual_assets.get("views", []) or []) + ".",
+    ]
+    tools = visual_assets.get("tools", []) or []
+    if tools:
+        parts.append("Tools and materials: " + "; ".join(map(str, tools)) + ".")
+    parts.append(f"Locked prompt: {visual_assets.get('locked_prompt', '')}.")
+    return " ".join(part for part in parts if part)
+
+
+def format_visual_assets_for_prompt(visual_assets: dict) -> str:
+    tools = visual_assets.get("tools", []) or []
+    parts = [
+        "Use the approved walkthrough asset sheet as the visual bible.",
+        f"Primary object: {visual_assets.get('primary_object', '')}.",
+        f"Product: {visual_assets.get('product', '')}.",
+        f"Environment: {visual_assets.get('environment', '')}.",
+        f"Worker: {visual_assets.get('worker', '')}.",
+        "Do not redesign these assets between steps; only change the pose, tool placement, highlight, and action.",
+    ]
+    if tools:
+        parts.append(f"Tools/materials: {'; '.join(map(str, tools))}.")
+    return " ".join(" ".join(parts).split())
+
+
 def build_visual_continuity_prompt(visual_template: str) -> str:
     return (
         "Walkthrough visual continuity contract: all steps must depict the same primary object, same product shape, "
@@ -175,7 +234,21 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     category = sequence_validation["category"]
     learned_rule_prompt = format_rules_for_prompt(category)
     visual_template = build_visual_template(clean_query, category)
+    visual_assets = build_visual_assets(clean_query, category, visual_template)
+    asset_sheet_brief = format_asset_sheet_brief(visual_assets)
+    visual_assets["asset_sheet_prompt"] = asset_sheet_brief
+    try:
+        visual_assets["asset_sheet_url"] = generate_visual_asset_sheet(
+            asset_sheet_brief,
+            visual_assets.get("asset_key", f"{category}-asset-sheet"),
+        )
+        visual_assets["asset_status"] = "generated"
+    except Exception as exc:
+        visual_assets["asset_sheet_url"] = ""
+        visual_assets["asset_status"] = "generation_failed"
+        visual_assets["asset_error"] = str(exc)
     visual_continuity_prompt = build_visual_continuity_prompt(visual_template)
+    visual_asset_prompt = format_visual_assets_for_prompt(visual_assets)
 
     labor = estimate_labor_minutes(
         query=clean_query,
@@ -190,7 +263,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
 
         image_prompt = safe_image_prompt(
             f"{clean_query} - {planned_step.get('title', f'Step {index}')}. "
-            f"{visual_continuity_prompt} {learned_rule_prompt} {research_image_prompt}"
+            f"{visual_continuity_prompt} {visual_asset_prompt} {learned_rule_prompt} {research_image_prompt}"
         )
 
         if index - 1 < len(canonical_images):
@@ -230,6 +303,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
         "title": f"PLANNED WALKTHROUGH: {clean_query}",
         "generator_schema_version": GENERATOR_SCHEMA_VERSION,
         "visual_template": visual_template,
+        "visual_assets": visual_assets,
         "review_status": "draft",
         "quality_status": "order_validated",
         "version": 1,

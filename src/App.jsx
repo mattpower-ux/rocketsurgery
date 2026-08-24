@@ -2143,7 +2143,8 @@ function App() {
           query: draft.query || "",
           step: stepForGeneration,
           image_direction: latestImageDirection,
-          visual_template: draft.visual_template || ""
+          visual_template: draft.visual_template || "",
+          visual_assets: draft.visual_assets || {}
         })
       });
       const data = await response.json();
@@ -2864,6 +2865,22 @@ function App() {
                                     placeholder="Example: same white drop-in bathroom sink set into a beige laminate countertop, chrome two-handle faucet, white vanity cabinet, same worker in tan shirt and gloves."
                                   />
                                 </label>
+                                {draft.visual_assets && (
+                                  <div className="qcVisualAssetsPanel">
+                                    <div>
+                                      <span>Visual asset sheet</span>
+                                      <strong>{draft.visual_assets.asset_status || "ready"}</strong>
+                                      <p>{draft.visual_assets.primary_object || draft.visual_assets.locked_prompt || "No primary asset description yet."}</p>
+                                      {draft.visual_assets.product && <p>{draft.visual_assets.product}</p>}
+                                    </div>
+                                    {draft.visual_assets.asset_sheet_url && (
+                                      <img
+                                        src={apiAssetUrl(draft.visual_assets.asset_sheet_url)}
+                                        alt="Walkthrough visual asset sheet"
+                                      />
+                                    )}
+                                  </div>
+                                )}
                               </div>
 
                               {stagedLabel && (
