@@ -53,7 +53,7 @@ except ImportError:
 
 
 MAX_GENERATION_QUERY_LENGTH = 160
-MAX_IMAGE_PROMPT_LENGTH = 420
+MAX_IMAGE_PROMPT_LENGTH = 900
 
 
 def safe_task_text(text: str, max_len: int = MAX_GENERATION_QUERY_LENGTH) -> str:
@@ -83,6 +83,27 @@ def safe_image_prompt(text: str) -> str:
     return prompt
 
 
+def build_visual_template(query: str, category: str = "") -> str:
+    clean_query = (query or "").lower()
+    if category == "chimney_cap" or "chimney cap" in clean_query:
+        return (
+            "same residential brick chimney on a gray shingle roof, same rectangular clay flue tile and concrete chimney crown, "
+            "same stainless steel chimney cap with mesh sides and flat overhanging lid, same worker in tan work shirt, gloves, and roof-safe footwear"
+        )
+    return (
+        "same primary product or fixture, same surrounding installation setting, same material colors, "
+        "same perspective, and same recurring worker character style across every step"
+    )
+
+
+def build_visual_continuity_prompt(visual_template: str) -> str:
+    return (
+        "Walkthrough visual continuity contract: all steps must depict the same primary object, same product shape, "
+        "same surrounding setting, and same recurring worker style unless the step explicitly replaces or removes that object. "
+        f"Locked visual template: {visual_template}."
+    )
+
+
 def generate_placeholder_walkthrough(query: str) -> dict:
     clean_query = safe_task_text(query)
     taxonomy_match = classify_taxonomy_query(clean_query)
@@ -99,7 +120,10 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     planned_steps = generate_installation_steps_with_research(clean_query, research_context)
     sequence_validation = validate_and_repair_step_sequence(clean_query, planned_steps)
     planned_steps = sequence_validation["steps"]
-    learned_rule_prompt = format_rules_for_prompt(sequence_validation["category"])
+    category = sequence_validation["category"]
+    learned_rule_prompt = format_rules_for_prompt(category)
+    visual_template = build_visual_template(clean_query, category)
+    visual_continuity_prompt = build_visual_continuity_prompt(visual_template)
 
     labor = estimate_labor_minutes(
         query=clean_query,
@@ -113,7 +137,8 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     for index, planned_step in enumerate(planned_steps[:8], start=1):
 
         image_prompt = safe_image_prompt(
-            f"{clean_query} — {planned_step.get('title', f'Step {index}')}. {learned_rule_prompt} {research_image_prompt}"
+            f"{clean_query} — {planned_step.get('title', f'Step {index}')}. "
+            f"{visual_continuity_prompt} {learned_rule_prompt} {research_image_prompt}"
         )
 
         if index - 1 < len(canonical_images):
@@ -151,6 +176,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
         "taxonomy_match": taxonomy_match,
         "walkthrough_type": "generic_foundation",
         "title": f"PLANNED WALKTHROUGH: {clean_query}",
+        "visual_template": visual_template,
         "review_status": "draft",
         "quality_status": "order_validated",
         "version": 1,

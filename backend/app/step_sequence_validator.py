@@ -118,6 +118,25 @@ CATEGORY_ORDER_RULES = {
         ("trim", 100),
         ("seal", 120),
     ],
+    "chimney_cap": [
+        ("gather", 10),
+        ("prepare", 10),
+        ("access", 20),
+        ("ladder", 20),
+        ("inspect chimney", 30),
+        ("clean", 35),
+        ("measure", 40),
+        ("select", 50),
+        ("choose", 50),
+        ("place", 70),
+        ("position", 70),
+        ("drill", 90),
+        ("fasten", 100),
+        ("secure", 100),
+        ("seal", 120),
+        ("verify", 140),
+        ("inspect installation", 145),
+    ],
 }
 
 
