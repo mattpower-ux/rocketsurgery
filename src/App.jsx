@@ -102,7 +102,7 @@ function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommi
   );
 }
 
-function QcDraftField({ as = "input", className = "", value = "", onCommit, placeholder = "", fieldKey = "" }) {
+function QcDraftField({ as = "input", className = "", value = "", onDraftChange, onCommit, placeholder = "", fieldKey = "" }) {
   const cacheKey = fieldKey || `${className}-${placeholder}`;
   const [draftValue, setDraftValue] = useState(
     qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || ""
@@ -146,6 +146,7 @@ function QcDraftField({ as = "input", className = "", value = "", onCommit, plac
         const nextValue = event.target.value;
         qcDraftValueCache.set(cacheKey, nextValue);
         setDraftValue(nextValue);
+        onDraftChange?.(nextValue);
       }}
       onBlur={(event) => commitCurrentValue(event.currentTarget)}
       onKeyDownCapture={stopEditorShortcut}
@@ -1774,7 +1775,8 @@ function App() {
   }
 
 
-  function updateQcMetadata(walkthroughId, field, value) {
+  function updateQcMetadata(walkthroughId, field, value, options = {}) {
+    const { announce = true } = options;
     const draft = qcWalkthroughs[walkthroughId];
     if (!draft) {
       return;
@@ -1811,7 +1813,9 @@ function App() {
         }
       };
     });
-    setAdminMessage(`Metadata edit staged for ${updatedDraft.title || walkthroughId}. Click Save All to apply it.`);
+    if (announce) {
+      setAdminMessage(`Metadata edit staged for ${updatedDraft.title || walkthroughId}. Click Save All to apply it.`);
+    }
   }
 
 
@@ -2749,6 +2753,7 @@ function App() {
                                     className="qcStepInput"
                                     fieldKey={`${walkthroughId}-query`}
                                     value={draft.query || ""}
+                                    onDraftChange={(value) => updateQcMetadata(walkthroughId, "query", value, { announce: false })}
                                     onCommit={(value) => updateQcMetadata(walkthroughId, "query", value)}
                                     placeholder="Example: install a refrigerator icemaker water line"
                                   />
