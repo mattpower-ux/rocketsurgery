@@ -200,7 +200,14 @@ function QcImageDirectionField({ className = "", value = "", onCommit, placehold
       className={className}
       defaultValue={initialDraftValue}
       onChange={(event) => {
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
         qcDraftValueCache.set(cacheKey, event.target.value);
+        window.requestAnimationFrame(() => {
+          if (document.activeElement === fieldRef.current) {
+            window.scrollTo(scrollX, scrollY);
+          }
+        });
       }}
       onBlur={(event) => commitCurrentValue(event.currentTarget)}
       onClick={(event) => event.stopPropagation()}

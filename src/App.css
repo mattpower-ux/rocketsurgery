@@ -833,6 +833,7 @@ body {
 .qcWorkspace {
   display: grid;
   gap: 12px;
+  overflow-anchor: none;
 }
 
 .qcToolbar {
@@ -858,6 +859,7 @@ body {
 .qcList {
   display: grid;
   gap: 6px;
+  overflow-anchor: none;
 }
 
 .qcRow {
@@ -973,6 +975,7 @@ body {
   padding: 12px;
   border-top: 1px solid #eee;
   background: #f8fafc;
+  overflow-anchor: none;
 }
 
 .qcExpandedHeader {
@@ -1074,6 +1077,7 @@ body {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   background: white;
+  overflow-anchor: none;
 }
 
 .qcStepNumber {
@@ -1093,6 +1097,7 @@ body {
   display: grid;
   gap: 6px;
   min-width: 0;
+  overflow-anchor: none;
 }
 
 .qcStepInput,
@@ -1125,6 +1130,7 @@ body {
   min-height: 118px;
   border-color: #bfdbfe;
   background: #eff6ff;
+  overflow-anchor: none;
 }
 
 .qcStepImagePreview {
@@ -1134,6 +1140,7 @@ body {
   border: 1px solid #d1d5db;
   border-radius: 8px;
   background: #f8fafc;
+  overflow-anchor: none;
 }
 
 .qcAddStepButton {
