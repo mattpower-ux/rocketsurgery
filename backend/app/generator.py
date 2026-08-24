@@ -29,9 +29,9 @@ except ImportError:
     from step_sequence_validator import validate_and_repair_step_sequence
 
 try:
-    from app.quality_rules import format_rules_for_prompt
+    from app.quality_rules import format_rules_for_prompt, infer_construction_category
 except ImportError:
-    from quality_rules import format_rules_for_prompt
+    from quality_rules import format_rules_for_prompt, infer_construction_category
 
 try:
     from app.taxonomy_router import classify_taxonomy_query
@@ -54,6 +54,51 @@ except ImportError:
 
 MAX_GENERATION_QUERY_LENGTH = 160
 MAX_IMAGE_PROMPT_LENGTH = 900
+GENERATOR_SCHEMA_VERSION = 4
+
+
+CHIMNEY_CAP_STEPS = [
+    {
+        "title": "Confirm Cap Fit and Gather Tools",
+        "instruction": "Confirm the chimney cap matches the flue and collect installation tools.",
+        "detail": "Have the cap, tape measure, drill or screwdriver, masonry bits if needed, fasteners or clamp hardware, gloves, and exterior-rated sealant ready before going onto the roof.",
+    },
+    {
+        "title": "Access Chimney Safely",
+        "instruction": "Set the ladder securely and reach the chimney crown.",
+        "detail": "Place the ladder on stable ground, maintain safe roof access, and keep tools controlled while moving to the chimney.",
+    },
+    {
+        "title": "Inspect Crown and Flue",
+        "instruction": "Check the chimney crown, flue tile, and surrounding masonry.",
+        "detail": "Look for cracks, loose mortar, blocked flue openings, or damaged crown surfaces that should be repaired before the cap is installed.",
+    },
+    {
+        "title": "Clean Chimney Crown",
+        "instruction": "Brush debris from the chimney crown and flue edge.",
+        "detail": "Remove leaves, loose grit, old sealant, and soot from the mounting area so the cap sits flat and secure.",
+    },
+    {
+        "title": "Dry-Fit Chimney Cap",
+        "instruction": "Set the cap over the flue and confirm alignment.",
+        "detail": "Center the cap over the flue opening with even overhang and verify the mesh clears the flue tile without blocking draft.",
+    },
+    {
+        "title": "Mark and Drill Fastener Points",
+        "instruction": "Mark the attachment points and drill pilot holes if required.",
+        "detail": "Use the cap base or clamp holes as guides, then drill carefully into the crown or masonry only where the cap hardware requires it.",
+    },
+    {
+        "title": "Secure Chimney Cap",
+        "instruction": "Fasten the chimney cap to the flue or crown.",
+        "detail": "Tighten screws, clamps, or anchors evenly so the cap is stable, level, and not deforming the flue tile or mesh.",
+    },
+    {
+        "title": "Seal and Inspect Installation",
+        "instruction": "Seal required fastener points and inspect the completed cap.",
+        "detail": "Apply exterior-rated sealant only where appropriate, then verify the cap is centered, secure, weather-shedding, and clear of the flue opening.",
+    },
+]
 
 
 def safe_task_text(text: str, max_len: int = MAX_GENERATION_QUERY_LENGTH) -> str:
@@ -104,6 +149,12 @@ def build_visual_continuity_prompt(visual_template: str) -> str:
     )
 
 
+def planned_steps_for_category(query: str, category: str, research_context: str = "") -> list[dict]:
+    if category == "chimney_cap":
+        return [dict(step) for step in CHIMNEY_CAP_STEPS]
+    return generate_installation_steps_with_research(query, research_context)
+
+
 def generate_placeholder_walkthrough(query: str) -> dict:
     clean_query = safe_task_text(query)
     taxonomy_match = classify_taxonomy_query(clean_query)
@@ -117,7 +168,8 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     research_context = format_research_for_planner(source_research)
     research_image_prompt = format_research_for_image_prompt(source_research)
 
-    planned_steps = generate_installation_steps_with_research(clean_query, research_context)
+    initial_category = infer_construction_category(query=clean_query)
+    planned_steps = planned_steps_for_category(clean_query, initial_category, research_context)
     sequence_validation = validate_and_repair_step_sequence(clean_query, planned_steps)
     planned_steps = sequence_validation["steps"]
     category = sequence_validation["category"]
@@ -137,7 +189,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     for index, planned_step in enumerate(planned_steps[:8], start=1):
 
         image_prompt = safe_image_prompt(
-            f"{clean_query} — {planned_step.get('title', f'Step {index}')}. "
+            f"{clean_query} - {planned_step.get('title', f'Step {index}')}. "
             f"{visual_continuity_prompt} {learned_rule_prompt} {research_image_prompt}"
         )
 
@@ -176,6 +228,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
         "taxonomy_match": taxonomy_match,
         "walkthrough_type": "generic_foundation",
         "title": f"PLANNED WALKTHROUGH: {clean_query}",
+        "generator_schema_version": GENERATOR_SCHEMA_VERSION,
         "visual_template": visual_template,
         "review_status": "draft",
         "quality_status": "order_validated",

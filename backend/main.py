@@ -47,9 +47,9 @@ except ImportError:
     )
 
 try:
-    from app.generator import generate_placeholder_walkthrough
+    from app.generator import GENERATOR_SCHEMA_VERSION, generate_placeholder_walkthrough
 except ImportError:
-    from generator import generate_placeholder_walkthrough
+    from generator import GENERATOR_SCHEMA_VERSION, generate_placeholder_walkthrough
 
 try:
     from app.catalog import (
@@ -302,6 +302,7 @@ app.add_middleware(
 
 class WalkthroughRequest(BaseModel):
     query: str
+    force_refresh: bool = False
 
 
 class VisitorEventRequest(BaseModel):
@@ -3199,6 +3200,20 @@ def walkthrough_overlay(request: OverlayRequest):
     )
 
 
+def should_rebuild_cached_walkthrough(manifest: dict | None, force_refresh: bool = False) -> bool:
+    if not manifest:
+        return False
+    if manifest.get("review_status") == "approved":
+        return False
+    if force_refresh:
+        return True
+    try:
+        cached_schema = int(manifest.get("generator_schema_version") or 0)
+    except Exception:
+        cached_schema = 0
+    return cached_schema < GENERATOR_SCHEMA_VERSION
+
+
 @app.post("/walkthrough")
 def get_walkthrough(
     request: WalkthroughRequest,
@@ -3216,6 +3231,8 @@ def get_walkthrough(
     cached = load_walkthrough_by_id(canonical_walkthrough_id)
     if not cached:
         cached = load_walkthrough(canonical_query)
+    if should_rebuild_cached_walkthrough(cached, request.force_refresh):
+        cached = None
 
     client_ip = client_ip_from_request(http_request)
     user_agent = user_agent_from_request(http_request)
