@@ -173,7 +173,12 @@ function QcImageDirectionField({ className = "", value = "", onCommit, placehold
   const cacheKey = fieldKey || `${className}-${placeholder}`;
   const fieldRef = useRef(null);
   const cacheKeyRef = useRef(cacheKey);
+  const onCommitRef = useRef(onCommit);
   const initialDraftValue = qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || "";
+
+  useEffect(() => {
+    onCommitRef.current = onCommit;
+  }, [onCommit]);
 
   useEffect(() => {
     if (cacheKeyRef.current === cacheKey) {
@@ -188,28 +193,35 @@ function QcImageDirectionField({ className = "", value = "", onCommit, placehold
     }
   }, [cacheKey, value]);
 
-  function commitCurrentValue(target) {
-    const nextValue = target?.value ?? qcDraftValueCache.get(cacheKey) ?? "";
-    qcDraftValueCache.set(cacheKey, nextValue);
-    onCommit?.(nextValue);
-  }
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field) {
+      return undefined;
+    }
+
+    function handleInput() {
+      qcDraftValueCache.set(cacheKey, field.value);
+    }
+
+    function handleBlur() {
+      qcDraftValueCache.set(cacheKey, field.value);
+      onCommitRef.current?.(field.value);
+    }
+
+    field.addEventListener("input", handleInput);
+    field.addEventListener("blur", handleBlur);
+
+    return () => {
+      field.removeEventListener("input", handleInput);
+      field.removeEventListener("blur", handleBlur);
+    };
+  }, [cacheKey]);
 
   return (
     <textarea
       ref={fieldRef}
       className={className}
       defaultValue={initialDraftValue}
-      onChange={(event) => {
-        const scrollX = window.scrollX;
-        const scrollY = window.scrollY;
-        qcDraftValueCache.set(cacheKey, event.target.value);
-        window.requestAnimationFrame(() => {
-          if (document.activeElement === fieldRef.current) {
-            window.scrollTo(scrollX, scrollY);
-          }
-        });
-      }}
-      onBlur={(event) => commitCurrentValue(event.currentTarget)}
       onClick={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
