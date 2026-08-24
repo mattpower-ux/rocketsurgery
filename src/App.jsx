@@ -104,25 +104,25 @@ function StepRepairPromptBox({ stepId, initialValue = "", onDraftChange, onCommi
 
 function QcDraftField({ as = "input", className = "", value = "", onDraftChange, onCommit, placeholder = "", fieldKey = "" }) {
   const cacheKey = fieldKey || `${className}-${placeholder}`;
-  const [draftValue, setDraftValue] = useState(
-    qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || ""
-  );
+  const initialDraftValue = qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : value || "";
   const editingRef = useRef(false);
+  const fieldRef = useRef(null);
   const Field = as;
 
   useEffect(() => {
     if (!editingRef.current) {
       const nextValue = value || "";
       qcDraftValueCache.set(cacheKey, nextValue);
-      setDraftValue(nextValue);
+      if (fieldRef.current) {
+        fieldRef.current.value = nextValue;
+      }
     }
   }, [cacheKey, value]);
 
   function commitCurrentValue(target) {
-    const nextValue = target?.value ?? draftValue;
+    const nextValue = target?.value ?? qcDraftValueCache.get(cacheKey) ?? "";
     editingRef.current = false;
     qcDraftValueCache.set(cacheKey, nextValue);
-    setDraftValue(nextValue);
     onCommit?.(nextValue);
   }
 
@@ -137,15 +137,15 @@ function QcDraftField({ as = "input", className = "", value = "", onDraftChange,
 
   return (
     <Field
+      ref={fieldRef}
       className={className}
-      value={draftValue}
+      defaultValue={initialDraftValue}
       onFocus={() => {
         editingRef.current = true;
       }}
       onChange={(event) => {
         const nextValue = event.target.value;
         qcDraftValueCache.set(cacheKey, nextValue);
-        setDraftValue(nextValue);
         onDraftChange?.(nextValue);
       }}
       onBlur={(event) => commitCurrentValue(event.currentTarget)}
@@ -2753,7 +2753,6 @@ function App() {
                                     className="qcStepInput"
                                     fieldKey={`${walkthroughId}-query`}
                                     value={draft.query || ""}
-                                    onDraftChange={(value) => updateQcMetadata(walkthroughId, "query", value, { announce: false })}
                                     onCommit={(value) => updateQcMetadata(walkthroughId, "query", value)}
                                     placeholder="Example: install a refrigerator icemaker water line"
                                   />
@@ -2810,7 +2809,6 @@ function App() {
                                         className="qcStepTextarea qcImageDirection"
                                         fieldKey={`${walkthroughId}-${index}-imageDirection`}
                                         value={step.imageDirection || ""}
-                                        onDraftChange={(value) => updateQcStep(walkthroughId, index, "imageDirection", value)}
                                         onCommit={(value) => updateQcStep(walkthroughId, index, "imageDirection", value)}
                                         placeholder="Image direction: clarify what the new image should show, avoid, or emphasize."
                                       />
