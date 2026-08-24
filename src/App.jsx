@@ -2810,6 +2810,7 @@ function App() {
                                         className="qcStepTextarea qcImageDirection"
                                         fieldKey={`${walkthroughId}-${index}-imageDirection`}
                                         value={step.imageDirection || ""}
+                                        onDraftChange={(value) => updateQcStep(walkthroughId, index, "imageDirection", value)}
                                         onCommit={(value) => updateQcStep(walkthroughId, index, "imageDirection", value)}
                                         placeholder="Image direction: clarify what the new image should show, avoid, or emphasize."
                                       />
