@@ -177,8 +177,22 @@ function QcDraftField({ as = "input", className = "", value = "", onDraftChange,
 function QcImageDirectionModal({ editor, step, generating, onClose, onApply, onApplyAndGenerate }) {
   const [value, setValue] = useState(editor.value || "");
 
+  function stopModalEditorEvent(event) {
+    event.stopPropagation();
+  }
+
   return (
-    <div className="qcDirectionOverlay" role="dialog" aria-modal="true" aria-label="Edit image direction">
+    <div
+      className="qcDirectionOverlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit image direction"
+      onKeyDownCapture={stopModalEditorEvent}
+      onKeyUpCapture={stopModalEditorEvent}
+      onClick={stopModalEditorEvent}
+      onMouseDown={stopModalEditorEvent}
+      onPointerDown={stopModalEditorEvent}
+    >
       <div className="qcDirectionDialog">
         <div className="qcDirectionHeader">
           <div>
@@ -193,6 +207,12 @@ function QcImageDirectionModal({ editor, step, generating, onClose, onApply, onA
           className="qcDirectionModalTextarea"
           value={value}
           onChange={(event) => setValue(event.target.value)}
+          onKeyDownCapture={stopModalEditorEvent}
+          onKeyDown={stopModalEditorEvent}
+          onKeyUp={stopModalEditorEvent}
+          onClick={stopModalEditorEvent}
+          onMouseDown={stopModalEditorEvent}
+          onPointerDown={stopModalEditorEvent}
           placeholder={IMAGE_DIRECTION_PLACEHOLDER}
           autoFocus
           spellCheck
