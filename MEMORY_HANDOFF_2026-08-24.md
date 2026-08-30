@@ -348,3 +348,28 @@ Next migration phase:
 2. Review the asset sheets for visual consistency before regenerating step images.
 3. Regenerate images one walkthrough at a time using the per-walkthrough `Regenerate All Images` control.
 4. Save and approve only after the visual template, asset sheet, narration order, and generated step images look coherent.
+
+## Update - 2026-08-30 Asset Sheets Completed In Production
+
+The visual asset-sheet generation phase was completed against the live Render app after the admin token was supplied as an ephemeral local environment variable.
+
+Production action completed:
+
+- Began with `83` missing asset sheets after the first browser-triggered batch had already generated `3`.
+- Ran the remaining asset-sheet migration through `node scripts/run_visual_migration.mjs asset-sheets 3` in capped batches.
+- Each batch was serialized; no overlapping image-generation jobs were intentionally started.
+- The final batch processed `2` remaining walkthroughs.
+- Missing asset sheets dropped from `83` to `0`.
+
+Final production migration state:
+
+- Active walkthroughs: `87`
+- Missing visual templates: `0`
+- Missing asset sheets: `0`
+- Remaining step-image calls for a full per-walkthrough image regeneration pass: `636`
+- Estimated medium-quality full step-image regeneration pass: about `$26.71`
+
+Important next step:
+
+- Do not blindly regenerate every step image at once.
+- Open one walkthrough at a time, inspect its new asset sheet, then use the per-walkthrough `Regenerate All Images` control only when that asset sheet is coherent enough to anchor the step images.
