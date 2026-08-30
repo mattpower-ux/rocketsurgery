@@ -383,6 +383,7 @@ function App() {
   const [editorSaving, setEditorSaving] = useState(false);
   const [adminPanels, setAdminPanels] = useState({
     qc: true,
+    visualMigration: true,
     library: true,
     visitors: true,
     catalog: false,
@@ -398,6 +399,8 @@ function App() {
   const [qcImageGenerating, setQcImageGenerating] = useState({});
   const [qcAllImagesGenerating, setQcAllImagesGenerating] = useState({});
   const [imageDirectionEditor, setImageDirectionEditor] = useState(null);
+  const [visualMigrationReport, setVisualMigrationReport] = useState(null);
+  const [visualMigrationLoading, setVisualMigrationLoading] = useState(false);
   const [catalogPipelineStatus, setCatalogPipelineStatus] = useState(null);
   const [catalogPipelineRunning, setCatalogPipelineRunning] = useState("");
   const [productPackageBrand, setProductPackageBrand] = useState("Niagara");
@@ -2430,6 +2433,105 @@ function App() {
   }
 
 
+  async function loadVisualMigrationReport(tokenOverride = "") {
+    const token = tokenOverride || getAdminToken("load the visual migration report");
+    if (!token) {
+      setAdminMessage("Visual migration report cancelled. No admin token was entered.");
+      return;
+    }
+
+    setVisualMigrationLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/admin/qc/visual-migration-report?limit=10000&review_status=all`, {
+        headers: {
+          "X-Admin-Token": token
+        },
+        cache: "no-store"
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          clearAdminToken();
+        }
+        throw new Error(data.detail || data.error || "Visual migration report failed.");
+      }
+
+      setVisualMigrationReport(data);
+      const summary = data.summary || {};
+      setAdminMessage(
+        `Visual migration report: ${summary.walkthrough_count || 0} walkthrough(s), ${summary.missing_visual_template_count || 0} missing templates, ${summary.missing_asset_sheet_count || 0} missing asset sheets.`
+      );
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Visual migration report failed: ${error.message}`);
+    } finally {
+      setVisualMigrationLoading(false);
+    }
+  }
+
+
+  async function prepareVisualMigration({ generateAssetSheets = false, limit = 5 } = {}) {
+    const token = getAdminToken(generateAssetSheets ? "generate visual asset sheets" : "prepare visual templates");
+    if (!token) {
+      setAdminMessage("Visual migration cancelled. No admin token was entered.");
+      return;
+    }
+
+    if (generateAssetSheets) {
+      const ok = window.confirm(
+        `Generate up to ${limit} visual asset sheet image(s)? This uses paid image generation and can take several minutes.`
+      );
+      if (!ok) return;
+    }
+
+    setVisualMigrationLoading(true);
+    setAdminMessage(
+      generateAssetSheets
+        ? `Generating up to ${limit} visual asset sheet(s)...`
+        : `Preparing visual templates for up to ${limit} walkthrough(s)...`
+    );
+
+    try {
+      const response = await fetch(`${API_URL}/admin/qc/prepare-visual-migration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          limit,
+          review_status: "all",
+          dry_run: false,
+          generate_asset_sheets: generateAssetSheets
+        })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          clearAdminToken();
+        }
+        throw new Error(data.detail || data.error || "Visual migration preparation failed.");
+      }
+
+      setAdminMessage(
+        generateAssetSheets
+          ? `Generated ${data.generated_asset_sheet_count || 0} asset sheet(s). Prepared ${data.processed_count || 0} walkthrough(s).`
+          : `Prepared visual templates for ${data.processed_count || 0} walkthrough(s).`
+      );
+      await loadVisualMigrationReport(token);
+      loadAdminWalkthroughs();
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Visual migration failed: ${error.message}`);
+    } finally {
+      setVisualMigrationLoading(false);
+    }
+  }
+
+
   async function regenerateStepImage(stepId) {
     if (!selectedAdminWalkthrough) {
       return;
@@ -3068,6 +3170,60 @@ function App() {
                   );
                 })}
               </div>
+            </div>
+          </AdminSection>
+
+          <AdminSection
+            panelId="visualMigration"
+            title="Visual Consistency Migration"
+            actions={
+              <div className="adminActionRow">
+                <button className="secondaryButton" onClick={() => loadVisualMigrationReport()} disabled={visualMigrationLoading}>
+                  {visualMigrationLoading ? "Working..." : "Load Report"}
+                </button>
+                <button className="secondaryButton" onClick={() => prepareVisualMigration({ limit: 10 })} disabled={visualMigrationLoading}>
+                  Prepare Missing Templates
+                </button>
+                <button className="secondaryButton" onClick={() => prepareVisualMigration({ generateAssetSheets: true, limit: 3 })} disabled={visualMigrationLoading}>
+                  Generate 3 Asset Sheets
+                </button>
+              </div>
+            }
+          >
+            <div className="libraryWorkspace">
+              <p className="adminHelp">
+                Start here before regenerating old walkthrough images. This locks a visual template and asset metadata first, then lets you generate asset sheets in small paid batches.
+              </p>
+              {visualMigrationReport?.summary ? (
+                <>
+                  <div className="libraryStats">
+                    <span>{visualMigrationReport.summary.walkthrough_count || 0} walkthroughs</span>
+                    <span>{visualMigrationReport.summary.missing_visual_template_count || 0} missing templates</span>
+                    <span>{visualMigrationReport.summary.missing_asset_sheet_count || 0} missing asset sheets</span>
+                    <span>{visualMigrationReport.summary.full_regen_image_calls || 0} full-regeneration image calls</span>
+                    <span>
+                      Est. medium full pass: ${visualMigrationReport.summary.estimated_full_regen_costs?.medium ?? 0}
+                    </span>
+                  </div>
+                  <div className="libraryList">
+                    {(visualMigrationReport.items || []).slice(0, 12).map((item) => (
+                      <div key={`visual-migration-${item.walkthrough_id}`} className="libraryItem">
+                        <div>
+                          <strong>{displayText(item.title, 120)}</strong>
+                          <span>{item.category} · {item.step_count} steps · {item.readiness}</span>
+                        </div>
+                        <div className="libraryItemMeta">
+                          <span>{item.has_visual_template ? "Template ready" : "Needs template"}</span>
+                          <span>{item.has_asset_sheet ? "Asset sheet ready" : "Needs asset sheet"}</span>
+                          <span>${item.estimated_full_regen_costs?.medium ?? 0} med.</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="adminHelp">Load the report to see the migration queue and estimated image-generation cost.</p>
+              )}
             </div>
           </AdminSection>
 

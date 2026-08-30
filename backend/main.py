@@ -47,9 +47,21 @@ except ImportError:
     )
 
 try:
-    from app.generator import GENERATOR_SCHEMA_VERSION, generate_placeholder_walkthrough
+    from app.generator import (
+        GENERATOR_SCHEMA_VERSION,
+        build_visual_assets,
+        build_visual_template,
+        format_asset_sheet_brief,
+        generate_placeholder_walkthrough,
+    )
 except ImportError:
-    from generator import GENERATOR_SCHEMA_VERSION, generate_placeholder_walkthrough
+    from generator import (
+        GENERATOR_SCHEMA_VERSION,
+        build_visual_assets,
+        build_visual_template,
+        format_asset_sheet_brief,
+        generate_placeholder_walkthrough,
+    )
 
 try:
     from app.catalog import (
@@ -191,9 +203,9 @@ except ImportError:
     from taxonomy_edits import record_query_alias_candidate
 
 try:
-    from app.image_generator import generate_step_image, generate_step_image_from_asset_sheet
+    from app.image_generator import generate_step_image, generate_step_image_from_asset_sheet, generate_visual_asset_sheet
 except ImportError:
-    from image_generator import generate_step_image, generate_step_image_from_asset_sheet
+    from image_generator import generate_step_image, generate_step_image_from_asset_sheet, generate_visual_asset_sheet
 
 try:
     from app.image_quality import assess_and_record_image_quality
@@ -403,6 +415,14 @@ class RegenerateAllQcImagesRequest(BaseModel):
     visual_assets: dict = Field(default_factory=dict)
 
 
+class QcVisualMigrationRequest(BaseModel):
+    limit: int = 5
+    review_status: str = "all"
+    dry_run: bool = False
+    generate_asset_sheets: bool = False
+    walkthrough_ids: list[str] = Field(default_factory=list)
+
+
 class AdoptApprovedMatchRequest(BaseModel):
     walkthrough_id: str
     walkthrough: dict = Field(default_factory=dict)
@@ -554,6 +574,199 @@ def log_editor_decision(payload: dict):
         append_jsonl(EDITOR_DECISIONS_FILE, record)
     except Exception as exc:
         print("Editor decision write failed:", exc)
+
+
+IMAGE_PRICE_BY_QUALITY = {
+    "low": 0.011,
+    "medium": 0.042,
+    "high": 0.167,
+}
+
+
+def estimated_image_generation_costs(image_count: int) -> dict:
+    count = max(0, int(image_count or 0))
+    return {
+        quality: round(count * unit_price, 2)
+        for quality, unit_price in IMAGE_PRICE_BY_QUALITY.items()
+    }
+
+
+def migration_status_matches(item_status: str, requested_status: str) -> bool:
+    status = (item_status or "draft").lower()
+    requested = (requested_status or "all").lower()
+    if requested == "all":
+        return status not in ["deleted", "deprecated"]
+    if requested == "draft":
+        return status not in ["approved", "deleted", "deprecated"]
+    return status == requested
+
+
+def visual_migration_item_for_manifest(item: dict, manifest: dict) -> dict:
+    walkthrough_id = item.get("storage_walkthrough_id") or item.get("walkthrough_id", "")
+    query = manifest.get("query") or item.get("title") or walkthrough_id
+    category = infer_construction_category(
+        walkthrough_id=walkthrough_id,
+        title=manifest.get("title", item.get("title", "")),
+        query=query,
+    )
+    steps = manifest.get("steps", []) or []
+    visual_assets = manifest.get("visual_assets") or {}
+    has_template = bool(str(manifest.get("visual_template") or "").strip())
+    has_asset_sheet = bool(str(visual_assets.get("asset_sheet_url") or "").strip())
+    image_count = len([step for step in steps if step.get("imageUrl")])
+    asset_sheet_calls_needed = 0 if has_asset_sheet else 1
+    step_image_calls_needed = len(steps)
+    full_regen_calls = asset_sheet_calls_needed + step_image_calls_needed
+    readiness = "ready_for_review"
+    if not has_template:
+        readiness = "needs_visual_template"
+    elif not has_asset_sheet:
+        readiness = "needs_asset_sheet"
+
+    return {
+        "walkthrough_id": walkthrough_id,
+        "title": manifest.get("title") or item.get("title") or walkthrough_id,
+        "query": query,
+        "review_status": manifest.get("review_status", item.get("review_status", "draft")),
+        "quality_status": manifest.get("quality_status", item.get("quality_status", "unvalidated")),
+        "category": category,
+        "step_count": len(steps),
+        "existing_image_count": image_count,
+        "has_visual_template": has_template,
+        "has_asset_sheet": has_asset_sheet,
+        "asset_sheet_url": visual_assets.get("asset_sheet_url", ""),
+        "asset_sheet_calls_needed": asset_sheet_calls_needed,
+        "step_image_calls_needed": step_image_calls_needed,
+        "full_regen_calls": full_regen_calls,
+        "estimated_full_regen_costs": estimated_image_generation_costs(full_regen_calls),
+        "readiness": readiness,
+    }
+
+
+def visual_migration_report(limit: int = 10000, review_status: str = "all") -> dict:
+    items = []
+    for item in list_walkthrough_manifests(limit=limit):
+        if not migration_status_matches(item.get("review_status", "draft"), review_status):
+            continue
+        walkthrough_id = item.get("storage_walkthrough_id") or item.get("walkthrough_id", "")
+        manifest = load_walkthrough_by_id(walkthrough_id)
+        if not manifest:
+            continue
+        items.append(visual_migration_item_for_manifest(item, manifest))
+
+    total_full_regen_calls = sum(item.get("full_regen_calls", 0) for item in items)
+    total_asset_sheet_calls = sum(item.get("asset_sheet_calls_needed", 0) for item in items)
+    total_step_image_calls = sum(item.get("step_image_calls_needed", 0) for item in items)
+    missing_templates = len([item for item in items if not item.get("has_visual_template")])
+    missing_asset_sheets = len([item for item in items if not item.get("has_asset_sheet")])
+
+    return {
+        "status": "loaded",
+        "summary": {
+            "walkthrough_count": len(items),
+            "missing_visual_template_count": missing_templates,
+            "missing_asset_sheet_count": missing_asset_sheets,
+            "asset_sheet_calls_needed": total_asset_sheet_calls,
+            "step_image_calls_for_full_regen": total_step_image_calls,
+            "full_regen_image_calls": total_full_regen_calls,
+            "estimated_full_regen_costs": estimated_image_generation_costs(total_full_regen_calls),
+            "estimated_asset_sheet_costs": estimated_image_generation_costs(total_asset_sheet_calls),
+        },
+        "items": items,
+    }
+
+
+def prepare_visual_migration_batch(request: QcVisualMigrationRequest) -> dict:
+    target_ids = {resolve_walkthrough_storage_id(item) for item in request.walkthrough_ids or []}
+    max_items = max(1, min(int(request.limit or 5), 25))
+    candidates = []
+
+    for item in list_walkthrough_manifests(limit=10000):
+        walkthrough_id = item.get("storage_walkthrough_id") or item.get("walkthrough_id", "")
+        if target_ids and walkthrough_id not in target_ids:
+            continue
+        if not target_ids and not migration_status_matches(item.get("review_status", "draft"), request.review_status):
+            continue
+        manifest = load_walkthrough_by_id(walkthrough_id)
+        if not manifest:
+            continue
+        migration_item = visual_migration_item_for_manifest(item, manifest)
+        if (
+            not migration_item.get("has_visual_template")
+            or not migration_item.get("has_asset_sheet")
+            or target_ids
+        ):
+            candidates.append((walkthrough_id, manifest, migration_item))
+        if len(candidates) >= max_items:
+            break
+
+    prepared = []
+    for walkthrough_id, manifest, migration_item in candidates:
+        before_manifest = json.loads(json.dumps(manifest))
+        query = manifest.get("query") or manifest.get("title") or walkthrough_id
+        category = migration_item.get("category", "generic")
+        visual_template = str(manifest.get("visual_template") or "").strip()
+        if not visual_template:
+            visual_template = build_visual_template(query, category)
+
+        visual_assets = dict(manifest.get("visual_assets") or {})
+        if not visual_assets:
+            visual_assets = build_visual_assets(query, category, visual_template)
+        else:
+            fallback_assets = build_visual_assets(query, category, visual_template)
+            visual_assets = {**fallback_assets, **visual_assets}
+            visual_assets["locked_prompt"] = visual_template
+            visual_assets["category"] = visual_assets.get("category") or category
+
+        if not visual_assets.get("asset_sheet_url") and category != "chimney_cap":
+            visual_assets["asset_key"] = f"walkthrough-{walkthrough_id}"
+
+        visual_assets["asset_sheet_prompt"] = visual_assets.get("asset_sheet_prompt") or format_asset_sheet_brief(visual_assets)
+
+        generated_asset_sheet = False
+        if request.generate_asset_sheets and not visual_assets.get("asset_sheet_url"):
+            visual_assets["asset_sheet_url"] = generate_visual_asset_sheet(
+                visual_assets["asset_sheet_prompt"],
+                visual_assets.get("asset_key", f"{category}-asset-sheet"),
+            )
+            visual_assets["asset_status"] = "generated"
+            generated_asset_sheet = True
+        elif not visual_assets.get("asset_sheet_url"):
+            visual_assets["asset_status"] = visual_assets.get("asset_status") or "template_ready"
+
+        if not request.dry_run:
+            manifest["visual_template"] = visual_template
+            manifest["visual_assets"] = visual_assets
+            manifest["visual_migration_status"] = "asset_sheet_generated" if generated_asset_sheet else "template_prepared"
+            manifest["visual_migration_updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            manifest["version"] = int(manifest.get("version", 1)) + 1
+            save_walkthrough(walkthrough_id, manifest)
+            log_editor_decision({
+                "action": "qc_visual_migration_prepared",
+                "walkthrough_id": walkthrough_id,
+                "category": category,
+                "generated_asset_sheet": generated_asset_sheet,
+                "dry_run": False,
+            })
+
+        prepared.append({
+            "walkthrough_id": walkthrough_id,
+            "title": manifest.get("title") or before_manifest.get("title") or walkthrough_id,
+            "category": category,
+            "generated_asset_sheet": generated_asset_sheet,
+            "dry_run": request.dry_run,
+            "has_visual_template": bool(visual_template),
+            "has_asset_sheet": bool(visual_assets.get("asset_sheet_url")),
+            "asset_sheet_url": visual_assets.get("asset_sheet_url", ""),
+        })
+
+    return {
+        "status": "prepared" if not request.dry_run else "dry_run",
+        "processed_count": len(prepared),
+        "generated_asset_sheet_count": len([item for item in prepared if item.get("generated_asset_sheet")]),
+        "estimated_asset_sheet_costs": estimated_image_generation_costs(len([item for item in prepared if item.get("generated_asset_sheet")])),
+        "items": prepared,
+    }
 
 
 def learn_editor_rules(action: str, before: dict, after: dict, context: dict | None = None):
@@ -2807,6 +3020,23 @@ def post_qc_mark_all_drafts(_: None = Depends(require_admin_token)):
         "updated": updated,
         "skipped": skipped,
     }
+
+
+@app.get("/admin/qc/visual-migration-report")
+def get_qc_visual_migration_report(
+    limit: int = 10000,
+    review_status: str = "all",
+    _: None = Depends(require_admin_token),
+):
+    return visual_migration_report(limit=limit, review_status=review_status)
+
+
+@app.post("/admin/qc/prepare-visual-migration")
+def post_qc_prepare_visual_migration(
+    request: QcVisualMigrationRequest,
+    _: None = Depends(require_admin_token),
+):
+    return prepare_visual_migration_batch(request)
 
 
 @app.post("/admin/qc/adopt-approved-match")
