@@ -198,10 +198,23 @@ def generate_step_image(query: str, step_number: int = 1, cache_key_suffix: str 
     )
 
 
-def generate_step_image_from_asset_sheet(query: str, step_number: int = 1, asset_sheet_url: str = "", cache_key_suffix: str = "") -> str:
+def generate_step_image_from_asset_sheet(
+    query: str,
+    step_number: int = 1,
+    asset_sheet_url: str = "",
+    cache_key_suffix: str = "",
+    return_metadata: bool = False,
+):
     reference_path = local_static_image_path(asset_sheet_url)
     if not reference_path:
-        return generate_step_image(query, step_number, cache_key_suffix=cache_key_suffix)
+        image_url = generate_step_image(query, step_number, cache_key_suffix=cache_key_suffix)
+        if return_metadata:
+            return {
+                "image_url": image_url,
+                "generation_mode": "missing_asset_sheet_fallback",
+                "used_asset_sheet": False,
+            }
+        return image_url
 
     ensure_storage()
     safe_query = slugify(query) or "walkthrough"
@@ -210,7 +223,14 @@ def generate_step_image_from_asset_sheet(query: str, step_number: int = 1, asset
     output_path = IMAGES_DIR / filename
 
     if output_path.exists():
-        return f"{API_BASE_URL}/static/images/{filename}"
+        image_url = f"{API_BASE_URL}/static/images/{filename}"
+        if return_metadata:
+            return {
+                "image_url": image_url,
+                "generation_mode": "asset_sheet_cache_hit",
+                "used_asset_sheet": True,
+            }
+        return image_url
 
     prompt = build_image_prompt(
         (
@@ -224,24 +244,51 @@ def generate_step_image_from_asset_sheet(query: str, step_number: int = 1, asset
         ),
         f"Step {step_number}",
     )
-    with reference_path.open("rb") as reference_image:
-        result = client.images.edit(
-            model="gpt-image-1",
-            image=[reference_image],
-            prompt=prompt,
-            size="1024x1024",
-            input_fidelity="high",
-            response_format="b64_json",
-        )
+    try:
+        with reference_path.open("rb") as reference_image:
+            result = client.images.edit(
+                model="gpt-image-1",
+                image=[reference_image],
+                prompt=prompt,
+                size="1024x1024",
+                input_fidelity="high",
+                response_format="b64_json",
+            )
 
-    return write_image_response(
-        result,
-        filename,
-        {
-            "source": "generated_step_image_from_asset_sheet",
-            "image_prompt": query,
-            "step_number": step_number,
-            "asset_sheet_url": asset_sheet_url,
-            "cache_key_suffix": cache_key_suffix,
-        },
-    )
+        image_url = write_image_response(
+            result,
+            filename,
+            {
+                "source": "generated_step_image_from_asset_sheet",
+                "image_prompt": query,
+                "step_number": step_number,
+                "asset_sheet_url": asset_sheet_url,
+                "cache_key_suffix": cache_key_suffix,
+            },
+        )
+        if return_metadata:
+            return {
+                "image_url": image_url,
+                "generation_mode": "asset_sheet_edit",
+                "used_asset_sheet": True,
+            }
+        return image_url
+    except Exception as exc:
+        fallback_prompt = (
+            f"{query}\n\n"
+            "The asset-sheet image edit path failed, so regenerate this step as a fresh illustration. "
+            "Still obey the locked visual asset descriptions in the prompt, and give highest priority to any editor image direction, especially absence/removal/not-yet-installed state instructions."
+        )
+        image_url = generate_step_image(
+            fallback_prompt,
+            step_number,
+            cache_key_suffix=f"{cache_key_suffix}-text-fallback",
+        )
+        if return_metadata:
+            return {
+                "image_url": image_url,
+                "generation_mode": "fallback_text_generation",
+                "used_asset_sheet": False,
+                "fallback_error": str(exc),
+            }
+        return image_url

@@ -3276,12 +3276,16 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
 
     visual_assets = request.visual_assets or {}
     visual_template = (request.visual_template or "").strip()
-    image_url = generate_step_image_from_asset_sheet(
+    image_result = generate_step_image_from_asset_sheet(
         image_prompt,
         step_id,
         asset_sheet_url=visual_assets.get("asset_sheet_url", ""),
         cache_key_suffix=f"qc-{request.walkthrough_id}-{step_id}-{int(time.time())}",
+        return_metadata=True,
     )
+    image_url = image_result.get("image_url", "") if isinstance(image_result, dict) else str(image_result)
+    generation_mode = image_result.get("generation_mode", "") if isinstance(image_result, dict) else ""
+    used_asset_sheet = bool(image_result.get("used_asset_sheet")) if isinstance(image_result, dict) else bool(visual_assets.get("asset_sheet_url"))
     log_correction_memory({
         "action": "qc_step_image_generated",
         "walkthrough_id": request.walkthrough_id,
@@ -3295,13 +3299,18 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "visual_assets": visual_assets,
         "image_prompt": image_prompt,
         "image_url": image_url,
+        "generation_mode": generation_mode,
+        "used_asset_sheet": used_asset_sheet,
+        "fallback_error": image_result.get("fallback_error", "") if isinstance(image_result, dict) else "",
     })
 
     return {
         "status": "generated",
         "step_id": step_id,
         "image_url": image_url,
-        "used_asset_sheet": bool(visual_assets.get("asset_sheet_url")),
+        "generation_mode": generation_mode,
+        "used_asset_sheet": used_asset_sheet,
+        "fallback_error": image_result.get("fallback_error", "") if isinstance(image_result, dict) else "",
         "visual_template": visual_template,
         "visual_assets": visual_assets,
         "image_prompt": image_prompt,

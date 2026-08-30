@@ -2216,12 +2216,15 @@ function App() {
     setAdminMessage(`Generating image for step ${stepIndex + 1}...`);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 240000);
       const response = await fetch(`${API_URL}/admin/qc/generate-step-image`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Admin-Token": token
         },
+        signal: controller.signal,
         body: JSON.stringify({
           walkthrough_id: walkthroughId,
           title: draft.title || "",
@@ -2232,6 +2235,7 @@ function App() {
           visual_assets: draft.visual_assets || {}
         })
       });
+      window.clearTimeout(timeoutId);
       const data = await response.json();
 
       if (!response.ok) {
@@ -2260,10 +2264,11 @@ function App() {
         }
       }));
       stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", updatedSteps, draft.title || walkthroughId, false);
-      setAdminMessage(`Generated a new image for step ${stepIndex + 1}${data.used_asset_sheet ? " using the asset sheet" : ""}. If it looks right, click Save All to keep it. ${data.image_url || ""}`);
+      const generationMode = data.generation_mode ? ` (${data.generation_mode})` : "";
+      setAdminMessage(`Generated a new image for step ${stepIndex + 1}${data.used_asset_sheet ? " using the asset sheet" : " using fallback generation"}${generationMode}. If it looks right, click Save All to keep it. ${data.image_url || ""}`);
     } catch (error) {
       console.error(error);
-      setAdminMessage(`Image generation failed: ${error.message}`);
+      setAdminMessage(error.name === "AbortError" ? "Image generation timed out after 4 minutes." : `Image generation failed: ${error.message}`);
     } finally {
       setQcImageGenerating((previous) => {
         const next = { ...previous };
