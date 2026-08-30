@@ -174,7 +174,7 @@ function QcDraftField({ as = "input", className = "", value = "", onDraftChange,
   );
 }
 
-function QcImageDirectionModal({ editor, step, generating, onClose, onApply, onApplyAndGenerate }) {
+function QcImageDirectionModal({ editor, step, generating, onClose, onDraftChange, onApply, onApplyAndGenerate }) {
   const [value, setValue] = useState(editor.value || "");
 
   function stopModalEditorEvent(event) {
@@ -206,7 +206,11 @@ function QcImageDirectionModal({ editor, step, generating, onClose, onApply, onA
         <textarea
           className="qcDirectionModalTextarea"
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setValue(nextValue);
+            onDraftChange(nextValue);
+          }}
           onKeyDownCapture={stopModalEditorEvent}
           onKeyDown={stopModalEditorEvent}
           onKeyUp={stopModalEditorEvent}
@@ -2125,8 +2129,30 @@ function App() {
       walkthroughId,
       stepIndex,
       cacheKey,
-      value: qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : step.imageDirection || ""
+      value: qcDraftValueCache.has(cacheKey) ? qcDraftValueCache.get(cacheKey) : step.imageDirection || "",
+      scrollY: window.scrollY
     });
+  }
+
+  function restoreImageDirectionEditorScroll(editor = imageDirectionEditor) {
+    const scrollY = Number(editor?.scrollY);
+    if (!Number.isFinite(scrollY)) {
+      return;
+    }
+    window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0 }));
+  }
+
+  function closeImageDirectionEditor() {
+    const editor = imageDirectionEditor;
+    setImageDirectionEditor(null);
+    restoreImageDirectionEditorScroll(editor);
+  }
+
+  function cacheImageDirectionEditorValue(value) {
+    if (!imageDirectionEditor) {
+      return;
+    }
+    qcDraftValueCache.set(imageDirectionEditor.cacheKey, value);
   }
 
   function commitImageDirectionEditorValue(value) {
@@ -2142,12 +2168,14 @@ function App() {
 
   function applyImageDirectionEditor(value) {
     commitImageDirectionEditorValue(value);
-    setImageDirectionEditor(null);
+    closeImageDirectionEditor();
   }
 
   function applyAndGenerateImageDirection(value) {
+    const editor = imageDirectionEditor;
     const target = commitImageDirectionEditorValue(value);
     setImageDirectionEditor(null);
+    restoreImageDirectionEditorScroll(editor);
     if (target) {
       window.setTimeout(() => generateQcStepImage(target.walkthroughId, target.stepIndex), 0);
     }
@@ -3658,7 +3686,8 @@ function App() {
               editor={imageDirectionEditor}
               step={qcWalkthroughs[imageDirectionEditor.walkthroughId]?.steps?.[imageDirectionEditor.stepIndex]}
               generating={!!qcImageGenerating[`${imageDirectionEditor.walkthroughId}-${imageDirectionEditor.stepIndex}`]}
-              onClose={() => setImageDirectionEditor(null)}
+              onClose={closeImageDirectionEditor}
+              onDraftChange={cacheImageDirectionEditorValue}
               onApply={applyImageDirectionEditor}
               onApplyAndGenerate={applyAndGenerateImageDirection}
             />
