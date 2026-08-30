@@ -693,11 +693,16 @@ def prepare_visual_migration_batch(request: QcVisualMigrationRequest) -> dict:
         if not manifest:
             continue
         migration_item = visual_migration_item_for_manifest(item, manifest)
-        if (
-            not migration_item.get("has_visual_template")
-            or not migration_item.get("has_asset_sheet")
-            or target_ids
-        ):
+        needs_visual_template = not migration_item.get("has_visual_template")
+        needs_asset_sheet = not migration_item.get("has_asset_sheet")
+        if target_ids:
+            should_prepare = True
+        elif request.generate_asset_sheets:
+            should_prepare = needs_asset_sheet
+        else:
+            should_prepare = needs_visual_template
+
+        if should_prepare:
             candidates.append((walkthrough_id, manifest, migration_item))
         if len(candidates) >= max_items:
             break

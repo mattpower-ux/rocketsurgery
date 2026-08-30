@@ -457,9 +457,9 @@ function App() {
     setAdminMessage("Admin token saved for this browser.");
   }
 
-  function preserveScrollAfter(updatePromise) {
+  function preserveScrollAfter(updateAction) {
     const scrollY = window.scrollY;
-    return Promise.resolve(updatePromise).finally(() => {
+    return Promise.resolve(typeof updateAction === "function" ? updateAction() : updateAction).finally(() => {
       window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0 }));
     });
   }
@@ -3228,13 +3228,13 @@ function App() {
             title="Visual Consistency Migration"
             actions={
               <div className="adminActionRow">
-                <button className="secondaryButton" onClick={() => preserveScrollAfter(loadVisualMigrationReport())} disabled={visualMigrationLoading}>
+                <button className="secondaryButton" onClick={() => preserveScrollAfter(loadVisualMigrationReport)} disabled={visualMigrationLoading}>
                   {visualMigrationLoading ? "Working..." : "Load Report"}
                 </button>
-                <button className="secondaryButton" onClick={() => preserveScrollAfter(prepareVisualMigration({ limit: 10 }))} disabled={visualMigrationLoading}>
+                <button className="secondaryButton" onClick={() => preserveScrollAfter(() => prepareVisualMigration({ limit: 10 }))} disabled={visualMigrationLoading}>
                   Prepare Missing Templates
                 </button>
-                <button className="secondaryButton" onClick={() => preserveScrollAfter(prepareVisualMigration({ generateAssetSheets: true, limit: 3 }))} disabled={visualMigrationLoading}>
+                <button className="secondaryButton" onClick={() => preserveScrollAfter(() => prepareVisualMigration({ generateAssetSheets: true, limit: 3 }))} disabled={visualMigrationLoading}>
                   Generate 3 Asset Sheets
                 </button>
               </div>
