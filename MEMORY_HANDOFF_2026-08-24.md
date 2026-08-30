@@ -294,3 +294,25 @@ Verification:
 
 - Added `scripts/test_asset_sheet_first_generation.py`.
 - Added `npm test`, backed by `scripts/run-python-test.mjs`, to verify asset-sheet-first sequencing without spending image-generation calls.
+
+## Update - 2026-08-30 Production Migration Inventory
+
+After `c47eec8` deployed, the live Render API was checked from this workspace.
+
+Read-only production inventory:
+
+- Active walkthroughs found: `87`
+- Walkthroughs missing visual templates: `86`
+- Walkthroughs missing asset sheets: `86`
+- Estimated full rebuild image calls: `722`
+- Estimated medium-quality output-only rebuild cost: about `$30.32`
+
+Protected migration writes could not be started from this Codex process because `ADMIN_API_TOKEN` was not available locally and the in-app browser session did not already have an admin token saved.
+
+Follow-up tooling:
+
+- `npm run visual:migration:report`
+- `npm run visual:migration:prepare`
+- `npm run visual:migration:asset-sheets`
+
+These commands use `ADMIN_API_TOKEN` from the environment and call the deployed Render API.
