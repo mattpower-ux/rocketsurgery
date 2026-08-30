@@ -3301,6 +3301,7 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "status": "generated",
         "step_id": step_id,
         "image_url": image_url,
+        "used_asset_sheet": bool(visual_assets.get("asset_sheet_url")),
         "visual_template": visual_template,
         "visual_assets": visual_assets,
         "image_prompt": image_prompt,

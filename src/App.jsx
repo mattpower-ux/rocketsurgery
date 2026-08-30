@@ -6,6 +6,13 @@ const ADMIN_TOKEN_STORAGE_KEY = "rocketsurgery_admin_token";
 const qcDraftValueCache = new Map();
 const IMAGE_DIRECTION_PLACEHOLDER = "Image direction: clarify what the new image should show, avoid, or emphasize.";
 
+function cacheBustUrl(url) {
+  const value = String(url || "").trim();
+  if (!value) return "";
+  const separator = value.includes("?") ? "&" : "?";
+  return `${value}${separator}v=${Date.now()}`;
+}
+
 function qcImageDirectionCacheKey(walkthroughId, stepIndex) {
   return `${walkthroughId}-${stepIndex}-imageDirection`;
 }
@@ -2238,7 +2245,7 @@ function App() {
         index === stepIndex
           ? {
               ...item,
-              imageUrl: data.image_url,
+              imageUrl: cacheBustUrl(data.image_url),
               imagePrompt: data.image_prompt,
               imageDirection: latestImageDirection,
               imageStale: false
@@ -2253,7 +2260,7 @@ function App() {
         }
       }));
       stageQcChange(walkthroughId, qcChanges[walkthroughId]?.action || "save", updatedSteps, draft.title || walkthroughId, false);
-      setAdminMessage(`Generated a new image for step ${stepIndex + 1}. Click Save All to keep it.`);
+      setAdminMessage(`Generated a new image for step ${stepIndex + 1}${data.used_asset_sheet ? " using the asset sheet" : ""}. If it looks right, click Save All to keep it. ${data.image_url || ""}`);
     } catch (error) {
       console.error(error);
       setAdminMessage(`Image generation failed: ${error.message}`);
