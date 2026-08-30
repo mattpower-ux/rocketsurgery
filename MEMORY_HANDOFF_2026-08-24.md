@@ -239,3 +239,38 @@ Invoke-RestMethod -Uri 'https://rocketsurgery-api.onrender.com/walkthrough' -Met
 5. Compare visual consistency before/after reference-based regeneration.
 6. Add YouTube transcript parsing if narration/sequence quality still needs stronger external grounding.
 7. Generalize deterministic scaffolds for other taxonomy families where step order should not be left to open-ended planning.
+
+## Update - 2026-08-30 Visual Consistency Migration Start
+
+Commit `bdcec0c` starts the existing-walkthrough migration process.
+
+Added backend endpoints:
+
+- `GET /admin/qc/visual-migration-report`
+- `POST /admin/qc/prepare-visual-migration`
+
+Added Admin panel:
+
+- `Visual Consistency Migration`
+- `Load Report`
+- `Prepare Missing Templates`
+- `Generate 3 Asset Sheets`
+
+The migration deliberately starts with an inventory and template-prep phase. It does not blindly regenerate all 80+ walkthroughs. The intended production flow is:
+
+1. Load the visual migration report.
+2. Prepare missing visual templates and visual asset metadata.
+3. Generate visual asset sheets in small capped batches.
+4. Open individual walkthroughs in Step Order QC.
+5. Use `Regenerate All Images` only after the visual template and asset sheet look right.
+6. Save and approve one walkthrough at a time.
+
+Cost guardrails:
+
+- The report estimates image calls and low/medium/high output-only costs.
+- `Prepare Missing Templates` does not create paid images.
+- `Generate 3 Asset Sheets` is intentionally capped to avoid an accidental expensive batch.
+
+Important implementation detail:
+
+- During legacy migration, non-chimney walkthroughs get per-walkthrough asset sheet keys when no sheet already exists. This avoids unrelated older walkthroughs accidentally sharing a broad generic category sheet.
