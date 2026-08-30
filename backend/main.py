@@ -489,6 +489,8 @@ def infer_construction_category(walkthrough_id: str = "", title: str = "", query
         return "dishwasher"
     if any(term in blob for term in ["faucet", "sink fixture"]):
         return "faucet"
+    if any(term in blob for term in ["chimney cap", "chimney crown", "chimney flue"]):
+        return "chimney_cap"
     if any(term in blob for term in ["roof", "shingle", "flashing"]):
         return "roofing"
     if any(term in blob for term in ["window", "door", "sash", "sliding glass"]):

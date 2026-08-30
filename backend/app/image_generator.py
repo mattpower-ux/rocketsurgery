@@ -215,8 +215,10 @@ def generate_step_image_from_asset_sheet(query: str, step_number: int = 1, asset
     prompt = build_image_prompt(
         (
             f"{query}\n\n"
-            "Use the provided asset sheet image as the reference source for the product/object, environment, worker, tools, material colors, and proportions. "
-            "Do not redesign the assets from the reference sheet. Create only the requested step panel, changing pose, tool placement, action highlight, and composition as needed."
+            "Use the provided asset sheet image as the controlling visual reference. "
+            "Preserve the same product/object geometry, material colors, environment, worker design, tool shapes, and proportions from the asset sheet. "
+            "Do not invent a different model, color, setting, or character. "
+            "Create only the requested step panel, changing pose, crop, tool placement, action highlight, and camera angle as needed while keeping the locked assets recognizable."
         ),
         f"Step {step_number}",
     )

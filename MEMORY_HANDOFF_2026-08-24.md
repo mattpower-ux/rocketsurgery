@@ -274,3 +274,23 @@ Cost guardrails:
 Important implementation detail:
 
 - During legacy migration, non-chimney walkthroughs get per-walkthrough asset sheet keys when no sheet already exists. This avoids unrelated older walkthroughs accidentally sharing a broad generic category sheet.
+
+## Update - 2026-08-30 Asset Sheet First Is Mandatory
+
+The generator pipeline has been hardened so new walkthrough generation creates or resolves the visual template and visual asset sheet before step-by-step images are created.
+
+Code changes:
+
+- `backend/app/generator.py` now uses `generate_step_image_from_asset_sheet` for first-pass step images.
+- `GENERATOR_SCHEMA_VERSION` is now `6`, so stale non-approved cached drafts rebuild under the stricter visual pipeline.
+- Generated manifests include `image_generation_pipeline.requires_asset_sheet_before_step_images = true`.
+- Each step records `imageGenerationMode`, usually `asset_sheet_reference`.
+- If asset sheet generation fails, new paid step images are not created from one-off prompts; the step is left with `imageStale: true` for QC.
+- Added stronger templates/assets for attic insulation, plumbing sinks, and door/window walkthroughs.
+- Fixed the duplicate API-side category classifier so chimney cap is recognized consistently during QC and migration.
+- `backend/app/image_generator.py` now uses stricter wording when deriving step images from an asset sheet.
+
+Verification:
+
+- Added `scripts/test_asset_sheet_first_generation.py`.
+- Added `npm test`, backed by `scripts/run-python-test.mjs`, to verify asset-sheet-first sequencing without spending image-generation calls.

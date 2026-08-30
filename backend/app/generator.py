@@ -4,9 +4,9 @@ except ImportError:
     from storage import query_to_walkthrough_id
 
 try:
-    from app.image_generator import generate_step_image, generate_visual_asset_sheet
+    from app.image_generator import generate_step_image_from_asset_sheet, generate_visual_asset_sheet
 except ImportError:
-    from image_generator import generate_step_image, generate_visual_asset_sheet
+    from image_generator import generate_step_image_from_asset_sheet, generate_visual_asset_sheet
 
 try:
     from app.step_planner import generate_installation_steps_with_research
@@ -54,7 +54,7 @@ except ImportError:
 
 MAX_GENERATION_QUERY_LENGTH = 160
 MAX_IMAGE_PROMPT_LENGTH = 1400
-GENERATOR_SCHEMA_VERSION = 5
+GENERATOR_SCHEMA_VERSION = 6
 
 
 CHIMNEY_CAP_STEPS = [
@@ -135,6 +135,21 @@ def build_visual_template(query: str, category: str = "") -> str:
             "same residential brick chimney on a gray shingle roof, same rectangular clay flue tile and concrete chimney crown, "
             "same stainless steel chimney cap with mesh sides and flat overhanging lid, same worker in tan work shirt, gloves, and roof-safe footwear"
         )
+    if category == "insulation" or "insulation" in clean_query:
+        return (
+            "same unfinished attic with exposed joists and rafters, same light tan fiberglass batt or loose-fill insulation color throughout, "
+            "same neutral plywood access path, same worker in long sleeves, gloves, dust mask, and safety glasses, same measuring and cutting tools"
+        )
+    if category == "plumbing_sink" or "sink" in clean_query:
+        return (
+            "same white drop-in bathroom sink set into a beige laminate countertop, same chrome two-handle faucet, same white vanity cabinet, "
+            "same P-trap and supply valves below, same worker in tan shirt and gloves"
+        )
+    if category == "door_window" or any(term in clean_query for term in ["window", "door", "sliding glass"]):
+        return (
+            "same framed wall opening, same exterior siding and interior framing colors, same window or door unit proportions, "
+            "same flashing tape color and placement logic, same worker in tan work shirt and gloves"
+        )
     return (
         "same primary product or fixture, same surrounding installation setting, same material colors, "
         "same perspective, and same recurring worker character style across every step"
@@ -142,6 +157,7 @@ def build_visual_template(query: str, category: str = "") -> str:
 
 
 def build_visual_assets(query: str, category: str, visual_template: str) -> dict:
+    clean_query = query or "walkthrough"
     if category == "chimney_cap":
         return {
             "schema_version": 1,
@@ -155,10 +171,49 @@ def build_visual_assets(query: str, category: str, visual_template: str) -> dict
             "views": ["front elevation", "side elevation", "top-down crown/flue view", "three-quarter roof context", "tool lineup"],
             "locked_prompt": visual_template,
         }
+    if category == "insulation":
+        return {
+            "schema_version": 1,
+            "category": category,
+            "asset_key": f"taxonomy-insulation-{query_to_walkthrough_id(clean_query)}",
+            "primary_object": "unfinished residential attic bay with exposed joists, rafters, and a neutral plywood access path",
+            "product": "light tan fiberglass insulation kept the same color, texture, thickness, and density across all panels",
+            "environment": "same clean attic with visible framing, soffit/eave edge cues, and no changing wall or roof colors between steps",
+            "worker": "same worker wearing long sleeves, gloves, dust mask, and safety glasses",
+            "tools": ["tape measure", "utility knife", "straightedge", "work light", "kneepads", "insulation batts or loose-fill material"],
+            "views": ["wide attic bay", "top-down joist view", "side view of insulation depth", "worker kneeling safely", "tools/materials lineup"],
+            "locked_prompt": visual_template,
+        }
+    if category == "plumbing_sink":
+        return {
+            "schema_version": 1,
+            "category": category,
+            "asset_key": f"taxonomy-plumbing-sink-{query_to_walkthrough_id(clean_query)}",
+            "primary_object": "white drop-in bathroom sink set into a beige laminate countertop above a white vanity cabinet",
+            "product": "same sink basin shape, chrome two-handle faucet, drain tailpiece, P-trap, and hot/cold shutoff valves",
+            "environment": "same bathroom vanity setting with neutral wall and cabinet colors",
+            "worker": "same worker in tan shirt and work gloves, face not emphasized",
+            "tools": ["adjustable wrench", "bucket", "pliers", "putty knife", "plumber's putty", "supply lines"],
+            "views": ["front vanity view", "under-sink plumbing view", "top-down sink rim view", "three-quarter bathroom context", "tools/materials lineup"],
+            "locked_prompt": visual_template,
+        }
+    if category == "door_window":
+        return {
+            "schema_version": 1,
+            "category": category,
+            "asset_key": f"taxonomy-door-window-{query_to_walkthrough_id(clean_query)}",
+            "primary_object": "same rectangular framed wall opening sized for the selected window or door unit",
+            "product": "same window or door unit proportions, frame color, glazing, sill, and trim details",
+            "environment": "same residential wall with consistent sheathing, siding, framing lumber, and flashing colors",
+            "worker": "same worker in tan work shirt, gloves, and safety glasses",
+            "tools": ["level", "shims", "flashing tape", "drill", "fasteners", "caulk gun"],
+            "views": ["exterior opening view", "interior opening view", "sill detail", "three-quarter installed unit view", "tools/materials lineup"],
+            "locked_prompt": visual_template,
+        }
     return {
         "schema_version": 1,
         "category": category,
-        "asset_key": f"taxonomy-{category or 'generic'}",
+        "asset_key": f"walkthrough-{query_to_walkthrough_id(clean_query)}",
         "primary_object": "primary product or fixture for the walkthrough",
         "product": "same product shape and material details across steps",
         "environment": "same installation setting and surrounding materials across steps",
@@ -249,6 +304,8 @@ def generate_placeholder_walkthrough(query: str) -> dict:
         visual_assets["asset_error"] = str(exc)
     visual_continuity_prompt = build_visual_continuity_prompt(visual_template)
     visual_asset_prompt = format_visual_assets_for_prompt(visual_assets)
+    asset_sheet_url = visual_assets.get("asset_sheet_url", "")
+    step_image_generation_mode = "asset_sheet_reference" if asset_sheet_url else "blocked_missing_asset_sheet"
 
     labor = estimate_labor_minutes(
         query=clean_query,
@@ -268,11 +325,14 @@ def generate_placeholder_walkthrough(query: str) -> dict:
 
         if index - 1 < len(canonical_images):
             image_url = canonical_images[index - 1]
-        else:
-            image_url = generate_step_image(
+        elif asset_sheet_url:
+            image_url = generate_step_image_from_asset_sheet(
                 image_prompt,
-                index
+                index,
+                asset_sheet_url=asset_sheet_url,
             )
+        else:
+            image_url = ""
 
         steps.append(
             {
@@ -282,6 +342,8 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                 "imageLabel": f"Step {index}: {planned_step.get('title', 'Installation step')}",
                 "imagePrompt": image_prompt,
                 "imageUrl": image_url,
+                "imageGenerationMode": "canonical" if index - 1 < len(canonical_images) else step_image_generation_mode,
+                "imageStale": not bool(image_url),
                 "imageRepairHistory": [],
                 "hotspots": [
                     {
@@ -304,6 +366,11 @@ def generate_placeholder_walkthrough(query: str) -> dict:
         "generator_schema_version": GENERATOR_SCHEMA_VERSION,
         "visual_template": visual_template,
         "visual_assets": visual_assets,
+        "image_generation_pipeline": {
+            "status": "asset_sheet_first",
+            "step_image_generation_mode": step_image_generation_mode,
+            "requires_asset_sheet_before_step_images": True,
+        },
         "review_status": "draft",
         "quality_status": "order_validated",
         "version": 1,
