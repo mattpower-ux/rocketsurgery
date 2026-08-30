@@ -413,6 +413,7 @@ function App() {
   const [qcSaving, setQcSaving] = useState(false);
   const [qcImageGenerating, setQcImageGenerating] = useState({});
   const [qcAllImagesGenerating, setQcAllImagesGenerating] = useState({});
+  const [qcAssetSheetGenerating, setQcAssetSheetGenerating] = useState({});
   const [imageDirectionEditor, setImageDirectionEditor] = useState(null);
   const [visualMigrationReport, setVisualMigrationReport] = useState(null);
   const [visualMigrationLoading, setVisualMigrationLoading] = useState(false);
@@ -2597,6 +2598,75 @@ function App() {
     }
   }
 
+  async function regenerateQcAssetSheet(walkthroughId) {
+    const draft = qcWalkthroughs[walkthroughId];
+    if (!draft) {
+      setAdminMessage("Open a walkthrough before regenerating its asset sheet.");
+      return;
+    }
+
+    const ok = window.confirm(
+      `Regenerate the visual asset sheet for ${draft.title || walkthroughId}? This uses paid image generation and should be reviewed before regenerating step images.`
+    );
+    if (!ok) return;
+
+    const token = getAdminToken("regenerate this walkthrough's asset sheet");
+    if (!token) {
+      setAdminMessage("Asset sheet regeneration cancelled. No admin token was entered.");
+      return;
+    }
+
+    setQcAssetSheetGenerating((previous) => ({ ...previous, [walkthroughId]: true }));
+    setAdminMessage(`Regenerating asset sheet for ${draft.title || walkthroughId}...`);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/qc/regenerate-asset-sheet`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Token": token
+        },
+        body: JSON.stringify({
+          walkthrough_id: walkthroughId,
+          title: draft.title || "",
+          query: draft.query || "",
+          visual_template: draft.visual_template || "",
+          visual_assets: draft.visual_assets || {}
+        })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          clearAdminToken();
+        }
+        throw new Error(data.detail || data.error || "Asset sheet regeneration failed.");
+      }
+
+      setQcWalkthroughs((previous) => ({
+        ...previous,
+        [walkthroughId]: {
+          ...draft,
+          visual_template: data.visual_template || draft.visual_template || "",
+          visual_assets: {
+            ...(data.visual_assets || {}),
+            asset_sheet_url: cacheBustUrl(data.asset_sheet_url || data.visual_assets?.asset_sheet_url || "")
+          }
+        }
+      }));
+      setAdminMessage(`Regenerated asset sheet for ${draft.title || walkthroughId}. Review it before regenerating step images. ${data.asset_sheet_url || ""}`);
+    } catch (error) {
+      console.error(error);
+      setAdminMessage(`Asset sheet regeneration failed: ${error.message}`);
+    } finally {
+      setQcAssetSheetGenerating((previous) => {
+        const next = { ...previous };
+        delete next[walkthroughId];
+        return next;
+      });
+    }
+  }
+
 
   async function regenerateStepImage(stepId) {
     if (!selectedAdminWalkthrough) {
@@ -3155,6 +3225,14 @@ function App() {
                                       <strong>{draft.visual_assets.asset_status || "ready"}</strong>
                                       <p>{draft.visual_assets.primary_object || draft.visual_assets.locked_prompt || "No primary asset description yet."}</p>
                                       {draft.visual_assets.product && <p>{draft.visual_assets.product}</p>}
+                                      <button
+                                        type="button"
+                                        className="secondaryButton compactButton"
+                                        onClick={() => regenerateQcAssetSheet(walkthroughId)}
+                                        disabled={!!qcAssetSheetGenerating[walkthroughId]}
+                                      >
+                                        {qcAssetSheetGenerating[walkthroughId] ? "Regenerating..." : "Regenerate Asset Sheet"}
+                                      </button>
                                     </div>
                                     {draft.visual_assets.asset_sheet_url && (
                                       <img

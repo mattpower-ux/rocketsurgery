@@ -56,7 +56,8 @@ Composition requirements:
 - avoid tiny labels or unreadable text
 - avoid brand logos and copyrighted marks
 - avoid messy backgrounds
-- avoid photorealistic people or faces
+- show simple believable illustrated facial features on people when faces are visible; avoid blank mannequin faces
+- avoid photorealistic faces, celebrity likenesses, or overly detailed portraits
 - avoid surreal, decorative, or fantasy imagery
 
 Output goal:
@@ -72,11 +73,18 @@ Asset brief:
 {description}
 
 The sheet must show the reusable visual components before any step narration:
-- primary product/object from front, side, and top/three-quarter angles
+- exactly one canonical primary product/object repeated from front, side, and top/three-quarter angles
 - important subparts and fasteners as separate callouts
 - surrounding installation environment
 - recurring worker/character design
 - tools and materials lineup
+
+Object consistency rules:
+- do not include alternate product models, alternate colors, alternate shapes, or alternate installation placements
+- every view of the primary product/object must depict the same physical item
+- for a sink, do not show both a vanity/countertop sink and a wall-hung or pedestal sink; choose only the specified sink and repeat that same sink
+- use the same material color, fixture color, cabinet/countertop color, proportions, and orientation in every product view
+- if a person is included, show a consistent illustrated worker with normal facial features when the face is visible, not a blank or erased face
 
 Visual style:
 - clean semi-realistic technical illustration
@@ -84,6 +92,7 @@ Visual style:
 - crisp black outlines with subtle shading
 - neutral background, no decorative clutter
 - no brand logos, no tiny unreadable labels
+- no blank faces, no faceless workers
 - mobile-app-ready construction training style
 
 Output goal:
@@ -149,9 +158,10 @@ def local_static_image_path(url: str) -> Path | None:
     return path if path.exists() else None
 
 
-def generate_visual_asset_sheet(description: str, asset_key: str = "visual-assets") -> str:
+def generate_visual_asset_sheet(description: str, asset_key: str = "visual-assets", cache_key_suffix: str = "") -> str:
     safe_key = slugify(asset_key) or "visual-assets"
-    filename = f"{safe_key}-asset-sheet.png"
+    suffix = f"-{slugify(cache_key_suffix)}" if cache_key_suffix else ""
+    filename = f"{safe_key}{suffix}-asset-sheet.png"
     prompt = build_asset_sheet_prompt(description)
     return write_generated_image(
         prompt,

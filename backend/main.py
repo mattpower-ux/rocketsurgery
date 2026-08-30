@@ -415,6 +415,14 @@ class RegenerateAllQcImagesRequest(BaseModel):
     visual_assets: dict = Field(default_factory=dict)
 
 
+class RegenerateQcAssetSheetRequest(BaseModel):
+    walkthrough_id: str
+    title: str = ""
+    query: str = ""
+    visual_template: str = ""
+    visual_assets: dict = Field(default_factory=dict)
+
+
 class QcVisualMigrationRequest(BaseModel):
     limit: int = 5
     review_status: str = "all"
@@ -3314,6 +3322,63 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         "visual_template": visual_template,
         "visual_assets": visual_assets,
         "image_prompt": image_prompt,
+    }
+
+
+@app.post("/admin/qc/regenerate-asset-sheet")
+def post_regenerate_qc_asset_sheet(request: RegenerateQcAssetSheetRequest, _: None = Depends(require_admin_token)):
+    walkthrough_id = resolve_walkthrough_storage_id(request.walkthrough_id)
+    manifest = load_walkthrough_by_id(walkthrough_id)
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Walkthrough not found.")
+
+    query = request.query or manifest.get("query") or manifest.get("title") or walkthrough_id
+    inferred_category = infer_construction_category(
+        walkthrough_id=walkthrough_id,
+        title=request.title or manifest.get("title", ""),
+        query=query,
+    )
+    visual_template = (request.visual_template or manifest.get("visual_template") or "").strip()
+    if not visual_template:
+        visual_template = build_visual_template(query, inferred_category)
+
+    fallback_assets = build_visual_assets(query, inferred_category, visual_template)
+    visual_assets = {
+        **fallback_assets,
+        **(manifest.get("visual_assets") or {}),
+        **(request.visual_assets or {}),
+    }
+    visual_assets["category"] = visual_assets.get("category") or inferred_category
+    visual_assets["locked_prompt"] = visual_template
+    visual_assets["asset_key"] = visual_assets.get("asset_key") or f"walkthrough-{walkthrough_id}"
+    visual_assets["asset_sheet_prompt"] = format_asset_sheet_brief(visual_assets)
+    visual_assets["asset_sheet_url"] = generate_visual_asset_sheet(
+        visual_assets["asset_sheet_prompt"],
+        visual_assets["asset_key"],
+        cache_key_suffix=f"regen-{int(time.time())}",
+    )
+    visual_assets["asset_status"] = "regenerated"
+    visual_assets["asset_regenerated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    manifest["visual_template"] = visual_template
+    manifest["visual_assets"] = visual_assets
+    manifest["visual_migration_status"] = "asset_sheet_regenerated"
+    manifest["visual_migration_updated_at"] = visual_assets["asset_regenerated_at"]
+    manifest["version"] = int(manifest.get("version", 1)) + 1
+    save_walkthrough(walkthrough_id, manifest)
+    log_editor_decision({
+        "action": "qc_asset_sheet_regenerated",
+        "walkthrough_id": walkthrough_id,
+        "category": inferred_category,
+        "asset_sheet_url": visual_assets["asset_sheet_url"],
+    })
+
+    return {
+        "status": "generated",
+        "walkthrough_id": walkthrough_id,
+        "visual_template": visual_template,
+        "visual_assets": visual_assets,
+        "asset_sheet_url": visual_assets["asset_sheet_url"],
     }
 
 
