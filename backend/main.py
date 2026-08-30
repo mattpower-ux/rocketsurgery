@@ -3223,12 +3223,17 @@ def build_qc_step_image_prompt(
 
     image_prompt_parts = [
         f"{title or query or walkthrough_id}.",
+    ]
+    if image_direction:
+        image_prompt_parts.append(
+            "Highest-priority editor image direction for this regenerated step: "
+            f"{image_direction}. If this direction conflicts with the asset sheet or prior image, the editor direction controls the temporary step state, including what has not been installed yet, what should be absent, and what should be emphasized."
+        )
+    image_prompt_parts.extend([
         continuity_prompt,
         f"Step {step_id}: {label}.",
         f"Instruction: {instruction}. Detail: {detail}.",
-    ]
-    if image_direction:
-        image_prompt_parts.append(f"Editor image direction: {image_direction}.")
+    ])
     image_prompt_parts.extend([
         category_rule_prompt,
         "Professional residential construction training illustration.",

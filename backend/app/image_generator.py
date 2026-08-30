@@ -218,7 +218,9 @@ def generate_step_image_from_asset_sheet(query: str, step_number: int = 1, asset
             "Use the provided asset sheet image as the controlling visual reference. "
             "Preserve the same product/object geometry, material colors, environment, worker design, tool shapes, and proportions from the asset sheet. "
             "Do not invent a different model, color, setting, or character. "
-            "Create only the requested step panel, changing pose, crop, tool placement, action highlight, and camera angle as needed while keeping the locked assets recognizable."
+            "The asset sheet controls visual identity and style, but the current step prompt controls the action state. "
+            "If the current step says an item is absent, removed, not installed yet, uncovered, bare, open, or should be avoided, obey that step-specific instruction even when the asset sheet shows that item. "
+            "Create only the requested step panel, changing pose, crop, tool placement, action highlight, installed/not-yet-installed state, and camera angle as needed while keeping the locked assets recognizable."
         ),
         f"Step {step_number}",
     )
