@@ -333,6 +333,7 @@ function App() {
 
   const [adminStatus, setAdminStatus] = useState(null);
   const [adminMessage, setAdminMessage] = useState("");
+  const [adminTokenValue, setAdminTokenValue] = useState(() => window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || "");
   const [bulkQueries, setBulkQueries] = useState("");
   const [bulkCatalog, setBulkCatalog] = useState("");
   const [catalogBrand, setCatalogBrand] = useState("");
@@ -423,20 +424,31 @@ function App() {
   const currentModelTips = overlayData?.installation_tips || overlayData?.overlays || [];
 
   function getAdminToken(promptLabel = "continue") {
-    const cached = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+    const cached = adminTokenValue || window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
     if (cached) {
       return cached;
     }
 
-    const token = window.prompt(`Enter admin token to ${promptLabel}:`);
-    if (token) {
-      window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
-    }
-    return token || "";
+    setAdminMessage(`Enter the admin token above to ${promptLabel}.`);
+    return "";
   }
 
   function clearAdminToken() {
     window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+    setAdminTokenValue("");
+  }
+
+  function saveAdminToken() {
+    const token = adminTokenValue.trim();
+    if (!token) {
+      clearAdminToken();
+      setAdminMessage("Admin token cleared.");
+      return;
+    }
+
+    window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+    setAdminTokenValue(token);
+    setAdminMessage("Admin token saved for this browser.");
   }
 
   function logVisitorEvent(event, overrides = {}) {
@@ -743,10 +755,11 @@ function App() {
     setActiveHotspot(null);
     loadAdminStatus();
     loadAdminWalkthroughs();
-    loadWalkthroughLibrary();
     loadCatalogPipelineStatus();
     const cachedToken = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
     if (cachedToken) {
+      setAdminTokenValue(cachedToken);
+      loadWalkthroughLibrary(cachedToken);
       loadVisitors(cachedToken);
     }
   }
@@ -2436,7 +2449,7 @@ function App() {
   async function loadVisualMigrationReport(tokenOverride = "") {
     const token = tokenOverride || getAdminToken("load the visual migration report");
     if (!token) {
-      setAdminMessage("Visual migration report cancelled. No admin token was entered.");
+      setAdminMessage("Visual migration report cancelled. Enter the admin token above first.");
       return;
     }
 
@@ -2907,6 +2920,24 @@ function App() {
           <div className="homeBadge">ADMIN</div>
 
           <h1>RocketSurgery Builder</h1>
+
+          <div className="adminTokenBar">
+            <label>
+              <span>Admin token</span>
+              <input
+                type="password"
+                value={adminTokenValue}
+                onChange={(event) => setAdminTokenValue(event.target.value)}
+                placeholder="Paste token for protected admin actions"
+              />
+            </label>
+            <button className="secondaryButton" onClick={saveAdminToken}>
+              Save Token
+            </button>
+            <button className="secondaryButton" onClick={clearAdminToken}>
+              Clear
+            </button>
+          </div>
 
           <AdminSection
             panelId="qc"
