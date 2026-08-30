@@ -82,7 +82,9 @@ The sheet must show the reusable visual components before any step narration:
 Object consistency rules:
 - do not include alternate product models, alternate colors, alternate shapes, or alternate installation placements
 - every view of the primary product/object must depict the same physical item
-- for a sink, do not show both a vanity/countertop sink and a wall-hung or pedestal sink; choose only the specified sink and repeat that same sink
+- if the primary product/object is described as installed in a countertop, cabinet, wall, roof, opening, fixture, appliance bay, or other setting, every depiction of that product/object must preserve that same installation setting
+- do not show detached, freestanding, floating, cropped, or alternate-context versions of the primary product/object unless the walkthrough specifically says the object is removed for that step
+- for a sink, do not show both a vanity/countertop sink and a wall-hung, pedestal, floating, or standalone basin; choose only the specified sink and repeat that same installed sink
 - use the same material color, fixture color, cabinet/countertop color, proportions, and orientation in every product view
 - if a person is included, show a consistent illustrated worker with normal facial features when the face is visible, not a blank or erased face
 
