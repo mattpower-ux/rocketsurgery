@@ -457,6 +457,13 @@ function App() {
     setAdminMessage("Admin token saved for this browser.");
   }
 
+  function preserveScrollAfter(updatePromise) {
+    const scrollY = window.scrollY;
+    return Promise.resolve(updatePromise).finally(() => {
+      window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0 }));
+    });
+  }
+
   function logVisitorEvent(event, overrides = {}) {
     const payload = {
       event,
@@ -3221,13 +3228,13 @@ function App() {
             title="Visual Consistency Migration"
             actions={
               <div className="adminActionRow">
-                <button className="secondaryButton" onClick={() => loadVisualMigrationReport()} disabled={visualMigrationLoading}>
+                <button className="secondaryButton" onClick={() => preserveScrollAfter(loadVisualMigrationReport())} disabled={visualMigrationLoading}>
                   {visualMigrationLoading ? "Working..." : "Load Report"}
                 </button>
-                <button className="secondaryButton" onClick={() => prepareVisualMigration({ limit: 10 })} disabled={visualMigrationLoading}>
+                <button className="secondaryButton" onClick={() => preserveScrollAfter(prepareVisualMigration({ limit: 10 }))} disabled={visualMigrationLoading}>
                   Prepare Missing Templates
                 </button>
-                <button className="secondaryButton" onClick={() => prepareVisualMigration({ generateAssetSheets: true, limit: 3 })} disabled={visualMigrationLoading}>
+                <button className="secondaryButton" onClick={() => preserveScrollAfter(prepareVisualMigration({ generateAssetSheets: true, limit: 3 }))} disabled={visualMigrationLoading}>
                   Generate 3 Asset Sheets
                 </button>
               </div>
@@ -3248,14 +3255,14 @@ function App() {
                       Est. medium full pass: ${visualMigrationReport.summary.estimated_full_regen_costs?.medium ?? 0}
                     </span>
                   </div>
-                  <div className="libraryList">
+                  <div className="visualMigrationList">
                     {(visualMigrationReport.items || []).slice(0, 12).map((item) => (
-                      <div key={`visual-migration-${item.walkthrough_id}`} className="libraryItem">
-                        <div>
+                      <div key={`visual-migration-${item.walkthrough_id}`} className="visualMigrationItem">
+                        <div className="visualMigrationMain">
                           <strong>{displayText(item.title, 120)}</strong>
-                          <span>{item.category} · {item.step_count} steps · {item.readiness}</span>
+                          <span>{item.category} · {item.step_count} steps · {item.readiness.replaceAll("_", " ")}</span>
                         </div>
-                        <div className="libraryItemMeta">
+                        <div className="visualMigrationMeta">
                           <span>{item.has_visual_template ? "Template ready" : "Needs template"}</span>
                           <span>{item.has_asset_sheet ? "Asset sheet ready" : "Needs asset sheet"}</span>
                           <span>${item.estimated_full_regen_costs?.medium ?? 0} med.</span>

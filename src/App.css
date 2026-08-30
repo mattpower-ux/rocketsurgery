@@ -651,6 +651,61 @@ body {
   font-size: 14px;
 }
 
+.visualMigrationList {
+  display: grid;
+  gap: 8px;
+}
+
+.visualMigrationItem {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(300px, auto);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.visualMigrationMain {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.visualMigrationMain strong,
+.visualMigrationMain span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visualMigrationMain span {
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.visualMigrationMeta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.visualMigrationMeta span {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: #f8fafc;
+  color: #374151;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
 .libraryList {
   display: grid;
   gap: 6px;
@@ -1397,6 +1452,7 @@ body {
   .visitorStats,
   .libraryControls,
   .libraryRow,
+  .visualMigrationItem,
   .visitorRow,
   .prospectiveRow,
   .adminTokenBar,
@@ -1405,8 +1461,13 @@ body {
   }
 
   .libraryRow,
+  .visualMigrationItem,
   .visitorRow {
     align-items: stretch;
+  }
+
+  .visualMigrationMeta {
+    justify-content: flex-start;
   }
 
   .visitorRow {
