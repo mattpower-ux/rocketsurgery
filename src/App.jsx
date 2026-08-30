@@ -334,6 +334,9 @@ function App() {
   const [adminStatus, setAdminStatus] = useState(null);
   const [adminMessage, setAdminMessage] = useState("");
   const [adminTokenValue, setAdminTokenValue] = useState(() => window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || "");
+  const [adminTokenStatus, setAdminTokenStatus] = useState(() => (
+    window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) ? "Saved" : "Not saved"
+  ));
   const [bulkQueries, setBulkQueries] = useState("");
   const [bulkCatalog, setBulkCatalog] = useState("");
   const [catalogBrand, setCatalogBrand] = useState("");
@@ -436,6 +439,7 @@ function App() {
   function clearAdminToken() {
     window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
     setAdminTokenValue("");
+    setAdminTokenStatus("Not saved");
   }
 
   function saveAdminToken() {
@@ -443,11 +447,13 @@ function App() {
     if (!token) {
       clearAdminToken();
       setAdminMessage("Admin token cleared.");
+      setAdminTokenStatus("Not saved");
       return;
     }
 
     window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
     setAdminTokenValue(token);
+    setAdminTokenStatus("Saved");
     setAdminMessage("Admin token saved for this browser.");
   }
 
@@ -2927,7 +2933,10 @@ function App() {
               <input
                 type="password"
                 value={adminTokenValue}
-                onChange={(event) => setAdminTokenValue(event.target.value)}
+                onChange={(event) => {
+                  setAdminTokenValue(event.target.value);
+                  setAdminTokenStatus("Unsaved");
+                }}
                 placeholder="Paste token for protected admin actions"
               />
             </label>
@@ -2937,6 +2946,9 @@ function App() {
             <button className="secondaryButton" onClick={clearAdminToken}>
               Clear
             </button>
+            <span className={`adminTokenStatus ${adminTokenStatus === "Saved" ? "saved" : ""}`}>
+              {adminTokenStatus}
+            </span>
           </div>
 
           <AdminSection

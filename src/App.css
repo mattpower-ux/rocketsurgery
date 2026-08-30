@@ -832,7 +832,7 @@ body {
 
 .adminTokenBar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
   gap: 10px;
   align-items: end;
   margin: 0 0 16px;
@@ -861,6 +861,27 @@ body {
   color: #111827;
   font-size: 16px;
   font-weight: 800;
+}
+
+.adminTokenStatus {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  color: #555;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.adminTokenStatus.saved {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
 }
 
 .qcWorkspace {
