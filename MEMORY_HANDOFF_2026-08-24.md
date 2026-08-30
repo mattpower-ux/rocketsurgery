@@ -316,3 +316,35 @@ Follow-up tooling:
 - `npm run visual:migration:asset-sheets`
 
 These commands use `ADMIN_API_TOKEN` from the environment and call the deployed Render API.
+
+## Update - 2026-08-30 Missing Templates Prepared In Production
+
+Commit `68caaea` fixed visual migration batch targeting before production writes were run.
+
+Why this mattered:
+
+- `Prepare Missing Templates` now selects only walkthroughs missing visual templates.
+- `Generate 3 Asset Sheets` selects only walkthroughs missing asset sheets.
+- The Visual Consistency Migration buttons preserve scroll from the click moment to reduce admin panel jumpiness.
+
+Production action completed:
+
+- The admin UI token was saved in the controllable in-app browser session.
+- `Prepare Missing Templates` was run in batches against the live Render app.
+- Missing visual templates dropped from `86` to `0`.
+- No paid asset-sheet or step-image generation was run as part of this template-prep phase.
+
+Current production migration state after the final report:
+
+- Active walkthroughs: `87`
+- Missing visual templates: `0`
+- Missing asset sheets: `86`
+- Estimated full-regeneration image calls: `722`
+- Estimated medium-quality full image pass: about `$30.32`
+
+Next migration phase:
+
+1. Generate asset sheets in capped batches, starting with a small group.
+2. Review the asset sheets for visual consistency before regenerating step images.
+3. Regenerate images one walkthrough at a time using the per-walkthrough `Regenerate All Images` control.
+4. Save and approve only after the visual template, asset sheet, narration order, and generated step images look coherent.
