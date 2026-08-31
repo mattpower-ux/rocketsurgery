@@ -521,6 +521,29 @@ def infer_construction_category(walkthrough_id: str = "", title: str = "", query
     return "generic"
 
 
+def sanitize_image_generation_prompt(prompt: str) -> str:
+    """Reduce image-model false positives while preserving construction meaning."""
+    sanitized = prompt or ""
+    replacements = [
+        ("house wrap", "weather-resistive wall barrier"),
+        ("House wrap", "weather-resistive wall barrier"),
+        ("sash rope", "window sash cord"),
+        ("Sash Rope", "Window Sash Cord"),
+        ("sash weights", "window balance weights"),
+        ("Sash Weights", "Window Balance Weights"),
+        ("weight pulley", "window balance pulley"),
+        ("Weight Pulley", "Window Balance Pulley"),
+        ("Cut and remove", "Trim and detach"),
+        ("cut the new", "measure and trim the new"),
+        ("cut new", "trim new"),
+        ("Use scissors or a utility knife to sever", "Use a hand tool to detach"),
+        ("sever the rope", "detach the old cord"),
+    ]
+    for old, new in replacements:
+        sanitized = sanitized.replace(old, new)
+    return sanitized
+
+
 def load_category_rules() -> dict:
     """Load durable category visual rules from the Render disk."""
     if not CATEGORY_RULES_FILE.exists():
@@ -892,8 +915,7 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
                 visual_template=visual_template,
                 visual_assets=visual_assets,
             )
-            image_prompt = image_prompt.replace("house wrap", "weather-resistive wall barrier")
-            image_prompt = image_prompt.replace("House wrap", "weather-resistive wall barrier")
+            image_prompt = sanitize_image_generation_prompt(image_prompt)
             image_prompt = image_prompt[:1400].rstrip(" ,;:-")
             image_result = generate_step_image_from_asset_sheet(
                 image_prompt,
@@ -3346,8 +3368,7 @@ def post_regenerate_step_image(request: RegenerateStepImageRequest):
         "Professional residential construction training illustration. "
         "Show realistic materials, accurate tool placement, safe work positioning, no injuries, no weapons, no illegal activity."
     ).split())
-    repair_prompt = repair_prompt.replace("house wrap", "weather-resistive wall barrier")
-    repair_prompt = repair_prompt.replace("House wrap", "weather-resistive wall barrier")
+    repair_prompt = sanitize_image_generation_prompt(repair_prompt)
     repair_prompt = repair_prompt[:900].rstrip(" ,;:-")
 
     new_image_url = generate_step_image(repair_prompt, int(request.step_id))
@@ -3477,8 +3498,7 @@ def post_generate_qc_step_image(request: GenerateQcStepImageRequest, _: None = D
         visual_template=request.visual_template,
         visual_assets=request.visual_assets,
     )
-    image_prompt = image_prompt.replace("house wrap", "weather-resistive wall barrier")
-    image_prompt = image_prompt.replace("House wrap", "weather-resistive wall barrier")
+    image_prompt = sanitize_image_generation_prompt(image_prompt)
     image_prompt = image_prompt[:1400].rstrip(" ,;:-")
 
     visual_assets = request.visual_assets or {}
@@ -3614,8 +3634,7 @@ def post_regenerate_all_qc_images(request: RegenerateAllQcImagesRequest, _: None
             visual_template=visual_template,
             visual_assets=visual_assets,
         )
-        image_prompt = image_prompt.replace("house wrap", "weather-resistive wall barrier")
-        image_prompt = image_prompt.replace("House wrap", "weather-resistive wall barrier")
+        image_prompt = sanitize_image_generation_prompt(image_prompt)
         image_prompt = image_prompt[:1400].rstrip(" ,;:-")
         image_url = generate_step_image_from_asset_sheet(
             image_prompt,
