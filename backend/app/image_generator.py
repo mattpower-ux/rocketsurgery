@@ -264,7 +264,6 @@ def generate_step_image_from_asset_sheet(
                 prompt=prompt,
                 size="1024x1024",
                 input_fidelity="high",
-                response_format="b64_json",
             )
 
         image_url = write_image_response(

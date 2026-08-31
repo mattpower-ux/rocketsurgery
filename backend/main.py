@@ -843,6 +843,7 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
         revision_key = f"migration-all-{walkthrough_id}-{int(time.time())}"
         updated_steps = []
         generation_modes = []
+        fallback_errors = []
 
         for index, original_step in enumerate(manifest.get("steps", []) or [], start=1):
             step = dict(original_step or {})
@@ -877,6 +878,12 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
             image_url = image_result.get("image_url", "") if isinstance(image_result, dict) else str(image_result)
             generation_mode = image_result.get("generation_mode", "") if isinstance(image_result, dict) else ""
             generation_modes.append(generation_mode)
+            fallback_error = image_result.get("fallback_error", "") if isinstance(image_result, dict) else ""
+            if fallback_error:
+                fallback_errors.append({
+                    "step_id": step_id,
+                    "error": fallback_error[:500],
+                })
             previous_image_url = step.get("imageUrl", "")
             step.update({
                 "previousImageUrl": previous_image_url,
@@ -885,6 +892,7 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
                 "imageStale": False,
                 "imageGenerationMode": generation_mode,
                 "imageGeneratedFromAssetSheet": bool(image_result.get("used_asset_sheet")) if isinstance(image_result, dict) else True,
+                "imageGenerationFallbackError": fallback_error,
                 "imageRegeneratedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             })
             updated_steps.append(step)
@@ -904,6 +912,7 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
             "category": category,
             "step_count": len(updated_steps),
             "generation_modes": generation_modes,
+            "fallback_errors": fallback_errors,
             "revision_key": revision_key,
         })
         regenerated.append({
@@ -912,6 +921,7 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
             "category": category,
             "step_count": len(updated_steps),
             "generation_modes": generation_modes,
+            "fallback_errors": fallback_errors,
             "revision_key": revision_key,
         })
 
