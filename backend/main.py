@@ -624,9 +624,14 @@ def visual_migration_item_for_manifest(item: dict, manifest: dict) -> dict:
     visual_assets = manifest.get("visual_assets") or {}
     has_template = bool(str(manifest.get("visual_template") or "").strip())
     has_asset_sheet = bool(str(visual_assets.get("asset_sheet_url") or "").strip())
+    step_images_regenerated = bool(manifest.get("visual_step_images_regenerated_at"))
+    regenerated_step_count = len([
+        step for step in steps
+        if step.get("imageRegeneratedAt") and step.get("imageGenerationMode") == "asset_sheet_edit"
+    ])
     image_count = len([step for step in steps if step.get("imageUrl")])
     asset_sheet_calls_needed = 0 if has_asset_sheet else 1
-    step_image_calls_needed = len(steps)
+    step_image_calls_needed = 0 if step_images_regenerated else max(0, len(steps) - regenerated_step_count)
     full_regen_calls = asset_sheet_calls_needed + step_image_calls_needed
     readiness = "ready_for_review"
     if not has_template:
@@ -645,6 +650,10 @@ def visual_migration_item_for_manifest(item: dict, manifest: dict) -> dict:
         "existing_image_count": image_count,
         "has_visual_template": has_template,
         "has_asset_sheet": has_asset_sheet,
+        "step_images_regenerated": step_images_regenerated,
+        "regenerated_step_count": regenerated_step_count,
+        "visual_migration_status": manifest.get("visual_migration_status", ""),
+        "visual_step_images_regenerated_at": manifest.get("visual_step_images_regenerated_at", ""),
         "asset_sheet_url": visual_assets.get("asset_sheet_url", ""),
         "asset_sheet_calls_needed": asset_sheet_calls_needed,
         "step_image_calls_needed": step_image_calls_needed,
@@ -670,6 +679,8 @@ def visual_migration_report(limit: int = 10000, review_status: str = "all") -> d
     total_step_image_calls = sum(item.get("step_image_calls_needed", 0) for item in items)
     missing_templates = len([item for item in items if not item.get("has_visual_template")])
     missing_asset_sheets = len([item for item in items if not item.get("has_asset_sheet")])
+    step_image_regenerated = len([item for item in items if item.get("step_images_regenerated")])
+    remaining_step_image_walkthroughs = len([item for item in items if item.get("step_image_calls_needed", 0) > 0])
 
     return {
         "status": "loaded",
@@ -677,6 +688,8 @@ def visual_migration_report(limit: int = 10000, review_status: str = "all") -> d
             "walkthrough_count": len(items),
             "missing_visual_template_count": missing_templates,
             "missing_asset_sheet_count": missing_asset_sheets,
+            "step_image_regenerated_walkthrough_count": step_image_regenerated,
+            "remaining_step_image_walkthrough_count": remaining_step_image_walkthroughs,
             "asset_sheet_calls_needed": total_asset_sheet_calls,
             "step_image_calls_for_full_regen": total_step_image_calls,
             "full_regen_image_calls": total_full_regen_calls,

@@ -3368,9 +3368,11 @@ function App() {
                     <span>{visualMigrationReport.summary.walkthrough_count || 0} walkthroughs</span>
                     <span>{visualMigrationReport.summary.missing_visual_template_count || 0} missing templates</span>
                     <span>{visualMigrationReport.summary.missing_asset_sheet_count || 0} missing asset sheets</span>
-                    <span>{visualMigrationReport.summary.full_regen_image_calls || 0} full-regeneration image calls</span>
+                    <span>{visualMigrationReport.summary.step_image_regenerated_walkthrough_count || 0} image-redone walkthroughs</span>
+                    <span>{visualMigrationReport.summary.remaining_step_image_walkthrough_count || 0} remaining image walkthroughs</span>
+                    <span>{visualMigrationReport.summary.full_regen_image_calls || 0} remaining image calls</span>
                     <span>
-                      Est. medium full pass: ${visualMigrationReport.summary.estimated_full_regen_costs?.medium ?? 0}
+                      Est. medium remaining: ${visualMigrationReport.summary.estimated_full_regen_costs?.medium ?? 0}
                     </span>
                   </div>
                   <div className="visualMigrationList">
@@ -3383,6 +3385,7 @@ function App() {
                         <div className="visualMigrationMeta">
                           <span>{item.has_visual_template ? "Template ready" : "Needs template"}</span>
                           <span>{item.has_asset_sheet ? "Asset sheet ready" : "Needs asset sheet"}</span>
+                          <span>{item.step_images_regenerated ? "Images redone" : `${item.step_image_calls_needed || 0} images left`}</span>
                           <span>${item.estimated_full_regen_costs?.medium ?? 0} med.</span>
                         </div>
                       </div>
