@@ -840,14 +840,28 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
         category_rule_prompt = format_rules_for_prompt(category)
         visual_template = str(manifest.get("visual_template") or "").strip()
         visual_assets = manifest.get("visual_assets") or {}
-        revision_key = f"migration-all-{walkthrough_id}-{int(time.time())}"
-        updated_steps = []
+        revision_key = (
+            f"migration-all-{walkthrough_id}-{int(time.time())}"
+            if request.force
+            else manifest.get("visual_step_image_revision_key") or f"migration-all-{walkthrough_id}-{int(time.time())}"
+        )
+        working_steps = normalize_step_numbering([
+            dict(step or {})
+            for step in manifest.get("steps", []) or []
+        ])
         generation_modes = []
         fallback_errors = []
+        generated_count = 0
+        skipped_count = 0
 
-        for index, original_step in enumerate(manifest.get("steps", []) or [], start=1):
-            step = dict(original_step or {})
+        for index, step in enumerate(working_steps, start=1):
             step_id = int(step.get("id") or index)
+            already_step_regenerated = bool(step.get("imageRegeneratedAt")) and str(step.get("imageGenerationMode") or "") == "asset_sheet_edit"
+            if already_step_regenerated and not request.force:
+                generation_modes.append(step.get("imageGenerationMode", "asset_sheet_edit"))
+                skipped_count += 1
+                continue
+
             label = step.get("imageLabel") or step.get("instruction") or f"Step {step_id}"
             instruction = step.get("instruction", "")
             detail = step.get("detail", "")
@@ -895,10 +909,20 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
                 "imageGenerationFallbackError": fallback_error,
                 "imageRegeneratedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             })
-            updated_steps.append(step)
+            working_steps[index - 1] = step
             total_step_images += 1
+            generated_count += 1
 
-        manifest["steps"] = normalize_step_numbering(updated_steps)
+            manifest["steps"] = normalize_step_numbering(working_steps)
+            manifest["visual_migration_status"] = "step_images_regeneration_in_progress"
+            manifest["visual_step_images_partial_at"] = step["imageRegeneratedAt"]
+            manifest["visual_step_image_revision_key"] = revision_key
+            manifest["quality_status"] = "awaiting_qc"
+            manifest["qc_stage"] = "step_order_review"
+            manifest["version"] = int(manifest.get("version", 1)) + 1
+            save_walkthrough(walkthrough_id, manifest)
+
+        manifest["steps"] = normalize_step_numbering(working_steps)
         manifest["visual_migration_status"] = "step_images_regenerated"
         manifest["visual_step_images_regenerated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         manifest["visual_step_image_revision_key"] = revision_key
@@ -910,7 +934,9 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
             "action": "qc_visual_migration_step_images_regenerated",
             "walkthrough_id": walkthrough_id,
             "category": category,
-            "step_count": len(updated_steps),
+            "step_count": len(working_steps),
+            "generated_count": generated_count,
+            "skipped_count": skipped_count,
             "generation_modes": generation_modes,
             "fallback_errors": fallback_errors,
             "revision_key": revision_key,
@@ -919,7 +945,9 @@ def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) 
             "walkthrough_id": walkthrough_id,
             "title": manifest.get("title") or walkthrough_id,
             "category": category,
-            "step_count": len(updated_steps),
+            "step_count": len(working_steps),
+            "generated_count": generated_count,
+            "skipped_count": skipped_count,
             "generation_modes": generation_modes,
             "fallback_errors": fallback_errors,
             "revision_key": revision_key,
