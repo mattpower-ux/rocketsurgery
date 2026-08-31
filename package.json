@@ -8,6 +8,8 @@
     "visual:migration:report": "node scripts/run_visual_migration.mjs report",
     "visual:migration:prepare": "node scripts/run_visual_migration.mjs prepare 10",
     "visual:migration:asset-sheets": "node scripts/run_visual_migration.mjs asset-sheets 3",
+    "visual:migration:images": "node scripts/run_visual_migration.mjs images 1",
+    "visual:migration:images:dry-run": "node scripts/run_visual_migration.mjs images-dry-run 1",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

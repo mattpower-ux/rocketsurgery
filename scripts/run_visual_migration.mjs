@@ -8,6 +8,8 @@ function usage() {
   console.log("  ADMIN_API_TOKEN=... node scripts/run_visual_migration.mjs report");
   console.log("  ADMIN_API_TOKEN=... node scripts/run_visual_migration.mjs prepare 10");
   console.log("  ADMIN_API_TOKEN=... node scripts/run_visual_migration.mjs asset-sheets 3");
+  console.log("  ADMIN_API_TOKEN=... node scripts/run_visual_migration.mjs images 1");
+  console.log("  ADMIN_API_TOKEN=... node scripts/run_visual_migration.mjs images-dry-run 1");
 }
 
 async function request(path, options = {}) {
@@ -64,6 +66,26 @@ async function run() {
       processed_count: data.processed_count,
       generated_asset_sheet_count: data.generated_asset_sheet_count,
       estimated_asset_sheet_costs: data.estimated_asset_sheet_costs,
+      items: data.items,
+    }, null, 2));
+    return;
+  }
+
+  if (action === "images" || action === "images-dry-run") {
+    const data = await request("/admin/qc/regenerate-visual-migration-images", {
+      method: "POST",
+      body: JSON.stringify({
+        limit,
+        review_status: "all",
+        dry_run: action === "images-dry-run",
+        generate_asset_sheets: false,
+      }),
+    });
+    console.log(JSON.stringify({
+      status: data.status,
+      processed_count: data.processed_count,
+      generated_step_image_count: data.generated_step_image_count,
+      estimated_step_image_costs: data.estimated_step_image_costs,
       items: data.items,
     }, null, 2));
     return;

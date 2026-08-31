@@ -429,6 +429,7 @@ class QcVisualMigrationRequest(BaseModel):
     dry_run: bool = False
     generate_asset_sheets: bool = False
     walkthrough_ids: list[str] = Field(default_factory=list)
+    force: bool = False
 
 
 class AdoptApprovedMatchRequest(BaseModel):
@@ -781,6 +782,145 @@ def prepare_visual_migration_batch(request: QcVisualMigrationRequest) -> dict:
         "generated_asset_sheet_count": len([item for item in prepared if item.get("generated_asset_sheet")]),
         "estimated_asset_sheet_costs": estimated_image_generation_costs(len([item for item in prepared if item.get("generated_asset_sheet")])),
         "items": prepared,
+    }
+
+
+def regenerate_visual_migration_images_batch(request: QcVisualMigrationRequest) -> dict:
+    target_ids = {resolve_walkthrough_storage_id(item) for item in request.walkthrough_ids or []}
+    max_items = max(1, min(int(request.limit or 1), 3))
+    candidates = []
+
+    for item in list_walkthrough_manifests(limit=10000):
+        walkthrough_id = item.get("storage_walkthrough_id") or item.get("walkthrough_id", "")
+        if target_ids and walkthrough_id not in target_ids:
+            continue
+        if not target_ids and not migration_status_matches(item.get("review_status", "draft"), request.review_status):
+            continue
+        manifest = load_walkthrough_by_id(walkthrough_id)
+        if not manifest:
+            continue
+        migration_item = visual_migration_item_for_manifest(item, manifest)
+        if migration_item.get("readiness") != "ready_for_review":
+            continue
+        already_regenerated = bool(manifest.get("visual_step_images_regenerated_at"))
+        if already_regenerated and not request.force and not target_ids:
+            continue
+        steps = manifest.get("steps", []) or []
+        if not steps:
+            continue
+        candidates.append((walkthrough_id, manifest, migration_item))
+        if len(candidates) >= max_items:
+            break
+
+    if request.dry_run:
+        return {
+            "status": "dry_run",
+            "processed_count": 0,
+            "generated_step_image_count": 0,
+            "estimated_step_image_costs": estimated_image_generation_costs(
+                sum(item.get("step_count", 0) for _, _, item in candidates)
+            ),
+            "items": [
+                {
+                    "walkthrough_id": walkthrough_id,
+                    "title": manifest.get("title") or walkthrough_id,
+                    "category": migration_item.get("category", "generic"),
+                    "step_count": migration_item.get("step_count", 0),
+                    "estimated_step_image_costs": estimated_image_generation_costs(migration_item.get("step_count", 0)),
+                    "already_regenerated": bool(manifest.get("visual_step_images_regenerated_at")),
+                }
+                for walkthrough_id, manifest, migration_item in candidates
+            ],
+        }
+
+    regenerated = []
+    total_step_images = 0
+    for walkthrough_id, manifest, migration_item in candidates:
+        category = migration_item.get("category", "generic")
+        category_rule_prompt = format_rules_for_prompt(category)
+        visual_template = str(manifest.get("visual_template") or "").strip()
+        visual_assets = manifest.get("visual_assets") or {}
+        revision_key = f"migration-all-{walkthrough_id}-{int(time.time())}"
+        updated_steps = []
+        generation_modes = []
+
+        for index, original_step in enumerate(manifest.get("steps", []) or [], start=1):
+            step = dict(original_step or {})
+            step_id = int(step.get("id") or index)
+            label = step.get("imageLabel") or step.get("instruction") or f"Step {step_id}"
+            instruction = step.get("instruction", "")
+            detail = step.get("detail", "")
+            image_direction = str(step.get("imageDirection") or "").strip()
+            image_prompt = build_qc_step_image_prompt(
+                walkthrough_id=walkthrough_id,
+                title=manifest.get("title", ""),
+                query=manifest.get("query", ""),
+                step_id=step_id,
+                label=label,
+                instruction=instruction,
+                detail=detail,
+                image_direction=image_direction,
+                category_rule_prompt=category_rule_prompt,
+                visual_template=visual_template,
+                visual_assets=visual_assets,
+            )
+            image_prompt = image_prompt.replace("house wrap", "weather-resistive wall barrier")
+            image_prompt = image_prompt.replace("House wrap", "weather-resistive wall barrier")
+            image_prompt = image_prompt[:1400].rstrip(" ,;:-")
+            image_result = generate_step_image_from_asset_sheet(
+                image_prompt,
+                step_id,
+                asset_sheet_url=visual_assets.get("asset_sheet_url", ""),
+                cache_key_suffix=f"{revision_key}-{step_id}",
+                return_metadata=True,
+            )
+            image_url = image_result.get("image_url", "") if isinstance(image_result, dict) else str(image_result)
+            generation_mode = image_result.get("generation_mode", "") if isinstance(image_result, dict) else ""
+            generation_modes.append(generation_mode)
+            previous_image_url = step.get("imageUrl", "")
+            step.update({
+                "previousImageUrl": previous_image_url,
+                "imageUrl": image_url,
+                "imagePrompt": image_prompt,
+                "imageStale": False,
+                "imageGenerationMode": generation_mode,
+                "imageGeneratedFromAssetSheet": bool(image_result.get("used_asset_sheet")) if isinstance(image_result, dict) else True,
+                "imageRegeneratedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            })
+            updated_steps.append(step)
+            total_step_images += 1
+
+        manifest["steps"] = normalize_step_numbering(updated_steps)
+        manifest["visual_migration_status"] = "step_images_regenerated"
+        manifest["visual_step_images_regenerated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        manifest["visual_step_image_revision_key"] = revision_key
+        manifest["quality_status"] = "awaiting_qc"
+        manifest["qc_stage"] = "step_order_review"
+        manifest["version"] = int(manifest.get("version", 1)) + 1
+        save_walkthrough(walkthrough_id, manifest)
+        log_editor_decision({
+            "action": "qc_visual_migration_step_images_regenerated",
+            "walkthrough_id": walkthrough_id,
+            "category": category,
+            "step_count": len(updated_steps),
+            "generation_modes": generation_modes,
+            "revision_key": revision_key,
+        })
+        regenerated.append({
+            "walkthrough_id": walkthrough_id,
+            "title": manifest.get("title") or walkthrough_id,
+            "category": category,
+            "step_count": len(updated_steps),
+            "generation_modes": generation_modes,
+            "revision_key": revision_key,
+        })
+
+    return {
+        "status": "step_images_regenerated",
+        "processed_count": len(regenerated),
+        "generated_step_image_count": total_step_images,
+        "estimated_step_image_costs": estimated_image_generation_costs(total_step_images),
+        "items": regenerated,
     }
 
 
@@ -3052,6 +3192,14 @@ def post_qc_prepare_visual_migration(
     _: None = Depends(require_admin_token),
 ):
     return prepare_visual_migration_batch(request)
+
+
+@app.post("/admin/qc/regenerate-visual-migration-images")
+def post_qc_regenerate_visual_migration_images(
+    request: QcVisualMigrationRequest,
+    _: None = Depends(require_admin_token),
+):
+    return regenerate_visual_migration_images_batch(request)
 
 
 @app.post("/admin/qc/adopt-approved-match")
