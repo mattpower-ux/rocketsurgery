@@ -9,6 +9,23 @@ const ids = process.argv.slice(2).map(Number);
 if (!ids.length) throw new Error("Pass one or more catalog IDs, for example: 6 2 5");
 
 const curated = {
+  10: {
+    brief: {
+      required_steps: [
+        "Identify whether the outdoor faucet leaks at the spout, handle, hose connection, or wall; stop and seek a plumber for a cracked body or leak inside the wall",
+        "Shut off the indoor supply valve to the hose bib and open the outdoor faucet to relieve pressure",
+        "Remove the handle and stem from a serviceable multi-turn faucet, keeping the body fixed to the wall",
+        "Inspect the stem washer and packing or O-ring, then select exact-size replacements",
+        "Replace the worn sealing parts and reassemble the same faucet without overtightening",
+        "Restore water slowly and test the faucet at the spout, handle, and hose connection",
+      ],
+      common_mistakes: ["Skipping the indoor shutoff", "Confusing a hose washer leak with a stem leak", "Forcing a damaged or frozen faucet body"],
+      image_guidance: ["One brass multi-turn hose bib fixed to the same light-gray exterior wall in every panel", "The faucet body never changes; only the removed stem and worn washer are shown as temporary states"],
+      tools_and_materials: ["correct-size stem washer", "packing or O-ring if needed", "screwdriver", "adjustable wrench", "cloth"],
+      branch_questions: ["Is this a serviceable multi-turn faucet with a replaceable stem washer, not a cracked frost-free sillcock or leak behind the wall?"],
+    },
+    reference_urls: ["https://www.lowes.com/n/how-to/how-to-fix-a-leaky-hose-bib"],
+  },
   6: {
     brief: {
       required_steps: [

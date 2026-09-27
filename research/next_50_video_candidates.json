@@ -28,7 +28,7 @@
         "publish_date": "2014-01-17T15:18:11-08:00"
       },
       "selection_status": "candidate",
-      "generation_status": "not_started",
+      "generation_status": "draft_created_visuals_checked",
       "popularity_rank_within_candidates": 2
     },
     {
@@ -70,7 +70,7 @@
         "publish_date": "2024-11-16T04:40:46-08:00"
       },
       "selection_status": "candidate",
-      "generation_status": "not_started",
+      "generation_status": "draft_created_visual_rebuild_pending",
       "popularity_rank_within_candidates": 41
     },
     {
@@ -84,7 +84,7 @@
         "publish_date": "2014-10-16T13:00:05-07:00"
       },
       "selection_status": "candidate",
-      "generation_status": "not_started",
+      "generation_status": "draft_created_visual_review_pending",
       "popularity_rank_within_candidates": 1
     },
     {

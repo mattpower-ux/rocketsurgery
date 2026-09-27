@@ -20,6 +20,8 @@ recurring person's appearance. For repair and cleaning, the object must remain
 installed. An expected before/after state change is allowed. Reject a panel if
 the instructed action is drawn on a nearby grille, bodywork, wall, or other
 object instead of the target. Do not reject a useful crop or camera angle change.
+For a lanai or pool-enclosure repair, the screen mesh must be attached to the
+stationary enclosure bay, not stretched over a removable frame on a table.
 Only report discrepancies actually visible in the two images. Do not infer specs.
 """
 
@@ -33,6 +35,8 @@ Do not substitute a screen door for a lanai enclosure panel, a loose headlamp fo
 one installed on a car, or another physical variant. A close-up is okay if the
 parent setting remains recognizable. If a person is shown, visible faces need
 ordinary illustrated features. Judge the actual image, not just the description.
+For a lanai or pool enclosure, reject a loose framed screen or tabletop frame
+even if a correct fixed enclosure appears elsewhere on the sheet.
 """
 
 

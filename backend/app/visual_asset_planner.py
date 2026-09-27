@@ -28,9 +28,10 @@ Rules:
 
 CATEGORY_SCENE_GUARDS = {
     "screen_enclosure": (
-        "One fixed screen bay in a multi-panel lanai or pool enclosure, with adjacent framed bays "
-        "and part of the screened roof visible. Never depict a hinged screen door, door handle, "
-        "or solid-wall doorway as the target panel."
+        "The target is one stationary vertical screen bay built into a multi-panel lanai or pool enclosure. "
+        "Keep its white aluminum frame anchored between the patio floor and screened roof, with adjacent bays visible. "
+        "Show new mesh as a loose roll only until it is attached directly into that fixed frame. "
+        "Never depict a hinged door, handle, removable framed screen, tabletop frame, or solid-wall doorway."
     ),
     "auto_lighting": (
         "The same headlamp lens remains mounted in the same vehicle's front headlamp housing "
@@ -98,5 +99,9 @@ def plan_visual_assets(query: str, steps: list[dict], category: str, visual_guid
         "worker": worker,
         "locked_prompt": f"{raw['locked_prompt'].strip()} {scene_guard}".strip(),
         "tools": [str(item).strip()[:100] for item in raw["tools"][:10] if str(item).strip()],
-        "views": [str(item).strip()[:100] for item in raw["views"][:6] if str(item).strip()],
+        "views": (
+            ["wide view of the same installed vertical bay and neighboring bays", "close-up of its fixed spline channel", "oblique view of the same attached bay", "worker and tools beside the installed bay"]
+            if category == "screen_enclosure" else
+            [str(item).strip()[:100] for item in raw["views"][:6] if str(item).strip()]
+        ),
     }

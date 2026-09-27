@@ -42,9 +42,10 @@ def test_short_but_complete_visual_plan_keeps_fixed_panel_anchor():
 
     with patch.object(visual_asset_planner, "OpenAI", FakeClient):
         plan = visual_asset_planner.plan_visual_assets("repair lanai screen", [], "screen_enclosure")
-    assert "fixed screen bay" in plan["primary_object"]
-    assert "Never depict a hinged screen door" in plan["locked_prompt"]
+    assert "stationary vertical screen bay" in plan["primary_object"]
+    assert "Never depict a hinged door" in plan["locked_prompt"]
     assert "facial features" in plan["worker"]
+    assert all("fixed" in view or "installed" in view or "attached" in view for view in plan["views"])
 
 
 def test_curated_walkthrough_has_asset_sheet_before_steps():
