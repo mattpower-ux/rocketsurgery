@@ -64,6 +64,11 @@ except ImportError:
     )
 
 try:
+    from app.visual_consistency import assess_visual_consistency
+except ImportError:
+    from visual_consistency import assess_visual_consistency
+
+try:
     from app.catalog import (
         get_product_options_for_query,
         query_has_known_brand_and_model
@@ -2976,6 +2981,29 @@ def post_create_curated_video_walkthrough(
         "asset_status": generated.get("visual_assets", {}).get("asset_status"),
         "asset_sheet_url": generated.get("visual_assets", {}).get("asset_sheet_url"),
     }
+
+
+@app.post("/admin/walkthroughs/{walkthrough_id}/audit-visuals")
+def post_audit_walkthrough_visuals(walkthrough_id: str, _: None = Depends(require_admin_token)):
+    storage_id = resolve_walkthrough_storage_id(walkthrough_id)
+    manifest = load_walkthrough_by_id(storage_id)
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Walkthrough not found.")
+    visual_assets = manifest.get("visual_assets") or {}
+    asset_sheet_url = visual_assets.get("asset_sheet_url")
+    if not asset_sheet_url:
+        raise HTTPException(status_code=400, detail="Walkthrough has no visual asset sheet.")
+    results = []
+    for step in manifest.get("steps", []) or []:
+        action = " ".join(str(step.get(key, "")) for key in ("imageLabel", "instruction", "detail"))
+        review = assess_visual_consistency(asset_sheet_url, step.get("imageUrl", ""), action, visual_assets)
+        step["visualConsistency"] = review
+        results.append({"step_id": step.get("id"), **review})
+    manifest["quality_status"] = "order_and_visuals_checked" if results and all(
+        result["status"] == "passed" for result in results
+    ) else "visual_review_needed"
+    save_walkthrough(storage_id, manifest)
+    return {"walkthrough_id": storage_id, "quality_status": manifest["quality_status"], "steps": results}
 
 
 @app.post("/admin/save-walkthrough")

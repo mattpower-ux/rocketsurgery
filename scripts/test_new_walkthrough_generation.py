@@ -30,6 +30,7 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
             "plan_visual_assets",
             "generate_visual_asset_sheet",
             "generate_step_image_from_asset_sheet",
+            "assess_visual_consistency",
         )
     }
     try:
@@ -37,7 +38,7 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
             {"title": "Inspect", "instruction": "Inspect the lens.", "detail": "Check for oxidation."},
             {"title": "Polish", "instruction": "Polish the lens.", "detail": "Use the selected kit."},
         ]
-        generator.plan_visual_assets = lambda query, steps, category: {
+        generator.plan_visual_assets = lambda query, steps, category, visual_guidance: {
             "primary_object": "same cloudy left headlamp on a silver sedan",
             "product": "same clear polycarbonate lens",
             "environment": "same silver sedan hood and black grille",
@@ -53,6 +54,7 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
             calls.append(("step_image", index, asset_sheet_url, return_metadata, allow_text_fallback))
             or {"image_url": f"https://example.com/{index}.png", "generation_mode": "asset_sheet_edit"}
         )
+        generator.assess_visual_consistency = lambda *args: {"status": "passed", "issues": []}
         research = {
             "status": "curated_video_metadata",
             "brief": {"required_steps": ["Inspect", "Polish"]},
@@ -70,6 +72,7 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
     assert all(item[3] and not item[4] for item in calls[1:])
     assert result["visual_assets"]["primary_object"].startswith("same cloudy left headlamp")
     assert result["source_research"]["sources"] == research["sources"]
+    assert result["quality_status"] == "order_and_visuals_checked"
     assert result["generator_schema_version"] == generator.GENERATOR_SCHEMA_VERSION
 
 

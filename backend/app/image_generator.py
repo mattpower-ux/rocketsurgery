@@ -73,6 +73,7 @@ Asset brief:
 
 The sheet must show the reusable visual components before any step narration:
 - exactly one canonical primary product/object repeated from front, side, and top/three-quarter angles
+- keep every angle visibly attached to the same parent setting; a close-up may crop the setting but must retain enough of it to locate the object
 - important subparts and fasteners as separate callouts
 - surrounding installation environment
 - recurring worker/character design
@@ -83,6 +84,7 @@ Object consistency rules:
 - every view of the primary product/object must depict the same physical item
 - if the primary product/object is described as installed in a countertop, cabinet, wall, roof, opening, fixture, appliance bay, or other setting, every depiction of that product/object must preserve that same installation setting
 - do not show detached, freestanding, floating, cropped, or alternate-context versions of the primary product/object unless the walkthrough specifically says the object is removed for that step
+- for cleaning and repair, show the object installed in place in every view; do not turn a headlamp into a detached oval, a windshield into a loose pane, or a screen into an unrelated frame
 - for a sink, do not show both a vanity/countertop sink and a wall-hung, pedestal, floating, or standalone basin; choose only the specified sink and repeat that same installed sink
 - use the same material color, fixture color, cabinet/countertop color, proportions, and orientation in every product view
 - if a person is included, show a consistent illustrated worker with normal facial features when the face is visible, not a blank or erased face

@@ -51,6 +51,11 @@ try:
 except ImportError:
     from visual_asset_planner import plan_visual_assets
 
+try:
+    from app.visual_consistency import assess_visual_consistency
+except ImportError:
+    from visual_consistency import assess_visual_consistency
+
 
 MAX_GENERATION_QUERY_LENGTH = 160
 MAX_IMAGE_PROMPT_LENGTH = 2600
@@ -292,7 +297,7 @@ def generate_placeholder_walkthrough(query: str, source_research_override: dict 
         visual_template = build_visual_template(clean_query, category)
         visual_assets = build_visual_assets(clean_query, category, visual_template)
     else:
-        visual_assets = plan_visual_assets(clean_query, planned_steps, category)
+        visual_assets = plan_visual_assets(clean_query, planned_steps, category, research_image_prompt)
         visual_template = visual_assets["locked_prompt"]
         visual_assets.update({
             "schema_version": 1,
@@ -338,6 +343,26 @@ def generate_placeholder_walkthrough(query: str, source_research_override: dict 
         )
         image_url = image_result["image_url"]
         image_mode = image_result["generation_mode"]
+        action = " ".join(str(planned_step.get(key, "")) for key in ("title", "instruction", "detail"))
+        visual_review = assess_visual_consistency(asset_sheet_url, image_url, action, visual_assets)
+        if visual_review["status"] == "needs_review":
+            correction = "; ".join(visual_review.get("issues", [])) or "the target object or action was unclear"
+            retry_prompt = safe_image_prompt(
+                f"Visual correction: {correction[:300]}. "
+                "The instructed action must visibly occur on the locked primary object in its original setting. "
+                f"{image_prompt}"
+            )
+            image_result = generate_step_image_from_asset_sheet(
+                retry_prompt,
+                index,
+                asset_sheet_url=asset_sheet_url,
+                cache_key_suffix=f"visual-qc-retry-{index}",
+                return_metadata=True,
+                allow_text_fallback=False,
+            )
+            image_url = image_result["image_url"]
+            image_mode = image_result["generation_mode"]
+            visual_review = assess_visual_consistency(asset_sheet_url, image_url, action, visual_assets)
 
         steps.append(
             {
@@ -348,6 +373,7 @@ def generate_placeholder_walkthrough(query: str, source_research_override: dict 
                 "imagePrompt": image_prompt,
                 "imageUrl": image_url,
                 "imageGenerationMode": image_mode,
+                "visualConsistency": visual_review,
                 "imageStale": not bool(image_url),
                 "imageRepairHistory": [],
                 "hotspots": [
@@ -377,7 +403,9 @@ def generate_placeholder_walkthrough(query: str, source_research_override: dict 
             "requires_asset_sheet_before_step_images": True,
         },
         "review_status": "draft",
-        "quality_status": "order_validated",
+        "quality_status": "order_and_visuals_checked" if all(
+            step["visualConsistency"]["status"] == "passed" for step in steps
+        ) else "visual_review_needed",
         "version": 1,
         "step_sequence_validation": {
             "status": sequence_validation["status"],
