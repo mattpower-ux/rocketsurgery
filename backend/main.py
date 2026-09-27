@@ -317,6 +317,15 @@ class WalkthroughRequest(BaseModel):
     force_refresh: bool = False
 
 
+class CuratedVideoWalkthroughRequest(BaseModel):
+    query: str
+    video_url: str
+    video_title: str
+    video_views: int | None = None
+    brief: dict = Field(default_factory=dict)
+    reference_urls: list[str] = Field(default_factory=list)
+
+
 class VisitorEventRequest(BaseModel):
     event: str = "client_event"
     query: str = ""
@@ -2923,6 +2932,50 @@ def get_admin_walkthrough(walkthrough_id: str):
         return {"status": "not_found", "walkthrough_id": walkthrough_id}
 
     return {"status": "loaded", "walkthrough": manifest}
+
+
+@app.post("/admin/create-curated-video-walkthrough")
+def post_create_curated_video_walkthrough(
+    request: CuratedVideoWalkthroughRequest,
+    _: None = Depends(require_admin_token),
+):
+    query = " ".join(request.query.split())
+    if not query or not request.video_url.startswith(("https://www.youtube.com/watch?v=", "https://youtu.be/")):
+        raise HTTPException(status_code=400, detail="A query and YouTube video URL are required.")
+    taxonomy_match = classify_taxonomy_query(query)
+    walkthrough_id = (
+        taxonomy_match.get("walkthrough_id")
+        if taxonomy_match.get("status") == "matched"
+        else query_to_walkthrough_id(query)
+    )
+    existing = load_walkthrough_by_id(walkthrough_id) or load_walkthrough(query)
+    if existing:
+        return {"status": "already_exists", "walkthrough_id": existing.get("walkthrough_id", walkthrough_id)}
+
+    research = {
+        "status": "curated_video_metadata",
+        "researched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source_types": ["youtube_public_metadata"] + (["curated_reference"] if request.reference_urls else []),
+        "source_candidate_count": 1,
+        "sources": [{
+            "url": request.video_url,
+            "title": request.video_title[:200],
+            "observed_views": request.video_views,
+            "reference_urls": request.reference_urls[:5],
+            "transcript_used": False,
+        }],
+        "brief": request.brief,
+    }
+    generated = generate_placeholder_walkthrough(query, source_research_override=research)
+    generated["review_status"] = "draft"
+    save_walkthrough(generated["walkthrough_id"], generated)
+    return {
+        "status": "created",
+        "walkthrough_id": generated["walkthrough_id"],
+        "step_count": len(generated.get("steps", [])),
+        "asset_status": generated.get("visual_assets", {}).get("asset_status"),
+        "asset_sheet_url": generated.get("visual_assets", {}).get("asset_sheet_url"),
+    }
 
 
 @app.post("/admin/save-walkthrough")

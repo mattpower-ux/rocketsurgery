@@ -7,7 +7,7 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
 SYSTEM_PROMPT = """
-You create concise contractor installation walkthroughs.
+You create concise home DIY and lifestyle how-to walkthrough drafts.
 
 Rules:
 - Return ONLY valid JSON
@@ -15,7 +15,7 @@ Rules:
 - No explanations
 - No prose outside JSON
 
-Generate sequential installation steps.
+Generate 4 to 8 steps in real prerequisite order for the requested task.
 
 Each step must contain:
 - title
@@ -23,13 +23,15 @@ Each step must contain:
 - detail
 
 Requirements:
-- contractor-focused
+- match the task type: installation, replacement, repair, cleaning, or maintenance
 - concise
 - one action per step
 - visually illustratable
 - mobile-friendly
-- avoid unnecessary words
-- avoid safety/legal disclaimers
+- include necessary safety checks in the relevant step
+- do not give amateur instructions for gas piping, mains wiring, or tasks requiring a licensed professional; show the handoff and post-install verification instead
+- do not invent product-specific specifications or code requirements
+- do not move inspection or final verification ahead of the work it checks
 - avoid conversational tone
 
 Return this format:
@@ -49,7 +51,7 @@ def generate_installation_steps(query: str):
 
 
 def generate_installation_steps_with_research(query: str, research_context: str = ""):
-    user_content = f"Create a contractor walkthrough for: {query}"
+    user_content = f"Create a step-by-step walkthrough for: {query}"
     if research_context:
         user_content += (
             "\n\nBackground research signals to use for accuracy. "

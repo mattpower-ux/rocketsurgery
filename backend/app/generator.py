@@ -19,11 +19,6 @@ except ImportError:
     from labor_estimator import estimate_labor_minutes
 
 try:
-    from app.canonical_images import get_canonical_image_urls
-except ImportError:
-    from canonical_images import get_canonical_image_urls
-
-try:
     from app.step_sequence_validator import validate_and_repair_step_sequence
 except ImportError:
     from step_sequence_validator import validate_and_repair_step_sequence
@@ -51,9 +46,14 @@ except ImportError:
         format_research_for_planner,
     )
 
+try:
+    from app.visual_asset_planner import plan_visual_assets
+except ImportError:
+    from visual_asset_planner import plan_visual_assets
+
 
 MAX_GENERATION_QUERY_LENGTH = 160
-MAX_IMAGE_PROMPT_LENGTH = 1400
+MAX_IMAGE_PROMPT_LENGTH = 2600
 GENERATOR_SCHEMA_VERSION = 6
 
 
@@ -118,8 +118,8 @@ def safe_image_prompt(text: str) -> str:
     prompt = prompt.replace("House wrap", "weather-resistive wall barrier")
 
     base = (
-        "Professional construction training illustration. "
-        "Show a safe residential building installation step with realistic materials, "
+        "Professional how-to training illustration. "
+        "Show one safe task step with realistic materials, "
         "clear tool placement, no injuries, no weapons, no illegal activity. "
     )
     prompt = f"{base}{prompt}"
@@ -269,7 +269,7 @@ def planned_steps_for_category(query: str, category: str, research_context: str 
     return generate_installation_steps_with_research(query, research_context)
 
 
-def generate_placeholder_walkthrough(query: str) -> dict:
+def generate_placeholder_walkthrough(query: str, source_research_override: dict | None = None) -> dict:
     clean_query = safe_task_text(query)
     taxonomy_match = classify_taxonomy_query(clean_query)
     if taxonomy_match.get("status") == "matched":
@@ -278,7 +278,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     else:
         walkthrough_id = query_to_walkthrough_id(clean_query)
 
-    source_research = discover_source_research(clean_query)
+    source_research = source_research_override or discover_source_research(clean_query)
     research_context = format_research_for_planner(source_research)
     research_image_prompt = format_research_for_image_prompt(source_research)
 
@@ -288,51 +288,56 @@ def generate_placeholder_walkthrough(query: str) -> dict:
     planned_steps = sequence_validation["steps"]
     category = sequence_validation["category"]
     learned_rule_prompt = format_rules_for_prompt(category)
-    visual_template = build_visual_template(clean_query, category)
-    visual_assets = build_visual_assets(clean_query, category, visual_template)
+    if category in {"chimney_cap", "insulation", "plumbing_sink", "door_window"}:
+        visual_template = build_visual_template(clean_query, category)
+        visual_assets = build_visual_assets(clean_query, category, visual_template)
+    else:
+        visual_assets = plan_visual_assets(clean_query, planned_steps, category)
+        visual_template = visual_assets["locked_prompt"]
+        visual_assets.update({
+            "schema_version": 1,
+            "category": category,
+            "asset_key": f"walkthrough-{query_to_walkthrough_id(clean_query)}",
+        })
     asset_sheet_brief = format_asset_sheet_brief(visual_assets)
     visual_assets["asset_sheet_prompt"] = asset_sheet_brief
-    try:
-        visual_assets["asset_sheet_url"] = generate_visual_asset_sheet(
-            asset_sheet_brief,
-            visual_assets.get("asset_key", f"{category}-asset-sheet"),
-        )
-        visual_assets["asset_status"] = "generated"
-    except Exception as exc:
-        visual_assets["asset_sheet_url"] = ""
-        visual_assets["asset_status"] = "generation_failed"
-        visual_assets["asset_error"] = str(exc)
+    visual_assets["asset_sheet_url"] = generate_visual_asset_sheet(
+        asset_sheet_brief,
+        visual_assets.get("asset_key", f"{category}-asset-sheet"),
+    )
+    if not visual_assets["asset_sheet_url"]:
+        raise RuntimeError("Visual asset sheet generation returned no image")
+    visual_assets["asset_status"] = "generated"
     visual_continuity_prompt = build_visual_continuity_prompt(visual_template)
     visual_asset_prompt = format_visual_assets_for_prompt(visual_assets)
-    asset_sheet_url = visual_assets.get("asset_sheet_url", "")
-    step_image_generation_mode = "asset_sheet_reference" if asset_sheet_url else "blocked_missing_asset_sheet"
+    asset_sheet_url = visual_assets["asset_sheet_url"]
+    step_image_generation_mode = "asset_sheet_edit"
 
     labor = estimate_labor_minutes(
         query=clean_query,
         step_count=len(planned_steps)
     )
 
-    canonical_images = get_canonical_image_urls(clean_query)
-
     steps = []
 
     for index, planned_step in enumerate(planned_steps[:8], start=1):
 
         image_prompt = safe_image_prompt(
-            f"{clean_query} - {planned_step.get('title', f'Step {index}')}. "
+            f"Task: {clean_query}. Step {index}: {planned_step.get('title', '')}. "
+            f"Action: {planned_step.get('instruction', '')}. "
+            f"Detail: {planned_step.get('detail', '')}. "
             f"{visual_continuity_prompt} {visual_asset_prompt} {learned_rule_prompt} {research_image_prompt}"
         )
 
-        if index - 1 < len(canonical_images):
-            image_url = canonical_images[index - 1]
-        elif asset_sheet_url:
-            image_url = generate_step_image_from_asset_sheet(
-                image_prompt,
-                index,
-                asset_sheet_url=asset_sheet_url,
-            )
-        else:
-            image_url = ""
+        image_result = generate_step_image_from_asset_sheet(
+            image_prompt,
+            index,
+            asset_sheet_url=asset_sheet_url,
+            return_metadata=True,
+            allow_text_fallback=False,
+        )
+        image_url = image_result["image_url"]
+        image_mode = image_result["generation_mode"]
 
         steps.append(
             {
@@ -342,7 +347,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
                 "imageLabel": f"Step {index}: {planned_step.get('title', 'Installation step')}",
                 "imagePrompt": image_prompt,
                 "imageUrl": image_url,
-                "imageGenerationMode": "canonical" if index - 1 < len(canonical_images) else step_image_generation_mode,
+                "imageGenerationMode": image_mode,
                 "imageStale": not bool(image_url),
                 "imageRepairHistory": [],
                 "hotspots": [
@@ -387,6 +392,7 @@ def generate_placeholder_walkthrough(query: str) -> dict:
             "source_types": source_research.get("source_types", []),
             "source_candidate_count": source_research.get("source_candidate_count", 0),
             "brief": source_research.get("brief", {}),
+            "sources": source_research.get("sources", []),
         },
         "disclaimer": "Draft walkthrough only. Manufacturer instructions and local codes must be verified.",
         "estimated_labor_minutes": labor["estimated_labor_minutes"],

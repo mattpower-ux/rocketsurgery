@@ -12,6 +12,16 @@ CATEGORY_RULES_FILE = INTELLIGENCE_DIR / "category_rules.json"
 
 def infer_construction_category(walkthrough_id: str = "", title: str = "", query: str = "") -> str:
     blob = f"{walkthrough_id} {title} {query}".lower()
+    if any(term in blob for term in ["windshield", "windscreen", "auto glass", "car window chip"]):
+        return "auto_glass"
+    if any(term in blob for term in ["headlight", "headlamp"]):
+        return "auto_lighting"
+    if any(term in blob for term in ["pool pump", "pool heater", "pool filter", "pool salt cell", "pool skimmer"]):
+        return "pool_equipment"
+    if any(term in blob for term in ["lanai screen", "pool screen", "screen enclosure"]) or ("lanai" in blob and "screen" in blob):
+        return "screen_enclosure"
+    if "ceiling fan" in blob:
+        return "ceiling_fan"
     if any(term in blob for term in ["shower cartridge", "valve cartridge", "mixing cartridge", "temperature control cartridge"]):
         return "shower_cartridge"
     if any(term in blob for term in ["replace shower valve", "install shower valve", "shower valve body", "concealed shower valve", "mixing valve"]):

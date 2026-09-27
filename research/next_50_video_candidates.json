@@ -1,0 +1,709 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-09-27",
+  "selection_method": "Distinct home DIY/lifestyle queries absent from the 88-item production list. One relevant public YouTube how-to video per query. Refresh view counts from YouTube before ranking; this is a curated candidate pool, not a claim to be YouTube's global top 50.",
+  "items": [
+    {
+      "id": 1,
+      "query": "How do I replace the remote-control receiver in a ceiling fan?",
+      "source_video": {
+        "title": "Replacing Remote Control of Ceiling Fan Step-by-Step Guide in Details",
+        "url": "https://www.youtube.com/watch?v=0plBpMMRPLs",
+        "observed_views": 29620,
+        "view_count_checked_at": "2026-09-27T04:27:22.202Z",
+        "publish_date": "2022-04-01T07:14:05-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 39
+    },
+    {
+      "id": 2,
+      "query": "How do I repair a small chip in my car windshield?",
+      "source_video": {
+        "title": "How to Repair a Windshield Chip or Crack",
+        "url": "https://www.youtube.com/watch?v=QjuWqBzO7qY",
+        "observed_views": 21163284,
+        "view_count_checked_at": "2026-09-27T04:27:22.219Z",
+        "publish_date": "2014-01-17T15:18:11-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 2
+    },
+    {
+      "id": 3,
+      "query": "How do I replace my pool pump with a variable-speed model?",
+      "source_video": {
+        "title": "Pool pump replacement, single speed to variable speed",
+        "url": "https://www.youtube.com/watch?v=SWqKs5oXZnQ",
+        "observed_views": 7756,
+        "view_count_checked_at": "2026-09-27T04:27:22.217Z",
+        "publish_date": "2021-08-23T18:22:58-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 45
+    },
+    {
+      "id": 4,
+      "query": "How do I install a pool heater?",
+      "source_video": {
+        "title": "Pool Heater installion; How-to complete Installation Step by Step DIY",
+        "url": "https://www.youtube.com/watch?v=OBi9EbLsh7Y",
+        "observed_views": 3820,
+        "view_count_checked_at": "2026-09-27T04:27:23.040Z",
+        "publish_date": "2024-01-14T14:56:44-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 46
+    },
+    {
+      "id": 5,
+      "query": "How do I replace a torn screen panel in my lanai?",
+      "source_video": {
+        "title": "\"DIY\" Replace or Rescreen the Corner Screen on Your Pool Screen Enclosure - Step-by-Step Guide!",
+        "url": "https://www.youtube.com/watch?v=LHEuq0qS1rc",
+        "observed_views": 17280,
+        "view_count_checked_at": "2026-09-27T04:27:23.035Z",
+        "publish_date": "2024-11-16T04:40:46-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 41
+    },
+    {
+      "id": 6,
+      "query": "How do I restore cloudy car headlights?",
+      "source_video": {
+        "title": "How to Restore Headlights PERMANENTLY",
+        "url": "https://www.youtube.com/watch?v=UEJbKLZ7RmM",
+        "observed_views": 35068119,
+        "view_count_checked_at": "2026-09-27T04:27:23.070Z",
+        "publish_date": "2014-10-16T13:00:05-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 1
+    },
+    {
+      "id": 7,
+      "query": "How do I patch drywall hole?",
+      "source_video": {
+        "title": "How to Patch a Small Hole in Drywall",
+        "url": "https://www.youtube.com/watch?v=dqsIzriVgn8",
+        "observed_views": 208637,
+        "view_count_checked_at": "2026-09-27T04:27:23.704Z",
+        "publish_date": "2009-10-23T05:06:00-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 26
+    },
+    {
+      "id": 8,
+      "query": "How do I clean dryer vent?",
+      "source_video": {
+        "title": "How To Clean a Dryer Vent",
+        "url": "https://www.youtube.com/watch?v=sC9Kl79BsNQ",
+        "observed_views": 304951,
+        "view_count_checked_at": "2026-09-27T04:27:23.681Z",
+        "publish_date": "2020-03-26T12:30:08-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 21
+    },
+    {
+      "id": 9,
+      "query": "How do I unclog bathtub drain?",
+      "source_video": {
+        "title": "How to Unclog a Bathtub Drain",
+        "url": "https://www.youtube.com/watch?v=FWyBZCj__tk",
+        "observed_views": 1570546,
+        "view_count_checked_at": "2026-09-27T04:27:23.769Z",
+        "publish_date": "2020-05-07T14:00:06-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 8
+    },
+    {
+      "id": 10,
+      "query": "How do I repair leaky outdoor faucet?",
+      "source_video": {
+        "title": "How To Fix A Leaking Outdoor Faucet | Easy DIY Fix!",
+        "url": "https://www.youtube.com/watch?v=txJiZYraM40",
+        "observed_views": 5111214,
+        "view_count_checked_at": "2026-09-27T04:27:24.402Z",
+        "publish_date": "2022-08-22T13:53:33-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 4
+    },
+    {
+      "id": 11,
+      "query": "How do I replace washing machine water inlet valve?",
+      "source_video": {
+        "title": "How to Replace the Water Inlet Valve on a Hotpoint washing machine",
+        "url": "https://www.youtube.com/watch?v=E2zJs5xVFiM",
+        "observed_views": 15367,
+        "view_count_checked_at": "2026-09-27T04:27:24.334Z",
+        "publish_date": "2019-07-26T02:46:58-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 42
+    },
+    {
+      "id": 12,
+      "query": "How do I replace garage door bottom seal?",
+      "source_video": {
+        "title": "How to Replace Garage Door Bottom Seal in Under 4 Mins!",
+        "url": "https://www.youtube.com/watch?v=mCSQ70u1oRE",
+        "observed_views": 494435,
+        "view_count_checked_at": "2026-09-27T04:27:24.362Z",
+        "publish_date": "2025-08-15T12:00:46-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 16
+    },
+    {
+      "id": 13,
+      "query": "How do I replace car cabin air filter?",
+      "source_video": {
+        "title": "How To: Change Your Vehicle's Cabin Air Filter",
+        "url": "https://www.youtube.com/watch?v=cw_knClnqtk",
+        "observed_views": 616231,
+        "view_count_checked_at": "2026-09-27T04:27:24.992Z",
+        "publish_date": "2018-03-19T08:31:46-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 14
+    },
+    {
+      "id": 14,
+      "query": "How do I replace dishwasher drain hose?",
+      "source_video": {
+        "title": "How to Replace the Drain Hose on a Dishwasher",
+        "url": "https://www.youtube.com/watch?v=NtjMDlKRbWI",
+        "observed_views": 449147,
+        "view_count_checked_at": "2026-09-27T04:27:24.929Z",
+        "publish_date": "2015-02-12T08:16:49-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 19
+    },
+    {
+      "id": 15,
+      "query": "How do I replace toilet fill valve?",
+      "source_video": {
+        "title": "How to Replace a Toilet Fill Valve | Toilet Repair | The Home Depot",
+        "url": "https://www.youtube.com/watch?v=H5G4OeIDXMk",
+        "observed_views": 1865199,
+        "view_count_checked_at": "2026-09-27T04:27:25.292Z",
+        "publish_date": "2020-10-08T10:11:14-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 7
+    },
+    {
+      "id": 16,
+      "query": "How do I clean dishwasher filter?",
+      "source_video": {
+        "title": "How To Clean Your Dishwasher Filter",
+        "url": "https://www.youtube.com/watch?v=ck3RtAhtuZk",
+        "observed_views": 826123,
+        "view_count_checked_at": "2026-09-27T04:27:25.581Z",
+        "publish_date": "2015-07-21T11:52:27-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 10
+    },
+    {
+      "id": 17,
+      "query": "How do I balance wobbling ceiling fan?",
+      "source_video": {
+        "title": "How Do I Balance My Ceiling Fan? | DIY Basics",
+        "url": "https://www.youtube.com/watch?v=WDbghDRgA6c",
+        "observed_views": 173892,
+        "view_count_checked_at": "2026-09-27T04:27:25.692Z",
+        "publish_date": "2016-06-15T07:00:02-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 32
+    },
+    {
+      "id": 18,
+      "query": "How do I replace ceiling fan capacitor?",
+      "source_video": {
+        "title": "How to Replace the Capacitor in a Ceiling Fan",
+        "url": "https://www.youtube.com/watch?v=zpc5MQvHGo8",
+        "observed_views": 758799,
+        "view_count_checked_at": "2026-09-27T04:27:25.974Z",
+        "publish_date": "2018-12-18T10:48:27-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 12
+    },
+    {
+      "id": 19,
+      "query": "How do I unclog AC condensate drain?",
+      "source_video": {
+        "title": "How to Unclog or Clean your AC Condensate Drain Line",
+        "url": "https://www.youtube.com/watch?v=37LrIgMDDTk",
+        "observed_views": 281967,
+        "view_count_checked_at": "2026-09-27T04:27:26.464Z",
+        "publish_date": "2025-12-30T08:18:51-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 23
+    },
+    {
+      "id": 20,
+      "query": "How do I replace HVAC air filter?",
+      "source_video": {
+        "title": "How to Replace Your Home Air Filters | How To Anything",
+        "url": "https://www.youtube.com/watch?v=s1j7PZgZKkY",
+        "observed_views": 178902,
+        "view_count_checked_at": "2026-09-27T04:27:26.388Z",
+        "publish_date": "2024-01-06T10:00:23-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 30
+    },
+    {
+      "id": 21,
+      "query": "How do I repair sliding patio door rollers?",
+      "source_video": {
+        "title": "How to Easily Repair Sliding Door Rollers",
+        "url": "https://www.youtube.com/watch?v=hSktWHBALoM",
+        "observed_views": 1773,
+        "view_count_checked_at": "2026-09-27T04:27:26.692Z",
+        "publish_date": "2025-02-03T07:48:42-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 48
+    },
+    {
+      "id": 22,
+      "query": "How do I program garage door opener remote?",
+      "source_video": {
+        "title": "How to Program a Garage Door Remote Control (Easy Step-by-Step Guide)",
+        "url": "https://www.youtube.com/watch?v=uP5qDcZXPqY",
+        "observed_views": 14906,
+        "view_count_checked_at": "2026-09-27T04:27:27.185Z",
+        "publish_date": "2026-01-09T07:01:50-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 43
+    },
+    {
+      "id": 23,
+      "query": "How do I power wash and seal deck?",
+      "source_video": {
+        "title": "How to Clean, Renew and Seal a Wood Deck in One Day",
+        "url": "https://www.youtube.com/watch?v=FouLgxHoluk",
+        "observed_views": 3255255,
+        "view_count_checked_at": "2026-09-27T04:27:27.019Z",
+        "publish_date": "2015-07-13T07:06:54-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 5
+    },
+    {
+      "id": 24,
+      "query": "How do I repair fence post?",
+      "source_video": {
+        "title": "How to Fix a Broken (or Rotted) Fence Post IN MINUTES!",
+        "url": "https://www.youtube.com/watch?v=gqiydHTZdGk",
+        "observed_views": 2705896,
+        "view_count_checked_at": "2026-09-27T04:27:27.356Z",
+        "publish_date": "2018-04-04T15:15:06-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 6
+    },
+    {
+      "id": 25,
+      "query": "How do I replace sprinkler head?",
+      "source_video": {
+        "title": "How To Replace A Sprinkler Head In 5 Minutes - Orbit, Hunter, Rainbird",
+        "url": "https://www.youtube.com/watch?v=FAFq8eYnpT4",
+        "observed_views": 111733,
+        "view_count_checked_at": "2026-09-27T04:27:27.774Z",
+        "publish_date": "2023-08-27T09:44:22-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 34
+    },
+    {
+      "id": 26,
+      "query": "How do I install drip irrigation garden?",
+      "source_video": {
+        "title": "HOW TO INSTALL A PROFESSIONAL DRIP IRRIGATION SYSTEM IN YOUR GARDEN",
+        "url": "https://www.youtube.com/watch?v=CVhAc34AwVw",
+        "observed_views": 456213,
+        "view_count_checked_at": "2026-09-27T04:27:27.827Z",
+        "publish_date": "2016-11-18T22:30:19-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 18
+    },
+    {
+      "id": 27,
+      "query": "How do I clean pool filter cartridge?",
+      "source_video": {
+        "title": "How To Clean Your POOL FILTER (Cartridge, Sand, D.E.)",
+        "url": "https://www.youtube.com/watch?v=7P3EtQOUDHU",
+        "observed_views": 210539,
+        "view_count_checked_at": "2026-09-27T04:27:28.070Z",
+        "publish_date": "2021-06-19T07:00:05-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 25
+    },
+    {
+      "id": 28,
+      "query": "How do I clean pool salt cell?",
+      "source_video": {
+        "title": "How to Clean your Swimming Pool Salt Cell",
+        "url": "https://www.youtube.com/watch?v=I2RF0KwXKnw",
+        "observed_views": 223992,
+        "view_count_checked_at": "2026-09-27T04:27:28.417Z",
+        "publish_date": "2020-04-30T07:42:19-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 24
+    },
+    {
+      "id": 29,
+      "query": "How do I replace pool skimmer basket?",
+      "source_video": {
+        "title": "How to Replace a Hayward Skimmer Basket: A Quick and Easy Guide",
+        "url": "https://www.youtube.com/watch?v=Em6DBfcfLnc",
+        "observed_views": 1463,
+        "view_count_checked_at": "2026-09-27T04:27:28.526Z",
+        "publish_date": "2024-10-10T14:29:51-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 49
+    },
+    {
+      "id": 30,
+      "query": "How do I clean hot tub filter?",
+      "source_video": {
+        "title": "How to Clean Hot Tub Filters (The RIGHT Way)",
+        "url": "https://www.youtube.com/watch?v=jWgBt4qeL4s",
+        "observed_views": 95625,
+        "view_count_checked_at": "2026-09-27T04:27:28.675Z",
+        "publish_date": "2024-01-13T07:00:28-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 35
+    },
+    {
+      "id": 31,
+      "query": "How do I install rain barrel?",
+      "source_video": {
+        "title": "How To Install A Rain Barrel",
+        "url": "https://www.youtube.com/watch?v=ZKD3bqIItpE",
+        "observed_views": 194703,
+        "view_count_checked_at": "2026-09-27T04:27:29.058Z",
+        "publish_date": "2015-08-13T10:38:44-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 28
+    },
+    {
+      "id": 32,
+      "query": "How do I unclog gutter downspout?",
+      "source_video": {
+        "title": "How To Unclog a Gutter Downspout (4 Great Methods That Work!)",
+        "url": "https://www.youtube.com/watch?v=q2kEphpRqRA",
+        "observed_views": 318350,
+        "view_count_checked_at": "2026-09-27T04:27:29.258Z",
+        "publish_date": "2021-12-02T20:34:11-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 20
+    },
+    {
+      "id": 33,
+      "query": "How do I clean faucet aerator?",
+      "source_video": {
+        "title": "How to Clean a Faucet Aerator | This Old House",
+        "url": "https://www.youtube.com/watch?v=2l8STssse5w",
+        "observed_views": 123525,
+        "view_count_checked_at": "2026-09-27T04:27:29.398Z",
+        "publish_date": "2014-12-26T05:00:06-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 33
+    },
+    {
+      "id": 34,
+      "query": "How do I descale shower head?",
+      "source_video": {
+        "title": "The best way to descale a shower head - Which?",
+        "url": "https://www.youtube.com/watch?v=5yI8aURSy9I",
+        "observed_views": 54518,
+        "view_count_checked_at": "2026-09-27T04:27:29.757Z",
+        "publish_date": "2022-03-09T03:32:14-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 37
+    },
+    {
+      "id": 35,
+      "query": "How do I clean tile grout?",
+      "source_video": {
+        "title": "How to Clean Your Tile Grout.",
+        "url": "https://www.youtube.com/watch?v=rBxTX1e24p0",
+        "observed_views": 761325,
+        "view_count_checked_at": "2026-09-27T04:27:30.108Z",
+        "publish_date": "2012-06-13T19:27:31-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 11
+    },
+    {
+      "id": 36,
+      "query": "How do I replace moldy bathtub caulk?",
+      "source_video": {
+        "title": "How to Replace Moldy Old Caulk Around a Bathtub or Shower",
+        "url": "https://www.youtube.com/watch?v=CDi037U5tCI",
+        "observed_views": 594,
+        "view_count_checked_at": "2026-09-27T04:27:30.215Z",
+        "publish_date": "2021-07-16T22:55:14-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 50
+    },
+    {
+      "id": 37,
+      "query": "How do I fix running toilet?",
+      "source_video": {
+        "title": "How to Fix a Running Toilet",
+        "url": "https://www.youtube.com/watch?v=MOKn9j6cmZ4",
+        "observed_views": 1480162,
+        "view_count_checked_at": "2026-09-27T04:27:30.553Z",
+        "publish_date": "2020-05-14T14:00:11-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 9
+    },
+    {
+      "id": 38,
+      "query": "How do I clean refrigerator condenser coils?",
+      "source_video": {
+        "title": "How to Clean Refrigerator Condenser Coils (Step-by-Step Guide)",
+        "url": "https://www.youtube.com/watch?v=dIJ4HYj6X38",
+        "observed_views": 11305,
+        "view_count_checked_at": "2026-09-27T04:27:30.915Z",
+        "publish_date": "2021-04-08T13:16:11-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 44
+    },
+    {
+      "id": 39,
+      "query": "How do I replace refrigerator water filter?",
+      "source_video": {
+        "title": "How To Replace Your Refrigerator Water Filter (It's Easy!)",
+        "url": "https://www.youtube.com/watch?v=KD_TizOdqCI",
+        "observed_views": 178189,
+        "view_count_checked_at": "2026-09-27T04:27:30.822Z",
+        "publish_date": "2024-09-24T08:40:18-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 31
+    },
+    {
+      "id": 40,
+      "query": "How do I clean oven door glass?",
+      "source_video": {
+        "title": "How To Clean an Oven Glass Door | Inside & Out",
+        "url": "https://www.youtube.com/watch?v=v7q4JhPrbas",
+        "observed_views": 203400,
+        "view_count_checked_at": "2026-09-27T04:27:31.260Z",
+        "publish_date": "2017-12-01T06:51:41-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 27
+    },
+    {
+      "id": 41,
+      "query": "How do I clean range hood filter?",
+      "source_video": {
+        "title": "How to clean and when to change your range hood filters",
+        "url": "https://www.youtube.com/watch?v=z9Rnetm-vws",
+        "observed_views": 289478,
+        "view_count_checked_at": "2026-09-27T04:27:31.545Z",
+        "publish_date": "2020-03-27T07:30:06-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 22
+    },
+    {
+      "id": 42,
+      "query": "How do I repair torn window screen?",
+      "source_video": {
+        "title": "Fast and Easy Window Screen Replacement - How to Repair a Torn Window Screen | Builds by Maz",
+        "url": "https://www.youtube.com/watch?v=G6_zOLO4W38",
+        "observed_views": 182920,
+        "view_count_checked_at": "2026-09-27T04:27:31.725Z",
+        "publish_date": "2024-07-10T13:00:05-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 29
+    },
+    {
+      "id": 43,
+      "query": "How do I replace car windshield wiper blades?",
+      "source_video": {
+        "title": "How To Replace Windshield Wiper Blades on Your Car, Truck or SUV",
+        "url": "https://www.youtube.com/watch?v=JRATe6UtQ-g",
+        "observed_views": 735905,
+        "view_count_checked_at": "2026-09-27T04:27:32.006Z",
+        "publish_date": "2010-07-20T14:45:24-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 13
+    },
+    {
+      "id": 44,
+      "query": "How do I clean corroded car battery terminals?",
+      "source_video": {
+        "title": "How to Clean Corroded Car Battery Terminals like a Pro",
+        "url": "https://www.youtube.com/watch?v=ewuOf4aBqMQ",
+        "observed_views": 475276,
+        "view_count_checked_at": "2026-09-27T04:27:32.289Z",
+        "publish_date": "2023-02-27T04:00:11-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 17
+    },
+    {
+      "id": 45,
+      "query": "How do I repair car paint scratch?",
+      "source_video": {
+        "title": "How to Repair a DEEP SCRATCH in Car Paint (DIY)",
+        "url": "https://www.youtube.com/watch?v=Zl_iSYYGBiY",
+        "observed_views": 8597573,
+        "view_count_checked_at": "2026-09-27T04:27:32.459Z",
+        "publish_date": "2021-01-26T07:30:02-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 3
+    },
+    {
+      "id": 46,
+      "query": "How do I fix nail pops drywall?",
+      "source_video": {
+        "title": "How To Fix Nail Pops in Drywall (Simple DIY for Beginners)",
+        "url": "https://www.youtube.com/watch?v=5KQqw3YNN1o",
+        "observed_views": 2434,
+        "view_count_checked_at": "2026-09-27T04:27:32.796Z",
+        "publish_date": "2023-01-16T06:00:03-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 47
+    },
+    {
+      "id": 47,
+      "query": "How do I install weatherstripping front door?",
+      "source_video": {
+        "title": "How To Install Weatherstripping",
+        "url": "https://www.youtube.com/watch?v=E3JK2zMR53c",
+        "observed_views": 579508,
+        "view_count_checked_at": "2026-09-27T04:27:32.911Z",
+        "publish_date": "2020-05-14T12:30:00-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 15
+    },
+    {
+      "id": 48,
+      "query": "How do I replace bathroom exhaust fan motor?",
+      "source_video": {
+        "title": "How to Replace a Bathroom Exhaust Fan Motor",
+        "url": "https://www.youtube.com/watch?v=51OXcQWg4Fs",
+        "observed_views": 28771,
+        "view_count_checked_at": "2026-09-27T04:27:33.034Z",
+        "publish_date": "2024-02-08T15:44:19-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 40
+    },
+    {
+      "id": 49,
+      "query": "How do I clean washing machine drain pump filter?",
+      "source_video": {
+        "title": "How to clean a washing machine filter? Easy, fast, and effective!",
+        "url": "https://www.youtube.com/watch?v=vGzRkJ3XtVw",
+        "observed_views": 47766,
+        "view_count_checked_at": "2026-09-27T04:27:33.667Z",
+        "publish_date": "2025-06-29T03:06:36-07:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 38
+    },
+    {
+      "id": 50,
+      "query": "How do I install peel and stick backsplash?",
+      "source_video": {
+        "title": "HOW TO INSTALL PEEL AND STICK TILE BACKSPLASH | Are Sticker Backsplash Tiles The Way To Go?",
+        "url": "https://www.youtube.com/watch?v=ubDaRk9rvKs",
+        "observed_views": 58579,
+        "view_count_checked_at": "2026-09-27T04:27:33.792Z",
+        "publish_date": "2020-12-08T09:00:32-08:00"
+      },
+      "selection_status": "candidate",
+      "generation_status": "not_started",
+      "popularity_rank_within_candidates": 36
+    }
+  ],
+  "view_count_checked_at": "2026-09-27T04:27:33.793Z",
+  "verified_count": 50
+}

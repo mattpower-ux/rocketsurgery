@@ -173,25 +173,32 @@ def rank_step(step: dict, category: str, index: int) -> tuple[int, int]:
 
 def validate_and_repair_step_sequence(query: str, steps: list[dict]) -> dict:
     category = infer_construction_category(query=query)
-    original_ids = [step.get("id", index + 1) for index, step in enumerate(steps)]
+    if category not in CATEGORY_ORDER_RULES:
+        return {
+            "category": category,
+            "status": "passed_unranked_category",
+            "issues": [],
+            "steps": [{**step, "id": index} for index, step in enumerate(steps, start=1)],
+        }
     ranked = [
-        (rank_step(step, category, index), step)
+        (rank_step(step, category, index), index, step)
         for index, step in enumerate(steps)
     ]
+    ranked.sort(key=lambda item: item[0])
     repaired_steps = [
-        step
-        for _, step in sorted(ranked, key=lambda item: item[0])
+        dict(step)
+        for _, _, step in ranked
     ]
 
-    repaired_ids = [step.get("id", index + 1) for index, step in enumerate(repaired_steps)]
+    repaired_order = [index for _, index, _ in ranked]
     issues = []
 
-    if repaired_ids != original_ids:
+    if repaired_order != list(range(len(steps))):
         issues.append({
             "type": "step_order_repaired",
             "message": "Steps were reordered before image generation using local prerequisite rules.",
-            "original_order": original_ids,
-            "repaired_order": repaired_ids,
+            "original_order": list(range(1, len(steps) + 1)),
+            "repaired_order": [index + 1 for index in repaired_order],
         })
 
     for index, step in enumerate(repaired_steps, start=1):

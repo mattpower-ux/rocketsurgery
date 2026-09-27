@@ -19,9 +19,13 @@ def test_asset_sheet_first_generation():
         calls.append(("asset_sheet", asset_key, description))
         return "https://rocketsurgery-api.onrender.com/static/images/test-asset-sheet.png"
 
-    def fake_step_image(prompt, step_number=1, asset_sheet_url="", cache_key_suffix=""):
+    def fake_step_image(prompt, step_number=1, asset_sheet_url="", cache_key_suffix="", return_metadata=False, allow_text_fallback=True):
         calls.append(("step_image", step_number, asset_sheet_url, prompt))
-        return f"https://rocketsurgery-api.onrender.com/static/images/test-step-{step_number}.png"
+        assert return_metadata and not allow_text_fallback
+        return {
+            "image_url": f"https://rocketsurgery-api.onrender.com/static/images/test-step-{step_number}.png",
+            "generation_mode": "asset_sheet_edit",
+        }
 
     original_asset_sheet = generator.generate_visual_asset_sheet
     original_step_image = generator.generate_step_image_from_asset_sheet
@@ -56,8 +60,8 @@ def test_asset_sheet_first_generation():
     assert all(call[0] == "step_image" for call in calls[1:])
     assert all(call[2].endswith("/test-asset-sheet.png") for call in calls[1:])
     assert walkthrough["image_generation_pipeline"]["requires_asset_sheet_before_step_images"] is True
-    assert walkthrough["image_generation_pipeline"]["step_image_generation_mode"] == "asset_sheet_reference"
-    assert all(step["imageGenerationMode"] == "asset_sheet_reference" for step in walkthrough["steps"])
+    assert walkthrough["image_generation_pipeline"]["step_image_generation_mode"] == "asset_sheet_edit"
+    assert all(step["imageGenerationMode"] == "asset_sheet_edit" for step in walkthrough["steps"])
     assert all(step["imageUrl"] for step in walkthrough["steps"])
 
 

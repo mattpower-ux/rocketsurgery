@@ -27,18 +27,17 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 def build_image_prompt(query: str, step_label: str = "Step 1") -> str:
     return f"""
-Create a high-quality technical installation illustration for RocketSurgery.
+Create a high-quality technical how-to illustration for RocketSurgery.
 
 Topic: {query}
 Panel: {step_label}
 
-The image should look like a polished app-ready construction walkthrough panel, similar to a premium illustrated field manual or contractor training comic.
+The image should look like a polished app-ready walkthrough panel, similar to a premium illustrated field manual.
 
 Visual style:
 - clean semi-realistic technical illustration
 - crisp black outlines with subtle shading
-- accurate construction materials and tool details
-- realistic wood grain, fasteners, siding, flashing, pipe, wire, roof, or product components when relevant
+- accurate materials, tools, and product details for this specific task
 - light jobsite background, not cluttered
 - modern mobile app illustration quality
 - clear focal point
@@ -50,7 +49,7 @@ Visual style:
 - blue circular hotspot markers may appear where specs could be tapped
 
 Composition requirements:
-- show exactly one installation action or concept
+- show exactly one task action or concept
 - make the work area large and readable on a phone screen
 - use arrows, callouts, cutaway details, or magnified inset circles only where helpful
 - avoid tiny labels or unreadable text
@@ -61,7 +60,7 @@ Composition requirements:
 - avoid surreal, decorative, or fantasy imagery
 
 Output goal:
-A crisp, clear, contractor-friendly instructional panel that could appear inside the RocketSurgery mobile app.
+A crisp, clear instructional panel that could appear inside the RocketSurgery mobile app.
 """
 
 
@@ -216,9 +215,12 @@ def generate_step_image_from_asset_sheet(
     asset_sheet_url: str = "",
     cache_key_suffix: str = "",
     return_metadata: bool = False,
+    allow_text_fallback: bool = True,
 ):
     reference_path = local_static_image_path(asset_sheet_url)
     if not reference_path:
+        if not allow_text_fallback:
+            raise FileNotFoundError("Visual asset sheet is required for this step image")
         image_url = generate_step_image(query, step_number, cache_key_suffix=cache_key_suffix)
         if return_metadata:
             return {
@@ -285,6 +287,8 @@ def generate_step_image_from_asset_sheet(
             }
         return image_url
     except Exception as exc:
+        if not allow_text_fallback:
+            raise
         fallback_prompt = (
             f"{query}\n\n"
             "The asset-sheet image edit path failed, so regenerate this step as a fresh illustration. "
