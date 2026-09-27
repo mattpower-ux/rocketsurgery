@@ -132,3 +132,16 @@ Passed:
 
 Temporary build output was removed after verification.
 
+## 2026-09-27 Curated Walkthrough Expansion
+
+Current workspace: `C:\Users\mattp\Documents\ChatGPT\Rocket Surgery` on `main`.
+GitHub pushes auto-deploy to Render. Do not use OpenAI Sites for this project.
+
+- `research/next_50_video_candidates.json` holds 50 distinct home DIY/lifestyle topics, one relevant YouTube source per topic, observed view counts, and candidate-pool popularity ranks. This is a curated set, not YouTube's global top 50. The requested ceiling-fan receiver, windshield chip, variable-speed pool pump, pool heater, lanai screen, and cloudy headlamp topics are included. Two sampled YouTube transcript exports were unavailable; do not claim these drafts used transcripts.
+- Production inventory is 92 stored walkthroughs as of this note: 88 preexisting plus four curated drafts. The four are `how-do-i-small-chip-in-my-car-windshield` (`order_and_visuals_checked`), `how-do-i-restore-cloudy-car-headlights` (`visual_review_needed`), `how-do-i-torn-screen-panel-in-my-lanai` (`visual_review_needed`), and `how-do-i-leaky-outdoor-faucet` (`visual_review_needed`). None is approved. A mistaken generic `repair-leaky-faucet` draft created during this session was deleted after the exact outdoor-faucet draft saved.
+- New curated generation creates a structured locked visual plan, then an asset sheet, then asset-sheet-edited step images. Sheet and step visual reviews can retry once. A review that reports discrepancies cannot be marked passed even if its booleans are true. Visual-review API calls have bounded timeouts. Curated queries now retain their exact wording and storage identity instead of being collapsed onto a broader taxonomy match.
+- Human visual QA remains essential. The lanai sheet and panels still show a removable screen frame/tabletop setup in places; this is not a fixed enclosure bay. The faucet draft changes handle geometry and its reassembly panel misdraws the faucet. The headlamp sheet needs a context review; step 3's earlier off-target sanding image was repaired. Do not approve or bulk-generate more from these patterns without repairing them.
+- `scripts/create_curated_video_walkthroughs.mjs` has vetted briefs for catalog IDs 2, 3, 5, 6, and 10. ID 3 (variable-speed pool pump) is prepared but not generated; its electrical and bonding work is assigned to a qualified installer. ID 4 (pool heater) remains a candidate because gas versus heat-pump installation needs a specific equipment branch and professional requirements. Catalog ID 1 interprets the fan request as a remote-control receiver, not a motor assembly; confirm that intent before generating.
+- The long-running creation POST can exceed the client/proxy timeout. The script checks production for a completed save after disconnect. Never assume a timed-out request failed or issue a duplicate paid generation without checking the exact saved query/storage ID. The faucet run eventually saved after its client disconnected. Future scaling would benefit from a persistent server-side job queue and checkpointed creation.
+- Focused tests: `scripts/test_new_walkthrough_generation.py` and `scripts/test_asset_sheet_first_generation.py`. Both passed locally on 2026-09-27.
+

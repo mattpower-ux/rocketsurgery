@@ -140,7 +140,7 @@
         "publish_date": "2022-08-22T13:53:33-07:00"
       },
       "selection_status": "candidate",
-      "generation_status": "not_started",
+      "generation_status": "draft_created_visual_review_needed",
       "popularity_rank_within_candidates": 4
     },
     {
