@@ -7,6 +7,7 @@ os.environ.setdefault("OPENAI_API_KEY", "test-key")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from app import generator
+from app import visual_asset_planner
 from app.quality_rules import infer_construction_category
 from app.step_sequence_validator import validate_and_repair_step_sequence
 
@@ -19,6 +20,31 @@ def test_nonconstruction_categories_and_order():
     result = validate_and_repair_step_sequence("clean cloudy headlights", steps)
     assert [step["title"] for step in result["steps"]] == [step["title"] for step in steps]
     assert result["status"] == "passed_unranked_category"
+
+
+def test_short_but_complete_visual_plan_keeps_fixed_panel_anchor():
+    from unittest.mock import patch
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.chat = type("Chat", (), {})()
+            self.chat.completions = type("Completions", (), {})()
+            self.chat.completions.create = lambda **kwargs: type("Response", (), {
+                "choices": [type("Choice", (), {
+                    "message": type("Message", (), {"content": (
+                        '{"primary_object":"fixed black-screen bay","product":"black fiberglass mesh",'
+                        '"environment":"white aluminum lanai frame","worker":"worker in blue shirt",'
+                        '"locked_prompt":"Same fixed lanai panel and frame.",'
+                        '"tools":["spline roller"],"views":["front view"]}'
+                    )})()
+                })()]
+            })()
+
+    with patch.object(visual_asset_planner, "OpenAI", FakeClient):
+        plan = visual_asset_planner.plan_visual_assets("repair lanai screen", [], "screen_enclosure")
+    assert "fixed screen bay" in plan["primary_object"]
+    assert "Never depict a hinged screen door" in plan["locked_prompt"]
+    assert "facial features" in plan["worker"]
 
 
 def test_curated_walkthrough_has_asset_sheet_before_steps():
@@ -91,5 +117,6 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
 
 if __name__ == "__main__":
     test_nonconstruction_categories_and_order()
+    test_short_but_complete_visual_plan_keeps_fixed_panel_anchor()
     test_curated_walkthrough_has_asset_sheet_before_steps()
     print("new walkthrough generation tests passed")
