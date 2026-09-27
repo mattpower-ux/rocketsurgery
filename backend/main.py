@@ -2954,13 +2954,8 @@ def post_create_curated_video_walkthrough(
     query = " ".join(request.query.split())
     if not query or not request.video_url.startswith(("https://www.youtube.com/watch?v=", "https://youtu.be/")):
         raise HTTPException(status_code=400, detail="A query and YouTube video URL are required.")
-    taxonomy_match = classify_taxonomy_query(query)
-    walkthrough_id = (
-        taxonomy_match.get("walkthrough_id")
-        if taxonomy_match.get("status") == "matched"
-        else query_to_walkthrough_id(query)
-    )
-    existing = load_walkthrough_by_id(walkthrough_id) or load_walkthrough(query)
+    walkthrough_id = query_to_walkthrough_id(query)
+    existing = load_walkthrough_by_id(walkthrough_id)
     if existing:
         return {"status": "already_exists", "walkthrough_id": existing.get("walkthrough_id", walkthrough_id)}
 

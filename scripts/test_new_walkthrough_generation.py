@@ -57,6 +57,7 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
         name: getattr(generator, name)
         for name in (
             "generate_installation_steps_with_research",
+            "classify_taxonomy_query",
             "plan_visual_assets",
             "generate_visual_asset_sheet",
             "generate_step_image_from_asset_sheet",
@@ -69,6 +70,10 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
             {"title": "Inspect", "instruction": "Inspect the lens.", "detail": "Check for oxidation."},
             {"title": "Polish", "instruction": "Polish the lens.", "detail": "Use the selected kit."},
         ]
+        generator.classify_taxonomy_query = lambda query: {
+            "status": "matched", "canonical_query": "generic faucet repair",
+            "walkthrough_id": "generic-faucet-repair",
+        }
         generator.plan_visual_assets = lambda query, steps, category, visual_guidance: {
             "primary_object": "same cloudy left headlamp on a silver sedan",
             "product": "same clear polycarbonate lens",
@@ -115,6 +120,8 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
     assert result["visual_assets"]["primary_object"].startswith("same cloudy left headlamp")
     assert result["visual_assets"]["asset_sheet_review"]["status"] == "passed"
     assert result["source_research"]["sources"] == research["sources"]
+    assert result["query"] == "How do I restore cloudy headlights?"
+    assert result["walkthrough_id"] != "generic-faucet-repair"
     assert result["quality_status"] == "order_and_visuals_checked"
     assert result["generator_schema_version"] == generator.GENERATOR_SCHEMA_VERSION
 

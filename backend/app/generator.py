@@ -283,7 +283,8 @@ def generate_placeholder_walkthrough(
 ) -> dict:
     clean_query = safe_task_text(query)
     taxonomy_match = classify_taxonomy_query(clean_query)
-    if taxonomy_match.get("status") == "matched":
+    is_curated = (source_research_override or {}).get("status") == "curated_video_metadata"
+    if taxonomy_match.get("status") == "matched" and not is_curated:
         clean_query = safe_task_text(taxonomy_match.get("canonical_query") or clean_query)
         walkthrough_id = taxonomy_match.get("walkthrough_id") or query_to_walkthrough_id(clean_query)
     else:

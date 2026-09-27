@@ -160,7 +160,7 @@ for (const id of ids) {
     });
   } catch (error) {
     console.log(`Connection interrupted for ${id}: ${error.message}. Checking for completed save.`);
-    for (let attempt = 0; attempt < 20 && !result; attempt++) {
+    for (let attempt = 0; attempt < 40 && !result; attempt++) {
       await wait(30000);
       const saved = await findByQuery(item.query);
       if (saved) result = { status: "created_after_disconnect", walkthrough_id: saved.storage_walkthrough_id || saved.walkthrough_id };
