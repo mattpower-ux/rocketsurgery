@@ -55,7 +55,7 @@ def assess_asset_sheet(asset_sheet_url: str, query: str, visual_assets: dict) ->
         return {"status": "audit_error", "issues": ["Asset sheet unavailable locally"]}
     try:
         encoded = base64.b64encode(sheet_path.read_bytes()).decode("ascii")
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=90.0, max_retries=1)
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
             temperature=0,
@@ -97,7 +97,7 @@ def assess_visual_consistency(asset_sheet_url: str, step_image_url: str, action:
         return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded}", "detail": "high"}}
 
     try:
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=90.0, max_retries=1)
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
             temperature=0,

@@ -9,6 +9,27 @@ const ids = process.argv.slice(2).map(Number);
 if (!ids.length) throw new Error("Pass one or more catalog IDs, for example: 6 2 5");
 
 const curated = {
+  3: {
+    brief: {
+      required_steps: [
+        "Document the existing pump, pipe layout, filter, pool volume, and accessories; select a compatible variable-speed model with a qualified pool professional",
+        "Confirm permit and electrical requirements, then shut down the pump at its breaker before any service",
+        "Have the qualified installer disconnect and remove the old single-speed pump while preserving the existing equipment-pad layout",
+        "Have the qualified installer set and plumb the new variable-speed pump, with a licensed electrician or qualified service professional handling grounding, bonding, and electrical connections per the model manual",
+        "Prime the new pump and purge the filter air using its manufacturer's startup procedure",
+        "Program a lower-speed filtration schedule that still meets the pool's flow needs and any cleaner or heater minimums",
+        "Inspect for leaks, stable flow, normal filter pressure, and correct operation; adjust the schedule with the installer",
+      ],
+      common_mistakes: ["Matching only horsepower rather than system flow and pipe layout", "Skipping bonding or GFCI requirements", "Running a pump dry", "Setting flow too low for attached equipment"],
+      image_guidance: ["One fixed outdoor concrete equipment pad with the same pool filter, two PVC lines, and electrical disconnect across all steps", "Old single-speed pump appears only before removal; one clearly different new variable-speed pump appears after installation, in the same pad position"],
+      tools_and_materials: ["compatible variable-speed pool pump", "manufacturer's installation and user guides", "qualified installer", "pool equipment records"],
+      branch_questions: ["What model, voltage, plumbing size, and connected equipment does this pool have?", "Which installation and electrical tasks require a licensed professional locally?"],
+    },
+    reference_urls: [
+      "https://www.pentair.com/content/dam/extranet/nam/pentair-pool/residential/pumps/intelliflo3-vsf/manuals/install-guide/intelliflo3-pro3-vsf-install-guide.pdf",
+      "https://www1.eere.energy.gov/buildings/publications/pdfs/building_america/measure_guide_pool_pump.pdf",
+    ],
+  },
   10: {
     brief: {
       required_steps: [

@@ -44,7 +44,7 @@ CATEGORY_SCENE_GUARDS = {
 
 
 def plan_visual_assets(query: str, steps: list[dict], category: str, visual_guidance: str = "") -> dict:
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"), timeout=90.0, max_retries=1)
     context = {
         "query": query,
         "category": category,
@@ -60,7 +60,7 @@ def plan_visual_assets(query: str, steps: list[dict], category: str, visual_guid
     for _ in range(2):
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
-            temperature=0.2,
+            temperature=0,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
