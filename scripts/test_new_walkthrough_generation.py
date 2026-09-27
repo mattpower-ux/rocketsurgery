@@ -30,6 +30,7 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
             "plan_visual_assets",
             "generate_visual_asset_sheet",
             "generate_step_image_from_asset_sheet",
+            "assess_asset_sheet",
             "assess_visual_consistency",
         )
     }
@@ -47,7 +48,7 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
             "views": ["front", "three-quarter"],
             "locked_prompt": "same silver sedan and left headlamp across every step",
         }
-        generator.generate_visual_asset_sheet = lambda brief, key: (
+        generator.generate_visual_asset_sheet = lambda brief, key, cache_key_suffix="": (
             calls.append(("asset_sheet", brief)) or "https://example.com/sheet.png"
         )
         generator.generate_step_image_from_asset_sheet = lambda prompt, index, asset_sheet_url="", return_metadata=False, allow_text_fallback=True: (
@@ -55,6 +56,11 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
             or {"image_url": f"https://example.com/{index}.png", "generation_mode": "asset_sheet_edit"}
         )
         generator.assess_visual_consistency = lambda *args: {"status": "passed", "issues": []}
+        sheet_reviews = iter([
+            {"status": "needs_review", "issues": ["The lens is detached from the car"]},
+            {"status": "passed", "issues": []},
+        ])
+        generator.assess_asset_sheet = lambda *args: next(sheet_reviews)
         research = {
             "status": "curated_video_metadata",
             "brief": {"required_steps": ["Inspect", "Polish"]},
@@ -68,9 +74,11 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
             setattr(generator, name, original)
 
     assert calls[0][0] == "asset_sheet"
-    assert all(item[0] == "step_image" and item[2] == "https://example.com/sheet.png" for item in calls[1:])
-    assert all(item[3] and not item[4] for item in calls[1:])
+    assert calls[1][0] == "asset_sheet"
+    assert all(item[0] == "step_image" and item[2] == "https://example.com/sheet.png" for item in calls[2:])
+    assert all(item[3] and not item[4] for item in calls[2:])
     assert result["visual_assets"]["primary_object"].startswith("same cloudy left headlamp")
+    assert result["visual_assets"]["asset_sheet_review"]["status"] == "passed"
     assert result["source_research"]["sources"] == research["sources"]
     assert result["quality_status"] == "order_and_visuals_checked"
     assert result["generator_schema_version"] == generator.GENERATOR_SCHEMA_VERSION

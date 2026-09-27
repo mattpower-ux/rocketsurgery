@@ -3,6 +3,8 @@ try:
 except ImportError:
     from storage import query_to_walkthrough_id
 
+import hashlib
+
 try:
     from app.image_generator import generate_step_image_from_asset_sheet, generate_visual_asset_sheet
 except ImportError:
@@ -52,9 +54,9 @@ except ImportError:
     from visual_asset_planner import plan_visual_assets
 
 try:
-    from app.visual_consistency import assess_visual_consistency
+    from app.visual_consistency import assess_asset_sheet, assess_visual_consistency
 except ImportError:
-    from visual_consistency import assess_visual_consistency
+    from visual_consistency import assess_asset_sheet, assess_visual_consistency
 
 
 MAX_GENERATION_QUERY_LENGTH = 160
@@ -306,12 +308,28 @@ def generate_placeholder_walkthrough(query: str, source_research_override: dict 
         })
     asset_sheet_brief = format_asset_sheet_brief(visual_assets)
     visual_assets["asset_sheet_prompt"] = asset_sheet_brief
+    asset_revision = hashlib.sha1(asset_sheet_brief.encode("utf-8")).hexdigest()[:10]
     visual_assets["asset_sheet_url"] = generate_visual_asset_sheet(
         asset_sheet_brief,
         visual_assets.get("asset_key", f"{category}-asset-sheet"),
+        cache_key_suffix=asset_revision,
     )
     if not visual_assets["asset_sheet_url"]:
         raise RuntimeError("Visual asset sheet generation returned no image")
+    sheet_review = assess_asset_sheet(visual_assets["asset_sheet_url"], clean_query, visual_assets)
+    if sheet_review["status"] == "needs_review":
+        correction = "; ".join(sheet_review.get("issues", [])) or "the reference object did not match"
+        revised_brief = f"Correct the previous sheet: {correction[:400]}. {asset_sheet_brief}"
+        visual_assets["asset_sheet_prompt"] = revised_brief
+        visual_assets["asset_sheet_url"] = generate_visual_asset_sheet(
+            revised_brief,
+            visual_assets.get("asset_key", f"{category}-asset-sheet"),
+            cache_key_suffix=f"{asset_revision}-retry1",
+        )
+        sheet_review = assess_asset_sheet(visual_assets["asset_sheet_url"], clean_query, visual_assets)
+    visual_assets["asset_sheet_review"] = sheet_review
+    if sheet_review["status"] != "passed":
+        raise RuntimeError(f"Visual asset sheet failed review: {sheet_review['issues']}")
     visual_assets["asset_status"] = "generated"
     visual_continuity_prompt = build_visual_continuity_prompt(visual_template)
     visual_asset_prompt = format_visual_assets_for_prompt(visual_assets)

@@ -66,9 +66,9 @@ except ImportError:
     )
 
 try:
-    from app.visual_consistency import assess_visual_consistency
+    from app.visual_consistency import assess_asset_sheet, assess_visual_consistency
 except ImportError:
-    from visual_consistency import assess_visual_consistency
+    from visual_consistency import assess_asset_sheet, assess_visual_consistency
 
 try:
     from app.catalog import (
@@ -3006,11 +3006,31 @@ def post_audit_walkthrough_visuals(walkthrough_id: str, _: None = Depends(requir
         review = assess_visual_consistency(asset_sheet_url, step.get("imageUrl", ""), action, visual_assets)
         step["visualConsistency"] = review
         results.append({"step_id": step.get("id"), **review})
-    manifest["quality_status"] = "order_and_visuals_checked" if results and all(
+    manifest["quality_status"] = "order_and_visuals_checked" if (
+        visual_assets.get("asset_sheet_review", {}).get("status") == "passed" and results and all(
         result["status"] == "passed" for result in results
+        )
     ) else "visual_review_needed"
     save_walkthrough(storage_id, manifest)
     return {"walkthrough_id": storage_id, "quality_status": manifest["quality_status"], "steps": results}
+
+
+@app.post("/admin/walkthroughs/{walkthrough_id}/audit-asset-sheet")
+def post_audit_walkthrough_asset_sheet(walkthrough_id: str, _: None = Depends(require_admin_token)):
+    storage_id = resolve_walkthrough_storage_id(walkthrough_id)
+    manifest = load_walkthrough_by_id(storage_id)
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Walkthrough not found.")
+    visual_assets = manifest.get("visual_assets") or {}
+    review = assess_asset_sheet(visual_assets.get("asset_sheet_url", ""), manifest.get("query", ""), visual_assets)
+    visual_assets["asset_sheet_review"] = review
+    manifest["quality_status"] = "order_and_visuals_checked" if review["status"] == "passed" and all(
+        step.get("visualConsistency", {}).get("status") == "passed"
+        for step in manifest.get("steps", [])
+    ) else "visual_review_needed"
+    save_walkthrough(storage_id, manifest)
+    return {"walkthrough_id": storage_id, "asset_sheet_review": review,
+            "quality_status": manifest.get("quality_status")}
 
 
 @app.post("/admin/walkthroughs/{walkthrough_id}/repair-visual-step")
@@ -3065,7 +3085,7 @@ def post_repair_visual_step(
                 "correctionPrompt": direction,
                 "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             })
-            manifest["quality_status"] = "order_and_visuals_checked" if all(
+            manifest["quality_status"] = "order_and_visuals_checked" if visual_assets.get("asset_sheet_review", {}).get("status") == "passed" and all(
                 step.get("visualConsistency", {}).get("status") == "passed" for step in manifest.get("steps", [])
             ) else "visual_review_needed"
             save_walkthrough(storage_id, manifest)

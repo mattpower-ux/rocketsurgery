@@ -15,7 +15,7 @@ from app import generator
 def test_asset_sheet_first_generation():
     calls = []
 
-    def fake_asset_sheet(description, asset_key="visual-assets"):
+    def fake_asset_sheet(description, asset_key="visual-assets", cache_key_suffix=""):
         calls.append(("asset_sheet", asset_key, description))
         return "https://rocketsurgery-api.onrender.com/static/images/test-asset-sheet.png"
 
@@ -32,12 +32,14 @@ def test_asset_sheet_first_generation():
     original_research = generator.discover_source_research
     original_step_planner = generator.generate_installation_steps_with_research
     original_visual_review = generator.assess_visual_consistency
+    original_sheet_review = generator.assess_asset_sheet
 
     try:
         generator.generate_visual_asset_sheet = fake_asset_sheet
         generator.generate_step_image_from_asset_sheet = fake_step_image
         generator.discover_source_research = lambda query: {"status": "skipped_test"}
         generator.assess_visual_consistency = lambda *args: {"status": "passed", "issues": []}
+        generator.assess_asset_sheet = lambda *args: {"status": "passed", "issues": []}
         generator.generate_installation_steps_with_research = lambda query, context: [
             {
                 "title": "Prepare Area",
@@ -58,6 +60,7 @@ def test_asset_sheet_first_generation():
         generator.discover_source_research = original_research
         generator.generate_installation_steps_with_research = original_step_planner
         generator.assess_visual_consistency = original_visual_review
+        generator.assess_asset_sheet = original_sheet_review
 
     assert calls[0][0] == "asset_sheet"
     assert all(call[0] == "step_image" for call in calls[1:])
