@@ -26,12 +26,29 @@ Rules:
 """
 
 
+CATEGORY_SCENE_GUARDS = {
+    "screen_enclosure": (
+        "One fixed screen bay in a multi-panel lanai or pool enclosure, with adjacent framed bays "
+        "and part of the screened roof visible. Never depict a hinged screen door, door handle, "
+        "or solid-wall doorway as the target panel."
+    ),
+    "auto_lighting": (
+        "The same headlamp lens remains mounted in the same vehicle's front headlamp housing "
+        "in every view; never show a detached lens."
+    ),
+    "auto_glass": (
+        "The target is the same front windshield on one vehicle, never a side window or loose pane."
+    ),
+}
+
+
 def plan_visual_assets(query: str, steps: list[dict], category: str, visual_guidance: str = "") -> dict:
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     context = {
         "query": query,
         "category": category,
         "visual_guidance": visual_guidance,
+        "mandatory_scene": CATEGORY_SCENE_GUARDS.get(category, ""),
         "steps": [
             {"title": step.get("title", ""), "instruction": step.get("instruction", "")}
             for step in steps[:8]
@@ -64,9 +81,11 @@ def plan_visual_assets(query: str, steps: list[dict], category: str, visual_guid
     worker = raw["worker"].strip()
     if "face" not in worker.lower() and "facial" not in worker.lower():
         worker += "; consistent illustrated facial features when visible"
+    scene_guard = CATEGORY_SCENE_GUARDS.get(category, "")
     return {
         **{key: raw[key].strip() for key in required if key != "worker"},
         "worker": worker,
+        "locked_prompt": f"{raw['locked_prompt'].strip()} {scene_guard}".strip(),
         "tools": [str(item).strip()[:100] for item in raw["tools"][:10] if str(item).strip()],
         "views": [str(item).strip()[:100] for item in raw["views"][:6] if str(item).strip()],
     }

@@ -2990,6 +2990,47 @@ def post_create_curated_video_walkthrough(
     }
 
 
+@app.post("/admin/walkthroughs/{walkthrough_id}/rebuild-curated-visuals")
+def post_rebuild_curated_visuals(walkthrough_id: str, _: None = Depends(require_admin_token)):
+    storage_id = resolve_walkthrough_storage_id(walkthrough_id)
+    manifest = load_walkthrough_by_id(storage_id)
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Walkthrough not found.")
+    if manifest.get("review_status") != "draft" or manifest.get("source_research", {}).get("status") != "curated_video_metadata":
+        raise HTTPException(status_code=409, detail="Only unapproved curated-video drafts can be rebuilt here.")
+    planned_steps = [
+        {
+            "title": str(step.get("imageLabel", "")).split(":", 1)[-1].strip(),
+            "instruction": step.get("instruction", ""),
+            "detail": step.get("detail", ""),
+        }
+        for step in manifest.get("steps", [])
+    ]
+    if not planned_steps:
+        raise HTTPException(status_code=400, detail="Walkthrough has no steps to preserve.")
+    rebuilt = generate_placeholder_walkthrough(
+        manifest.get("query", ""),
+        source_research_override=manifest.get("source_research"),
+        planned_steps_override=planned_steps,
+    )
+    if rebuilt.get("quality_status") != "order_and_visuals_checked":
+        return {"status": "not_applied", "walkthrough_id": storage_id,
+                "quality_status": rebuilt.get("quality_status")}
+    updated = {
+        **manifest,
+        **rebuilt,
+        "walkthrough_id": manifest.get("walkthrough_id") or storage_id,
+        "title": manifest.get("title") or rebuilt.get("title"),
+        "aliases": manifest.get("aliases", []),
+        "review_status": "draft",
+        "version": int(manifest.get("version", 1)) + 1,
+    }
+    save_walkthrough(storage_id, updated)
+    return {"status": "rebuilt", "walkthrough_id": storage_id,
+            "step_count": len(updated.get("steps", [])),
+            "asset_sheet_url": updated.get("visual_assets", {}).get("asset_sheet_url")}
+
+
 @app.post("/admin/walkthroughs/{walkthrough_id}/audit-visuals")
 def post_audit_walkthrough_visuals(walkthrough_id: str, _: None = Depends(require_admin_token)):
     storage_id = resolve_walkthrough_storage_id(walkthrough_id)

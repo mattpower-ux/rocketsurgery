@@ -67,7 +67,12 @@ def test_curated_walkthrough_has_asset_sheet_before_steps():
             "sources": [{"url": "https://www.youtube.com/watch?v=UEJbKLZ7RmM", "transcript_used": False}],
         }
         result = generator.generate_placeholder_walkthrough(
-            "How do I restore cloudy headlights?", source_research_override=research
+            "How do I restore cloudy headlights?",
+            source_research_override=research,
+            planned_steps_override=[
+                {"title": "Inspect", "instruction": "Inspect the lens.", "detail": "Check for oxidation."},
+                {"title": "Polish", "instruction": "Polish the lens.", "detail": "Use the selected kit."},
+            ],
         )
     finally:
         for name, original in originals.items():

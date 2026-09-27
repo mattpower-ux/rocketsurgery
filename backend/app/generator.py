@@ -276,7 +276,11 @@ def planned_steps_for_category(query: str, category: str, research_context: str 
     return generate_installation_steps_with_research(query, research_context)
 
 
-def generate_placeholder_walkthrough(query: str, source_research_override: dict | None = None) -> dict:
+def generate_placeholder_walkthrough(
+    query: str,
+    source_research_override: dict | None = None,
+    planned_steps_override: list[dict] | None = None,
+) -> dict:
     clean_query = safe_task_text(query)
     taxonomy_match = classify_taxonomy_query(clean_query)
     if taxonomy_match.get("status") == "matched":
@@ -290,7 +294,11 @@ def generate_placeholder_walkthrough(query: str, source_research_override: dict 
     research_image_prompt = format_research_for_image_prompt(source_research)
 
     initial_category = infer_construction_category(query=clean_query)
-    planned_steps = planned_steps_for_category(clean_query, initial_category, research_context)
+    planned_steps = (
+        [dict(step) for step in planned_steps_override]
+        if planned_steps_override is not None
+        else planned_steps_for_category(clean_query, initial_category, research_context)
+    )
     sequence_validation = validate_and_repair_step_sequence(clean_query, planned_steps)
     planned_steps = sequence_validation["steps"]
     category = sequence_validation["category"]

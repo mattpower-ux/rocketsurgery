@@ -56,6 +56,7 @@ def assess_asset_sheet(asset_sheet_url: str, query: str, visual_assets: dict) ->
                         "product": visual_assets.get("product", ""),
                         "environment": visual_assets.get("environment", ""),
                         "worker": visual_assets.get("worker", ""),
+                        "locked_prompt": visual_assets.get("locked_prompt", ""),
                     })},
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded}", "detail": "high"}},
                 ]},
