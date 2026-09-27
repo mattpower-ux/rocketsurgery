@@ -53,6 +53,7 @@ try:
         build_visual_template,
         format_asset_sheet_brief,
         generate_placeholder_walkthrough,
+        safe_image_prompt,
     )
 except ImportError:
     from generator import (
@@ -61,6 +62,7 @@ except ImportError:
         build_visual_template,
         format_asset_sheet_brief,
         generate_placeholder_walkthrough,
+        safe_image_prompt,
     )
 
 try:
@@ -329,6 +331,11 @@ class CuratedVideoWalkthroughRequest(BaseModel):
     video_views: int | None = None
     brief: dict = Field(default_factory=dict)
     reference_urls: list[str] = Field(default_factory=list)
+
+
+class VisualStepRepairRequest(BaseModel):
+    step_id: int
+    image_direction: str = ""
 
 
 class VisitorEventRequest(BaseModel):
@@ -3004,6 +3011,70 @@ def post_audit_walkthrough_visuals(walkthrough_id: str, _: None = Depends(requir
     ) else "visual_review_needed"
     save_walkthrough(storage_id, manifest)
     return {"walkthrough_id": storage_id, "quality_status": manifest["quality_status"], "steps": results}
+
+
+@app.post("/admin/walkthroughs/{walkthrough_id}/repair-visual-step")
+def post_repair_visual_step(
+    walkthrough_id: str,
+    request: VisualStepRepairRequest,
+    _: None = Depends(require_admin_token),
+):
+    storage_id = resolve_walkthrough_storage_id(walkthrough_id)
+    manifest = load_walkthrough_by_id(storage_id)
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Walkthrough not found.")
+    target = next((step for step in manifest.get("steps", []) if int(step.get("id", 0)) == request.step_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Step not found.")
+    visual_assets = manifest.get("visual_assets") or {}
+    asset_sheet_url = visual_assets.get("asset_sheet_url")
+    if not asset_sheet_url:
+        raise HTTPException(status_code=400, detail="Walkthrough has no visual asset sheet.")
+
+    old_url = target.get("imageUrl", "")
+    issues = target.get("visualConsistency", {}).get("issues", []) or []
+    direction = request.image_direction.strip() or "; ".join(map(str, issues))
+    action = " ".join(str(target.get(key, "")) for key in ("imageLabel", "instruction", "detail"))
+    last_review = {}
+    for attempt in range(1, 3):
+        prompt = safe_image_prompt(
+            f"Highest-priority correction: {direction[:350]}. "
+            "Put the instructed action on the locked target object, not an adjacent object. "
+            f"{target.get('imagePrompt', '')}"
+        )
+        image_result = generate_step_image_from_asset_sheet(
+            prompt,
+            request.step_id,
+            asset_sheet_url=asset_sheet_url,
+            cache_key_suffix=f"visual-repair-{storage_id}-{int(time.time())}-{attempt}",
+            return_metadata=True,
+            allow_text_fallback=False,
+        )
+        candidate_url = image_result["image_url"]
+        last_review = assess_visual_consistency(asset_sheet_url, candidate_url, action, visual_assets)
+        if last_review["status"] == "passed":
+            target["previousImageUrl"] = old_url
+            target["imageUrl"] = candidate_url
+            target["imagePrompt"] = prompt
+            target["imageGenerationMode"] = image_result["generation_mode"]
+            target["visualConsistency"] = last_review
+            target.setdefault("imageRepairHistory", []).append({
+                "status": "accepted_by_visual_audit",
+                "oldImageUrl": old_url,
+                "newImageUrl": candidate_url,
+                "correctionPrompt": direction,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            })
+            manifest["quality_status"] = "order_and_visuals_checked" if all(
+                step.get("visualConsistency", {}).get("status") == "passed" for step in manifest.get("steps", [])
+            ) else "visual_review_needed"
+            save_walkthrough(storage_id, manifest)
+            return {"status": "repaired", "walkthrough_id": storage_id, "step_id": request.step_id,
+                    "image_url": candidate_url, "quality_status": manifest["quality_status"]}
+        direction = "; ".join(last_review.get("issues", [])) or direction
+
+    return {"status": "needs_review", "walkthrough_id": storage_id,
+            "step_id": request.step_id, "visual_review": last_review}
 
 
 @app.post("/admin/save-walkthrough")
