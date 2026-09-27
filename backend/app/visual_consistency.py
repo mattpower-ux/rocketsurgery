@@ -23,6 +23,8 @@ object instead of the target. Do not reject a useful crop or camera angle change
 For a lanai or pool-enclosure repair, the screen mesh must be attached to the
 stationary enclosure bay, not stretched over a removable frame on a table.
 Only report discrepancies actually visible in the two images. Do not infer specs.
+Treat lighting-related shade differences and approximate worker age as equivalent.
+Do not list an issue unless it changes the target object, action, or setting.
 """
 
 
@@ -37,7 +39,14 @@ parent setting remains recognizable. If a person is shown, visible faces need
 ordinary illustrated features. Judge the actual image, not just the description.
 For a lanai or pool enclosure, reject a loose framed screen or tabletop frame
 even if a correct fixed enclosure appears elsewhere on the sheet.
+Treat lighting-related shade differences and approximate worker age as equivalent.
+Only list material discrepancies, and set object_and_setting_match to false
+when any view shows a detached version of a fixed target.
 """
+
+
+def _review_status(checks: list[bool], issues: list[str]) -> str:
+    return "passed" if all(checks) and not issues else "needs_review"
 
 
 def assess_asset_sheet(asset_sheet_url: str, query: str, visual_assets: dict) -> dict:
@@ -70,8 +79,9 @@ def assess_asset_sheet(asset_sheet_url: str, query: str, visual_assets: dict) ->
         checks = ("object_and_setting_match", "repeated_views_consistent", "face_is_drawn_if_visible")
         if not all(isinstance(result.get(key), bool) for key in checks):
             raise ValueError("Incomplete asset sheet review response")
-        status = "passed" if all(result[key] for key in checks) else "needs_review"
-        return {"status": status, "issues": [str(item)[:220] for item in result.get("issues", [])[:3]]}
+        issues = [str(item)[:220] for item in result.get("issues", [])[:3]]
+        status = _review_status([result[key] for key in checks], issues)
+        return {"status": status, "issues": issues}
     except Exception as exc:
         return {"status": "audit_error", "issues": [str(exc)[:220]]}
 
@@ -111,7 +121,7 @@ def assess_visual_consistency(asset_sheet_url: str, step_image_url: str, action:
         if not isinstance(result.get("same_object"), bool) or not isinstance(result.get("action_visible"), bool):
             raise ValueError("Incomplete visual review response")
         issues = [str(item)[:220] for item in result.get("issues", [])[:3]]
-        status = "passed" if result["same_object"] and result["action_visible"] else "needs_review"
+        status = _review_status([result["same_object"], result["action_visible"]], issues)
         return {"status": status, "issues": issues}
     except Exception as exc:
         return {"status": "audit_error", "issues": [str(exc)[:220]]}

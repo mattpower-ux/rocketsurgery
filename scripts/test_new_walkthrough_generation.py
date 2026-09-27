@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from app import generator
 from app import visual_asset_planner
+from app.visual_consistency import _review_status
 from app.quality_rules import infer_construction_category
 from app.step_sequence_validator import validate_and_repair_step_sequence
 
@@ -20,6 +21,8 @@ def test_nonconstruction_categories_and_order():
     result = validate_and_repair_step_sequence("clean cloudy headlights", steps)
     assert [step["title"] for step in result["steps"]] == [step["title"] for step in steps]
     assert result["status"] == "passed_unranked_category"
+    assert _review_status([True, True], []) == "passed"
+    assert _review_status([True, True], ["Detached screen frame"]) == "needs_review"
 
 
 def test_short_but_complete_visual_plan_keeps_fixed_panel_anchor():
