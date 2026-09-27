@@ -10,6 +10,8 @@ function usage() {
   console.log("  ADMIN_API_TOKEN=... node scripts/run_visual_migration.mjs asset-sheets 3");
   console.log("  ADMIN_API_TOKEN=... node scripts/run_visual_migration.mjs images 1");
   console.log("  ADMIN_API_TOKEN=... node scripts/run_visual_migration.mjs images-dry-run 1");
+  console.log("  ADMIN_API_TOKEN=... node scripts/run_visual_migration.mjs images-all");
+  console.log("  Optional for images-all: ROCKETSURGERY_MIGRATION_IDS=id-1,id-2");
 }
 
 async function request(path, options = {}) {
@@ -39,6 +41,88 @@ async function request(path, options = {}) {
   return data;
 }
 
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function migrationReport() {
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      return await request("/admin/qc/visual-migration-report?limit=10000&review_status=all");
+    } catch (error) {
+      if (attempt === 5) throw error;
+      await pause(10000);
+    }
+  }
+}
+
+async function verifyRegeneratedWalkthrough(walkthroughId) {
+  const data = await request(`/admin/walkthroughs/${encodeURIComponent(walkthroughId)}`);
+  const walkthrough = data.walkthrough || {};
+  const steps = walkthrough.steps || [];
+  const failures = steps.filter((step) =>
+    step.imageGenerationMode !== "asset_sheet_edit" || !step.imageUrl ||
+    !step.imageRegeneratedAt || step.imageGenerationFallbackError
+  );
+  if (!walkthrough.visual_step_images_regenerated_at || failures.length || !steps.length) {
+    throw new Error(`${walkthroughId}: saved images failed asset-sheet verification`);
+  }
+  return steps.length;
+}
+
+async function runAllImages() {
+  const allowedIds = new Set(
+    (process.env.ROCKETSURGERY_MIGRATION_IDS || "").split(",").map((id) => id.trim()).filter(Boolean)
+  );
+  while (true) {
+    const report = await migrationReport();
+    const candidate = (report.items || []).find((item) =>
+      item.step_image_calls_needed > 0 && (!allowedIds.size || allowedIds.has(item.walkthrough_id))
+    );
+    if (!candidate) {
+      console.log(JSON.stringify(report.summary, null, 2));
+      return;
+    }
+
+    const walkthroughId = candidate.walkthrough_id;
+    const body = JSON.stringify({
+      limit: 1,
+      review_status: "all",
+      dry_run: false,
+      generate_asset_sheets: false,
+      walkthrough_ids: [walkthroughId],
+    });
+    let disconnected = false;
+    try {
+      await request("/admin/qc/regenerate-visual-migration-images", { method: "POST", body });
+    } catch (error) {
+      if (error.message !== "fetch failed") throw error;
+      disconnected = true;
+      console.log(`WAIT ${walkthroughId}: connection dropped; checking saved steps`);
+    }
+
+    if (disconnected) {
+      let savedStepCount = candidate.regenerated_step_count || 0;
+      let lastProgressAt = Date.now();
+      while (true) {
+        await pause(20000);
+        const latest = await migrationReport();
+        const item = (latest.items || []).find((entry) => entry.walkthrough_id === walkthroughId);
+        if (item?.step_images_regenerated) break;
+        if ((item?.regenerated_step_count || 0) > savedStepCount) {
+          savedStepCount = item.regenerated_step_count;
+          lastProgressAt = Date.now();
+        }
+        if (Date.now() - lastProgressAt > 300000) {
+          throw new Error(`${walkthroughId}: no saved image progress for five minutes`);
+        }
+      }
+    }
+
+    const stepCount = await verifyRegeneratedWalkthrough(walkthroughId);
+    const latest = await migrationReport();
+    console.log(`DONE ${walkthroughId}: ${stepCount} asset-sheet edits; ${latest.summary.remaining_step_image_walkthrough_count} walkthroughs remain`);
+  }
+}
+
 async function run() {
   if (action === "help" || action === "--help" || action === "-h") {
     usage();
@@ -48,6 +132,11 @@ async function run() {
   if (action === "report") {
     const data = await request("/admin/qc/visual-migration-report?limit=10000&review_status=all");
     console.log(JSON.stringify(data.summary || data, null, 2));
+    return;
+  }
+
+  if (action === "images-all") {
+    await runAllImages();
     return;
   }
 
